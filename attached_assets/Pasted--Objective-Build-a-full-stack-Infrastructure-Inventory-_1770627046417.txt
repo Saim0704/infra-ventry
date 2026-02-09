@@ -1,0 +1,298 @@
+🎯 Objective
+
+Build a full-stack Infrastructure Inventory & Monitoring system with a central web application and three independent agents that automatically collect infrastructure data and push it to the application on a schedule.
+
+The system must prevent infra outages (like disk-full incidents) by providing visibility, history, and alerting.
+
+🧱 System Architecture
+Components:
+
+Central Web Application
+
+VM Agent
+
+Database Agent
+
+Kubernetes Agent
+
+Agents run independently and push data to the backend via secure APIs.
+
+VMs ─────▶ VM Agent ─────┐
+DBs ─────▶ DB Agent ─────┼──▶ Central API ─▶ Database ─▶ Dashboard
+K8s ─────▶ K8s Agent ────┘
+
+🖥️ Central Web Application Requirements
+Backend
+
+Expose REST APIs to:
+
+Register infrastructure assets
+
+Receive metrics from agents
+
+Store historical metrics
+
+Authentication via API tokens for agents
+
+Store last-updated timestamps
+
+Support daily / hourly ingestion
+
+Frontend Dashboard
+
+Infra overview (VMs, K8s clusters, DBs)
+
+Resource health (green / yellow / red)
+
+Disk usage alerts (>80%)
+
+CPU & memory utilization
+
+Historical trends (7d / 30d)
+
+☁️ VM AGENT (Agent #1)
+Purpose
+
+Collect system-level metrics from VMs / droplets.
+
+Runs On
+
+Linux servers (Ubuntu, Amazon Linux, etc.)
+
+Data Collected
+
+Static Info
+
+Hostname
+
+OS name & version
+
+CPU cores
+
+Total RAM
+
+Total disk size
+
+IP address
+
+Dynamic Metrics
+
+Average CPU usage
+
+Average memory usage
+
+Disk usage (used / free / %)
+
+Load average
+
+Uptime
+
+Behavior
+
+Runs as:
+
+Cron job OR systemd service
+
+Configurable interval (default: once per day)
+
+Sends JSON payload to backend API
+
+Retries on failure
+
+Logs locally
+
+Implementation
+
+Language: Python or Go
+
+Uses:
+
+/proc, df, free, uptime
+
+psutil library (if Python)
+
+🗄️ DATABASE AGENT (Agent #2)
+Purpose
+
+Collect database-level inventory & metrics
+
+Supported Databases
+
+PostgreSQL
+
+MySQL
+
+MongoDB
+
+Redis (optional)
+
+Data Collected
+
+Static Info
+
+DB engine
+
+Version
+
+Host
+
+Port
+
+Metrics
+
+Storage used
+
+Number of databases
+
+Database names
+
+Size per database
+
+Active connections
+
+Last backup timestamp (if available)
+
+Behavior
+
+Connects using read-only credentials
+
+Scheduled execution
+
+Sends metrics to backend
+
+Mask sensitive values
+
+Implementation
+
+Language: Python
+
+Libraries:
+
+psycopg2 / mysqlclient / pymongo
+
+Config file for DB credentials
+
+☸️ KUBERNETES AGENT (Agent #3)
+Purpose
+
+Collect cluster, workload, and resource data
+
+Runs As
+
+Kubernetes Pod (Deployment or CronJob)
+
+Data Collected
+
+Cluster Info
+
+Kubernetes version
+
+Node count
+
+Total CPU / memory
+
+Storage capacity
+
+Workloads
+
+Namespaces
+
+Services per namespace
+
+Deployments / StatefulSets
+
+Pod counts
+
+Metrics
+
+Node CPU & memory usage
+
+Namespace-level resource usage
+
+Behavior
+
+Uses Kubernetes API
+
+Auth via ServiceAccount + RBAC
+
+Pushes data to backend API
+
+Configurable interval
+
+Implementation
+
+Language: Python or Go
+
+Libraries:
+
+kubernetes-client
+
+metrics-server integration (if available)
+
+🔐 Security Requirements
+
+Agent authentication using API tokens
+
+TLS for API communication
+
+Read-only access for agents
+
+No secrets logged or stored in plaintext
+
+📊 Database Schema (High Level)
+
+users
+
+servers
+
+server_metrics
+
+kubernetes_clusters
+
+kubernetes_workloads
+
+cluster_metrics
+
+databases
+
+database_metrics
+
+agent_tokens
+
+ingestion_logs
+
+🚨 Alerting Logic
+
+Disk usage > 80% → warning
+
+Disk usage > 90% → critical
+
+CPU > 85% for sustained period
+
+Missing agent data → unhealthy
+
+⚙️ Tech Stack
+
+Backend: FastAPI / Express
+
+Frontend: React + Charts
+
+DB: PostgreSQL
+
+Agents: Python
+
+Auth: JWT + API tokens
+
+📦 Deliverables
+
+Central web application
+
+3 standalone agent projects
+
+API documentation
+
+Sample agent config files
+
+README with setup instructions
+
+Dockerfiles (optional but preferred)
