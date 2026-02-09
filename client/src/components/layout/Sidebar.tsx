@@ -1,0 +1,62 @@
+import { Link, useLocation } from "wouter";
+import { LayoutDashboard, Server, Database, Cloud, Settings, LogOut, Terminal } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { useAuth } from "@/hooks/use-auth";
+
+export function Sidebar() {
+  const [location] = useLocation();
+  const { logout } = useAuth();
+
+  const navItems = [
+    { href: "/", label: "Dashboard", icon: LayoutDashboard },
+    { href: "/servers", label: "Servers", icon: Server },
+    { href: "/databases", label: "Databases", icon: Database },
+    { href: "/clusters", label: "Kubernetes", icon: Cloud },
+    { href: "/settings", label: "Settings", icon: Settings },
+  ];
+
+  return (
+    <div className="h-screen w-64 bg-card border-r border-border flex flex-col fixed left-0 top-0 z-50 shadow-xl">
+      <div className="p-6 flex items-center gap-3 border-b border-border/50">
+        <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center shadow-lg shadow-primary/25">
+          <Terminal className="text-white h-6 w-6" />
+        </div>
+        <div>
+          <h1 className="font-display font-bold text-lg leading-none">InfraWatch</h1>
+          <span className="text-xs text-muted-foreground font-medium">System Monitor</span>
+        </div>
+      </div>
+
+      <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
+        {navItems.map((item) => {
+          const isActive = location === item.href;
+          return (
+            <Link key={item.href} href={item.href}>
+              <div
+                className={cn(
+                  "flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all duration-200 cursor-pointer group",
+                  isActive
+                    ? "bg-primary text-primary-foreground shadow-md shadow-primary/20 translate-x-1"
+                    : "text-muted-foreground hover:bg-secondary/50 hover:text-foreground hover:translate-x-1"
+                )}
+              >
+                <item.icon className={cn("h-5 w-5", isActive ? "text-primary-foreground" : "text-muted-foreground group-hover:text-primary")} />
+                {item.label}
+              </div>
+            </Link>
+          );
+        })}
+      </nav>
+
+      <div className="p-4 border-t border-border/50 bg-secondary/20">
+        <button
+          onClick={() => logout()}
+          className="flex w-full items-center gap-3 px-4 py-3 rounded-xl font-medium text-destructive hover:bg-destructive/10 hover:translate-x-1 transition-all duration-200"
+        >
+          <LogOut className="h-5 w-5" />
+          Sign Out
+        </button>
+      </div>
+    </div>
+  );
+}
