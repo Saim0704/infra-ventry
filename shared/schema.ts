@@ -1,14 +1,31 @@
-import { pgTable, text, serial, integer, boolean, timestamp, jsonb, real } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import { pgTable, text, serial, integer, boolean, timestamp, jsonb, real, index, varchar } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
+// === SESSIONS (Replit Auth) ===
+export const sessions = pgTable(
+  "sessions",
+  {
+    sid: varchar("sid").primaryKey(),
+    sess: jsonb("sess").notNull(),
+    expire: timestamp("expire").notNull(),
+  },
+  (table) => [index("IDX_session_expire").on(table.expire)]
+);
+
 // === USERS (Replit Auth) ===
 export const users = pgTable("users", {
-  id: serial("id").primaryKey(),
-  replitId: integer("replit_id").unique(),
-  username: text("username").notNull(),
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  email: varchar("email").unique(),
+  firstName: varchar("first_name"),
+  lastName: varchar("last_name"),
+  profileImageUrl: varchar("profile_image_url"),
+  username: text("username"),
   isAdmin: boolean("is_admin").default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 // === AGENT TOKENS ===
@@ -116,7 +133,7 @@ export const clusterMetricsRelations = relations(clusterMetrics, ({ one }) => ({
 
 
 // === ZOD SCHEMAS ===
-export const insertUserSchema = createInsertSchema(users).omit({ id: true });
+export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertTokenSchema = createInsertSchema(tokens).omit({ id: true, createdAt: true });
 
 export const insertServerSchema = createInsertSchema(servers).omit({ id: true, lastSeen: true });
@@ -130,6 +147,7 @@ export const insertClusterMetricSchema = createInsertSchema(clusterMetrics).omit
 
 // === TYPES ===
 export type User = typeof users.$inferSelect;
+export type InsertUser = z.infer<typeof insertUserSchema>;
 export type Token = typeof tokens.$inferSelect;
 export type Server = typeof servers.$inferSelect;
 export type ServerMetric = typeof serverMetrics.$inferSelect;

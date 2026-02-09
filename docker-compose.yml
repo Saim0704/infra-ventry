@@ -1,0 +1,23 @@
+services:
+  app:
+    build: .
+    ports:
+      - "5000:5000"
+    environment:
+      - DATABASE_URL=postgresql://user:password@db:5432/infra_inventory
+      - SESSION_SECRET=your_secret_here
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: postgres:15
+    environment:
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=infra_inventory
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d infra_inventory"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
