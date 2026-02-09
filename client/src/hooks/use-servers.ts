@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { api, buildUrl } from "@shared/routes";
 import { z } from "zod";
 
@@ -29,6 +29,50 @@ export function useServer(id: number | null) {
       return api.servers.get.responses[200].parse(await res.json());
     },
     enabled: !!id,
-    refetchInterval: 5000, // Faster refresh for live metrics
+    refetchInterval: 5000,
+  });
+}
+
+export function useCreateServer() {
+  return useMutation({
+    mutationFn: async (data: z.infer<typeof api.servers.create.input>) => {
+      const res = await fetch(api.servers.create.path, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to create server");
+      return api.servers.create.responses[201].parse(await res.json());
+    },
+  });
+}
+
+export function useUpdateServer() {
+  return useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: z.infer<typeof api.servers.update.input> }) => {
+      const url = buildUrl(api.servers.update.path, { id });
+      const res = await fetch(url, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to update server");
+      return api.servers.update.responses[200].parse(await res.json());
+    },
+  });
+}
+
+export function useDeleteServer() {
+  return useMutation({
+    mutationFn: async (id: number) => {
+      const url = buildUrl(api.servers.delete.path, { id });
+      const res = await fetch(url, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("Failed to delete server");
+    },
   });
 }

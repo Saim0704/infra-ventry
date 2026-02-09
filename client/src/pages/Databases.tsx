@@ -6,7 +6,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useState } from "react";
 import { Database, HardDrive, Network } from "lucide-react";
-import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip } from "recharts";
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
 import { format } from "date-fns";
 
 export default function DatabasesPage() {
@@ -47,14 +47,14 @@ export default function DatabasesPage() {
                     </div>
                     {/* Placeholder metrics */}
                     <div className="grid grid-cols-2 gap-2">
-                       <div className="bg-secondary/30 rounded-lg p-3 text-center">
-                          <div className="text-xs text-muted-foreground mb-1">Storage</div>
-                          <div className="font-bold text-lg">{(Math.random() * 100).toFixed(1)} GB</div>
-                       </div>
-                       <div className="bg-secondary/30 rounded-lg p-3 text-center">
-                          <div className="text-xs text-muted-foreground mb-1">Connections</div>
-                          <div className="font-bold text-lg">{Math.floor(Math.random() * 50)}</div>
-                       </div>
+                      <div className="bg-secondary/30 rounded-lg p-3 text-center">
+                        <div className="text-xs text-muted-foreground mb-1">Storage</div>
+                        <div className="font-bold text-lg">{(Math.random() * 100).toFixed(1)} GB</div>
+                      </div>
+                      <div className="bg-secondary/30 rounded-lg p-3 text-center">
+                        <div className="text-xs text-muted-foreground mb-1">Connections</div>
+                        <div className="font-bold text-lg">{Math.floor(Math.random() * 50)}</div>
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
@@ -73,7 +73,7 @@ export default function DatabasesPage() {
         )}
       </div>
       {!isLoading && databases?.length === 0 && (
-         <div className="text-center py-20 bg-secondary/20 rounded-3xl border border-dashed border-border">
+        <div className="text-center py-20 bg-secondary/20 rounded-3xl border border-dashed border-border">
           <Database className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
           <h3 className="text-lg font-semibold">No databases connected</h3>
           <p className="text-muted-foreground mt-2">Deploy a DB agent to start monitoring.</p>
@@ -126,9 +126,9 @@ function DatabaseDetailView({ id }: { id: number | null }) {
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
               <XAxis dataKey="time" stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
               <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
-              <Tooltip 
+              <Tooltip
                 contentStyle={{ backgroundColor: 'hsl(var(--popover))', borderColor: 'hsl(var(--border))', borderRadius: '8px' }}
-                cursor={{fill: 'hsl(var(--secondary))'}}
+                cursor={{ fill: 'hsl(var(--secondary))' }}
               />
               <Bar dataKey="connections" name="Connections" fill="hsl(var(--accent))" radius={[4, 4, 0, 0]} />
             </BarChart>

@@ -30,6 +30,25 @@ export function useAuth() {
     staleTime: 1000 * 60 * 5, // 5 minutes
   });
 
+  const loginMutation = useMutation({
+    mutationFn: async (credentials: any) => {
+      const res = await fetch("/api/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(credentials),
+      });
+
+      if (!res.ok) {
+        throw new Error((await res.json()).message || "Login failed");
+      }
+
+      return res.json();
+    },
+    onSuccess: (user: User) => {
+      queryClient.setQueryData(["/api/auth/user"], user);
+    },
+  });
+
   const logoutMutation = useMutation({
     mutationFn: logout,
     onSuccess: () => {
@@ -41,6 +60,8 @@ export function useAuth() {
     user,
     isLoading,
     isAuthenticated: !!user,
+    loginMutation,
+    logoutMutation,
     logout: logoutMutation.mutate,
     isLoggingOut: logoutMutation.isPending,
   };

@@ -1,13 +1,14 @@
 import { z } from 'zod';
-import { 
-  insertTokenSchema, 
-  tokens, 
-  servers, 
-  serverMetrics, 
-  databases, 
-  databaseMetrics, 
-  clusters, 
-  clusterMetrics 
+import {
+  insertTokenSchema,
+  tokens,
+  servers,
+  serverMetrics,
+  serverWithMetricsSchema,
+  databases,
+  databaseMetrics,
+  clusters,
+  clusterMetrics
 } from './schema';
 
 // Shared error schemas
@@ -74,7 +75,7 @@ export const api = {
       method: 'GET' as const,
       path: '/api/servers' as const,
       responses: {
-        200: z.array(z.custom<typeof servers.$inferSelect>()),
+        200: z.array(z.custom<typeof servers.$inferSelect & { metrics: typeof serverMetrics.$inferSelect[] }>()),
       },
     },
     get: {
@@ -82,6 +83,31 @@ export const api = {
       path: '/api/servers/:id' as const,
       responses: {
         200: z.custom<typeof servers.$inferSelect & { metrics: typeof serverMetrics.$inferSelect[] }>(),
+        404: errorSchemas.notFound,
+      },
+    },
+    create: {
+      method: 'POST' as const,
+      path: '/api/servers' as const,
+      input: serverWithMetricsSchema,
+      responses: {
+        201: z.custom<typeof servers.$inferSelect>(),
+      },
+    },
+    update: {
+      method: 'PATCH' as const,
+      path: '/api/servers/:id' as const,
+      input: serverWithMetricsSchema.partial(),
+      responses: {
+        200: z.custom<typeof servers.$inferSelect>(),
+        404: errorSchemas.notFound,
+      },
+    },
+    delete: {
+      method: 'DELETE' as const,
+      path: '/api/servers/:id' as const,
+      responses: {
+        204: z.void(),
         404: errorSchemas.notFound,
       },
     },

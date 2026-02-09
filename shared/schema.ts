@@ -19,10 +19,8 @@ export const sessions = pgTable(
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   email: varchar("email").unique(),
-  firstName: varchar("first_name"),
-  lastName: varchar("last_name"),
-  profileImageUrl: varchar("profile_image_url"),
-  username: text("username"),
+  username: text("username").unique().notNull(),
+  password: text("password").notNull(),
   isAdmin: boolean("is_admin").default(false),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
@@ -46,6 +44,9 @@ export const servers = pgTable("servers", {
   totalRam: real("total_ram"), // in GB
   totalDisk: real("total_disk"), // in GB
   ipAddress: text("ip_address"),
+  osVersion: text("os_version"),
+  sshUser: text("ssh_user"),
+  sshKey: text("ssh_key"),
   lastSeen: timestamp("last_seen").defaultNow(),
 });
 
@@ -144,6 +145,24 @@ export const insertDatabaseMetricSchema = createInsertSchema(databaseMetrics).om
 
 export const insertClusterSchema = createInsertSchema(clusters).omit({ id: true, lastSeen: true });
 export const insertClusterMetricSchema = createInsertSchema(clusterMetrics).omit({ id: true, createdAt: true });
+
+// Form Schema for Manual Server Entry
+export const serverWithMetricsSchema = z.object({
+  hostname: z.string().min(1, "Hostname is required"),
+  ipAddress: z.string().optional(),
+  os: z.string().optional(),
+  osVersion: z.string().optional(),
+  cpuCores: z.number().int().min(1, "CPU Cores must be at least 1"),
+  totalRam: z.number().min(0, "Total RAM must be positive"),
+  totalDisk: z.number().min(0, "Total Disk must be positive"),
+  sshUser: z.string().optional(),
+  sshKey: z.string().optional(),
+  cpuUsage: z.number().min(0).max(100, "CPU Usage must be between 0 and 100").optional(),
+  ramUsed: z.number().min(0, "RAM Used must be positive").optional(),
+  storageUsed: z.number().min(0, "Storage Used must be positive").optional(),
+  memoryUsage: z.number().min(0).max(100).optional(),
+  diskUsage: z.number().min(0).max(100).optional(),
+});
 
 // === TYPES ===
 export type User = typeof users.$inferSelect;

@@ -24,9 +24,11 @@ export interface IStorage {
   }>;
 
   // === SERVERS ===
-  getServers(): Promise<Server[]>;
+  getServers(): Promise<(Server & { metrics: ServerMetric[] })[]>;
   getServer(id: number): Promise<(Server & { metrics: ServerMetric[] }) | undefined>;
   upsertServer(data: z.infer<typeof insertServerSchema>): Promise<Server>;
+  updateServer(id: number, data: Partial<z.infer<typeof insertServerSchema>>): Promise<Server | undefined>;
+  deleteServer(id: number): Promise<void>;
   addServerMetric(data: z.infer<typeof insertServerMetricSchema>): Promise<void>;
 
   // === DATABASES ===
@@ -75,7 +77,7 @@ export class DatabaseStorage implements IStorage {
     // For now, we'll just count total. Real health checks require complex queries.
     // Let's do a simple heuristic: server "critical" if lastSeen > 10 mins ago OR disk > 90%
     // We need to fetch latest metrics for that.
-    
+
     // Optimized count queries
     const serverCount = await db.select({ count: sql<number>`count(*)` }).from(servers);
     const dbCount = await db.select({ count: sql<number>`count(*)` }).from(databases);
@@ -93,8 +95,20 @@ export class DatabaseStorage implements IStorage {
   }
 
   // === SERVERS ===
-  async getServers(): Promise<Server[]> {
-    return await db.select().from(servers).orderBy(desc(servers.lastSeen));
+  async getServers(): Promise<(Server & { metrics: ServerMetric[] })[]> {
+    const allServers = await db.select().from(servers).orderBy(desc(servers.lastSeen));
+
+    // Fetch latest metrics for each server
+    // For MVP, we'll just map and fetch. For production, use a single join with window function.
+    const serversWithMetrics = await Promise.all(allServers.map(async (server) => {
+      const metrics = await db.select().from(serverMetrics)
+        .where(eq(serverMetrics.serverId, server.id))
+        .orderBy(desc(serverMetrics.createdAt))
+        .limit(1);
+      return { ...server, metrics };
+    }));
+
+    return serversWithMetrics;
   }
 
   async getServer(id: number): Promise<(Server & { metrics: ServerMetric[] }) | undefined> {
@@ -110,14 +124,43 @@ export class DatabaseStorage implements IStorage {
   }
 
   async upsertServer(data: z.infer<typeof insertServerSchema>): Promise<Server> {
+    const updateData: any = { ...data, lastSeen: new Date() };
+    // Filter out undefined values to prevent overwriting existing fields (like SSH User/Key) with NULL
+    Object.keys(updateData).forEach(key => {
+      if (updateData[key] === undefined) {
+        delete updateData[key];
+      }
+    });
+
     const [server] = await db.insert(servers)
       .values({ ...data, lastSeen: new Date() })
       .onConflictDoUpdate({
         target: servers.hostname,
-        set: { ...data, lastSeen: new Date() }
+        set: updateData
       })
       .returning();
     return server;
+  }
+
+  async updateServer(id: number, data: Partial<z.infer<typeof insertServerSchema>>): Promise<Server | undefined> {
+    const updateData: any = { ...data, lastSeen: new Date() };
+    Object.keys(updateData).forEach(key => {
+      if (updateData[key] === undefined) {
+        delete updateData[key];
+      }
+    });
+
+    const [updated] = await db.update(servers)
+      .set(updateData)
+      .where(eq(servers.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteServer(id: number): Promise<void> {
+    // Delete associated metrics first if not handled by CASCADE
+    await db.delete(serverMetrics).where(eq(serverMetrics.serverId, id));
+    await db.delete(servers).where(eq(servers.id, id));
   }
 
   async addServerMetric(data: z.infer<typeof insertServerMetricSchema>): Promise<void> {
@@ -146,11 +189,11 @@ export class DatabaseStorage implements IStorage {
     // Wait, earlier I didn't make 'name' unique in schema.ts for databases.
     // Let's assume name is unique for the project scope, or we rely on the agent sending ID.
     // Actually, agents send metadata. Let's look up by name.
-    
+
     // Fix: We need to handle lookup manually if no unique constraint, or trust the agent provides consistent name.
     // Best effort: Try to find by name, update if exists, else insert.
     const [existing] = await db.select().from(databases).where(eq(databases.name, data.name));
-    
+
     if (existing) {
       const [updated] = await db.update(databases)
         .set({ ...data, lastSeen: new Date() })
