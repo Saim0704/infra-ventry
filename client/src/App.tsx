@@ -10,6 +10,8 @@ import ServersPage from "@/pages/Servers";
 import DatabasesPage from "@/pages/Databases";
 import ClustersPage from "@/pages/Clusters";
 import SettingsPage from "@/pages/Settings";
+import ProjectsPage from "@/pages/Projects";
+import ProjectDetailPage from "@/pages/ProjectDetail";
 import LoginPage from "@/pages/Login";
 import { Loader2 } from "lucide-react";
 
@@ -31,6 +33,8 @@ function Router() {
   return (
     <Switch>
       <Route path="/" component={Dashboard} />
+      <Route path="/projects" component={ProjectsPage} />
+      <Route path="/projects/:id" component={ProjectDetailPage} />
       <Route path="/servers" component={ServersPage} />
       <Route path="/databases" component={DatabasesPage} />
       <Route path="/clusters" component={ClustersPage} />

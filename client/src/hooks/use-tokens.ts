@@ -33,6 +33,7 @@ export function useCreateToken() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [api.tokens.list.path] });
+      queryClient.invalidateQueries({ queryKey: [api.projects.resources.path] });
     },
   });
 }

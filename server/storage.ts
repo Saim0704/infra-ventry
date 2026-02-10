@@ -1,16 +1,17 @@
 import { db } from "./db";
 import { eq, desc, sql } from "drizzle-orm";
 import {
-  users, tokens, servers, serverMetrics, databases, databaseMetrics, clusters, clusterMetrics,
-  type User, type Token, type Server, type ServerMetric, type Database, type DatabaseMetric, type Cluster, type ClusterMetric
+  users, tokens, servers, serverMetrics, databases, databaseMetrics, clusters, clusterMetrics, projects,
+  type User, type Token, type Server, type ServerMetric, type Database, type DatabaseMetric, type Cluster, type ClusterMetric, type Project
 } from "@shared/schema";
-import { insertTokenSchema, insertServerSchema, insertServerMetricSchema, insertDatabaseSchema, insertDatabaseMetricSchema, insertClusterSchema, insertClusterMetricSchema } from "@shared/schema";
+import { insertTokenSchema, insertServerSchema, insertServerMetricSchema, insertDatabaseSchema, insertDatabaseMetricSchema, insertClusterSchema, insertClusterMetricSchema, insertProjectSchema } from "@shared/schema";
 import { z } from "zod";
 
 export interface IStorage {
   // === TOKENS ===
-  getTokens(): Promise<Token[]>;
-  createToken(name: string, type: string): Promise<Token>;
+  getTokens(projectId?: number | null): Promise<Token[]>;
+  getTokenByString(tokenStr: string): Promise<Token | undefined>;
+  createToken(name: string, type: string, projectId?: number | null): Promise<Token>;
   validateToken(token: string): Promise<boolean>;
   revokeToken(id: number): Promise<void>;
 
@@ -22,6 +23,11 @@ export interface IStorage {
     healthyServers: number;
     criticalServers: number;
   }>;
+
+  // === PROJECTS ===
+  getProjects(): Promise<Project[]>;
+  createProject(data: z.infer<typeof insertProjectSchema>): Promise<Project>;
+  deleteProject(id: number): Promise<void>;
 
   // === SERVERS ===
   getServers(): Promise<(Server & { metrics: ServerMetric[] })[]>;
@@ -46,24 +52,73 @@ export interface IStorage {
 
 export class DatabaseStorage implements IStorage {
   // === TOKENS ===
-  async getTokens(): Promise<Token[]> {
+  async getTokens(projectId?: number | null): Promise<Token[]> {
+    if (projectId) {
+      return await db.select().from(tokens).where(eq(tokens.projectId, projectId));
+    }
     return await db.select().from(tokens);
   }
 
-  async createToken(name: string, type: string): Promise<Token> {
+  async createToken(name: string, type: string, projectId?: number | null): Promise<Token> {
     // Generate a random token
     const tokenStr = `ag_${Math.random().toString(36).substring(2)}${Math.random().toString(36).substring(2)}`;
-    const [token] = await db.insert(tokens).values({ name, type, token: tokenStr }).returning();
+    const [token] = await db.insert(tokens).values({ name, type, token: tokenStr, projectId }).returning();
+    return token;
+  }
+
+  async getTokenByString(tokenStr: string): Promise<Token | undefined> {
+    const [token] = await db.select().from(tokens).where(eq(tokens.token, tokenStr));
     return token;
   }
 
   async validateToken(tokenStr: string): Promise<boolean> {
-    const [token] = await db.select().from(tokens).where(eq(tokens.token, tokenStr));
+    const token = await this.getTokenByString(tokenStr);
     return !!token;
   }
 
   async revokeToken(id: number): Promise<void> {
     await db.delete(tokens).where(eq(tokens.id, id));
+  }
+
+  // === PROJECTS ===
+  async getProjects(): Promise<Project[]> {
+    return await db.select().from(projects).orderBy(desc(projects.createdAt));
+  }
+
+  async createProject(data: z.infer<typeof insertProjectSchema>): Promise<Project> {
+    const [project] = await db.insert(projects).values(data).returning();
+    return project;
+  }
+
+  async updateProject(id: number, data: Partial<z.infer<typeof insertProjectSchema>>): Promise<Project> {
+    const [project] = await db.update(projects).set(data).where(eq(projects.id, id)).returning();
+    return project;
+  }
+
+  async deleteProject(id: number): Promise<void> {
+    // Set projectId to null for all servers in this project before deleting
+    await db.update(servers).set({ projectId: null }).where(eq(servers.projectId, id));
+    await db.update(databases).set({ projectId: null }).where(eq(databases.projectId, id));
+    await db.update(clusters).set({ projectId: null }).where(eq(clusters.projectId, id));
+    await db.delete(projects).where(eq(projects.id, id));
+  }
+
+  async getProjectResources(projectId: number) {
+    const [project] = await db.select().from(projects).where(eq(projects.id, projectId));
+    if (!project) return null;
+
+    const allServers = await this.getServers();
+    const allDbs = await this.getDatabases();
+    const allClusters = await this.getClusters();
+    const projectTokens = await this.getTokens(projectId);
+
+    return {
+      project,
+      servers: allServers.filter(s => s.projectId === projectId),
+      databases: allDbs.filter(d => d.projectId === projectId),
+      clusters: allClusters.filter(c => c.projectId === projectId),
+      tokens: projectTokens,
+    };
   }
 
   // === STATS ===
@@ -95,23 +150,28 @@ export class DatabaseStorage implements IStorage {
   }
 
   // === SERVERS ===
-  async getServers(): Promise<(Server & { metrics: ServerMetric[] })[]> {
+  async getServers(): Promise<(Server & { metrics: ServerMetric[], project?: Project })[]> {
     const allServers = await db.select().from(servers).orderBy(desc(servers.lastSeen));
 
-    // Fetch latest metrics for each server
-    // For MVP, we'll just map and fetch. For production, use a single join with window function.
-    const serversWithMetrics = await Promise.all(allServers.map(async (server) => {
+    // Fetch latest metrics and project for each server
+    const serversWithExtras = await Promise.all(allServers.map(async (server) => {
       const metrics = await db.select().from(serverMetrics)
         .where(eq(serverMetrics.serverId, server.id))
         .orderBy(desc(serverMetrics.createdAt))
         .limit(1);
-      return { ...server, metrics };
+
+      let project;
+      if (server.projectId) {
+        [project] = await db.select().from(projects).where(eq(projects.id, server.projectId));
+      }
+
+      return { ...server, metrics, project };
     }));
 
-    return serversWithMetrics;
+    return serversWithExtras;
   }
 
-  async getServer(id: number): Promise<(Server & { metrics: ServerMetric[] }) | undefined> {
+  async getServer(id: number): Promise<(Server & { metrics: ServerMetric[], project?: Project }) | undefined> {
     const [server] = await db.select().from(servers).where(eq(servers.id, id));
     if (!server) return undefined;
 
@@ -120,7 +180,12 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(serverMetrics.createdAt))
       .limit(50); // Last 50 data points
 
-    return { ...server, metrics: metrics.reverse() }; // Return chronological
+    let project;
+    if (server.projectId) {
+      [project] = await db.select().from(projects).where(eq(projects.id, server.projectId));
+    }
+
+    return { ...server, metrics: metrics.reverse(), project }; // Return chronological
   }
 
   async upsertServer(data: z.infer<typeof insertServerSchema>): Promise<Server> {
@@ -168,11 +233,18 @@ export class DatabaseStorage implements IStorage {
   }
 
   // === DATABASES ===
-  async getDatabases(): Promise<Database[]> {
-    return await db.select().from(databases).orderBy(desc(databases.lastSeen));
+  async getDatabases(): Promise<(Database & { project?: Project })[]> {
+    const allDbs = await db.select().from(databases).orderBy(desc(databases.lastSeen));
+    return await Promise.all(allDbs.map(async (dbItem) => {
+      let project;
+      if (dbItem.projectId) {
+        [project] = await db.select().from(projects).where(eq(projects.id, dbItem.projectId));
+      }
+      return { ...dbItem, project };
+    }));
   }
 
-  async getDatabase(id: number): Promise<(Database & { metrics: DatabaseMetric[] }) | undefined> {
+  async getDatabase(id: number): Promise<(Database & { metrics: DatabaseMetric[], project?: Project }) | undefined> {
     const [database] = await db.select().from(databases).where(eq(databases.id, id));
     if (!database) return undefined;
 
@@ -181,7 +253,12 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(databaseMetrics.createdAt))
       .limit(50);
 
-    return { ...database, metrics: metrics.reverse() };
+    let project;
+    if (database.projectId) {
+      [project] = await db.select().from(projects).where(eq(projects.id, database.projectId));
+    }
+
+    return { ...database, metrics: metrics.reverse(), project };
   }
 
   async upsertDatabase(data: z.infer<typeof insertDatabaseSchema>): Promise<Database> {
@@ -213,11 +290,18 @@ export class DatabaseStorage implements IStorage {
   }
 
   // === CLUSTERS ===
-  async getClusters(): Promise<Cluster[]> {
-    return await db.select().from(clusters).orderBy(desc(clusters.lastSeen));
+  async getClusters(): Promise<(Cluster & { project?: Project })[]> {
+    const allClusters = await db.select().from(clusters).orderBy(desc(clusters.lastSeen));
+    return await Promise.all(allClusters.map(async (cluster) => {
+      let project;
+      if (cluster.projectId) {
+        [project] = await db.select().from(projects).where(eq(projects.id, cluster.projectId));
+      }
+      return { ...cluster, project };
+    }));
   }
 
-  async getCluster(id: number): Promise<(Cluster & { metrics: ClusterMetric[] }) | undefined> {
+  async getCluster(id: number): Promise<(Cluster & { metrics: ClusterMetric[], project?: Project }) | undefined> {
     const [cluster] = await db.select().from(clusters).where(eq(clusters.id, id));
     if (!cluster) return undefined;
 
@@ -226,7 +310,12 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(clusterMetrics.createdAt))
       .limit(50);
 
-    return { ...cluster, metrics: metrics.reverse() };
+    let project;
+    if (cluster.projectId) {
+      [project] = await db.select().from(projects).where(eq(projects.id, cluster.projectId));
+    }
+
+    return { ...cluster, metrics: metrics.reverse(), project };
   }
 
   async upsertCluster(data: z.infer<typeof insertClusterSchema>): Promise<Cluster> {

@@ -35,13 +35,19 @@ export async function registerRoutes(
   // VM Ingestion
   app.post(api.ingest.vm.path, validateAgentToken, async (req, res) => {
     try {
-      // Manual parse because we need to separate metadata from metrics
-      // The shared route input schema has the full structure
       const input = api.ingest.vm.input.parse(req.body);
-
       const { metrics, ...serverInfo } = input.data;
 
-      const server = await storage.upsertServer(serverInfo);
+      // Look up the token to get its project association
+      const tokenData = await storage.getTokenByString(input.token);
+      console.log(`[DEBUG] VM Ingestion - Token: ${input.token.substring(0, 10)}...`);
+      console.log(`[DEBUG] Token Data found:`, tokenData ? `Yes (ID: ${tokenData.id})` : "No");
+
+      const projectId = tokenData?.projectId || null;
+      console.log(`[DEBUG] Associated Project ID:`, projectId);
+
+      // Upsert server with project association
+      const server = await storage.upsertServer({ ...serverInfo, projectId });
       await storage.addServerMetric({ ...metrics, serverId: server.id });
 
       res.json({ success: true });
@@ -57,7 +63,11 @@ export async function registerRoutes(
       const input = api.ingest.db.input.parse(req.body);
       const { metrics, ...dbInfo } = input.data;
 
-      const database = await storage.upsertDatabase(dbInfo);
+      // Look up the token to get its project association
+      const tokenData = await storage.getTokenByString(input.token);
+      const projectId = tokenData?.projectId || null;
+
+      const database = await storage.upsertDatabase({ ...dbInfo, projectId });
       await storage.addDatabaseMetric({ ...metrics, databaseId: database.id });
 
       res.json({ success: true });
@@ -73,7 +83,11 @@ export async function registerRoutes(
       const input = api.ingest.k8s.input.parse(req.body);
       const { metrics, ...clusterInfo } = input.data;
 
-      const cluster = await storage.upsertCluster(clusterInfo);
+      // Look up the token to get its project association
+      const tokenData = await storage.getTokenByString(input.token);
+      const projectId = tokenData?.projectId || null;
+
+      const cluster = await storage.upsertCluster({ ...clusterInfo, projectId });
       await storage.addClusterMetric({ ...metrics, clusterId: cluster.id });
 
       res.json({ success: true });
@@ -100,14 +114,44 @@ export async function registerRoutes(
   });
 
   app.post(api.tokens.create.path, isAuthenticated, async (req, res) => {
-    const { name, type } = api.tokens.create.input.parse(req.body);
-    const token = await storage.createToken(name, type);
+    const { name, type, projectId } = api.tokens.create.input.parse(req.body);
+    const token = await storage.createToken(name, type, projectId);
     res.status(201).json(token);
   });
 
   app.delete(api.tokens.revoke.path, isAuthenticated, async (req, res) => {
     await storage.revokeToken(Number(req.params.id));
     res.status(204).send();
+  });
+
+  // Projects
+  app.get(api.projects.list.path, isAuthenticated, async (req, res) => {
+    const projects = await storage.getProjects();
+    res.json(projects);
+  });
+
+  app.post(api.projects.create.path, isAuthenticated, async (req, res) => {
+    const input = api.projects.create.input.parse(req.body);
+    const project = await storage.createProject(input);
+    res.status(201).json(project);
+  });
+
+  app.patch(api.projects.update.path, isAuthenticated, async (req, res) => {
+    const input = api.projects.update.input.parse(req.body);
+    const project = await storage.updateProject(Number(req.params.id), input);
+    if (!project) return res.status(404).json({ message: "Project not found" });
+    res.json(project);
+  });
+
+  app.delete(api.projects.delete.path, isAuthenticated, async (req, res) => {
+    await storage.deleteProject(Number(req.params.id));
+    res.status(204).send();
+  });
+
+  app.get(api.projects.resources.path, isAuthenticated, async (req, res) => {
+    const resources = await storage.getProjectResources(Number(req.params.id));
+    if (!resources) return res.status(404).json({ message: "Project not found" });
+    res.json(resources);
   });
 
   // Servers

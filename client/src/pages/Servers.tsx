@@ -1,4 +1,5 @@
 import { useServers, useServer, useCreateServer, useUpdateServer, useDeleteServer } from "@/hooks/use-servers";
+import { useProjects, useCreateProject } from "@/hooks/use-projects";
 import { Shell } from "@/components/layout/Shell";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/StatusBadge";
@@ -9,16 +10,19 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Label } from "@/components/ui/label";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { serverWithMetricsSchema } from "@shared/schema";
-import { useState } from "react";
+import { useState, Fragment } from "react";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { format } from "date-fns";
-import { Server, Cpu, HardDrive, CircuitBoard, Plus, Edit2, Trash2, Eye, Terminal, Layout, Activity, Shield, Globe, User, Key, Search } from "lucide-react";
+import { Server, Cpu, HardDrive, CircuitBoard, Plus, Edit2, Trash2, Eye, Terminal, Layout, Activity, Shield, Globe, User, Key, Search, ChevronDown, ChevronRight, Folder } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
 import { api } from "@shared/routes";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { DialogDescription } from "@/components/ui/dialog";
 import { z } from "zod";
 
 type ServerWithMetrics = z.infer<typeof serverWithMetricsSchema>;
@@ -36,15 +40,29 @@ export default function ServersPage() {
   const updateServer = useUpdateServer();
   const deleteServer = useDeleteServer();
 
+  const { data: projects } = useProjects();
+  const createProject = useCreateProject();
+  const [isProjectFormOpen, setIsProjectFormOpen] = useState(false);
+  const [newProject, setNewProject] = useState({ name: "", description: "" });
+  const [collapsedProjects, setCollapsedProjects] = useState<Record<string, boolean>>({});
+
+  const toggleProject = (name: string) => {
+    setCollapsedProjects(prev => ({ ...prev, [name]: !prev[name] }));
+  };
+
   const form = useForm<ServerWithMetrics>({
     resolver: zodResolver(serverWithMetricsSchema),
     defaultValues: {
       hostname: "",
+      name: "",
       ipAddress: "",
       os: "",
       osVersion: "",
       cpuCores: 1,
       totalRam: 1,
+      sshUser: "root",
+      sshKey: "",
+      projectId: null,
       totalDisk: 10,
       cpuUsage: 0,
       ramUsed: 0,
@@ -66,9 +84,17 @@ export default function ServersPage() {
     : 0;
 
   const filteredServers = servers?.filter(server =>
+    (server.name && server.name.toLowerCase().includes(searchTerm.toLowerCase())) ||
     server.hostname.toLowerCase().includes(searchTerm.toLowerCase()) ||
     (server.ipAddress && server.ipAddress.includes(searchTerm))
   );
+
+  const groupedServers = filteredServers?.reduce((acc, server) => {
+    const projectName = (server as any).project?.name || "Uncategorized";
+    if (!acc[projectName]) acc[projectName] = [];
+    acc[projectName].push(server);
+    return acc;
+  }, {} as Record<string, any[]>);
 
   const onSubmit = async (data: ServerWithMetrics) => {
     try {
@@ -104,6 +130,7 @@ export default function ServersPage() {
 
     form.reset({
       hostname: server.hostname,
+      name: server.name || "",
       ipAddress: server.ipAddress || "",
       os: server.os || "",
       osVersion: server.osVersion || "",
@@ -112,6 +139,7 @@ export default function ServersPage() {
       totalDisk: server.totalDisk,
       sshUser: server.sshUser || "root",
       sshKey: server.sshKey || "",
+      projectId: server.projectId || null,
       cpuUsage: lastMetric?.cpuUsage || 0,
       ramUsed: Number(ramUsed.toFixed(2)),
       storageUsed: Number(storageUsed.toFixed(2)),
@@ -152,9 +180,13 @@ export default function ServersPage() {
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
+          <Button onClick={() => setIsProjectFormOpen(true)} variant="outline" className="h-11 px-6 border-primary/20 hover:bg-primary/5 transition-all duration-300 rounded-xl font-bold tracking-tight text-primary">
+            <Plus className="mr-2 h-4 w-4 stroke-[3px]" /> Add Project
+          </Button>
           <Button onClick={() => {
             setEditingServer(null); form.reset({
               hostname: "",
+              name: "",
               ipAddress: "",
               os: "Linux",
               osVersion: "",
@@ -163,6 +195,7 @@ export default function ServersPage() {
               totalDisk: 10,
               sshUser: "root",
               sshKey: "",
+              projectId: null,
               cpuUsage: 0,
               ramUsed: 0,
               storageUsed: 0,
@@ -208,79 +241,103 @@ export default function ServersPage() {
                 </TableCell>
               </TableRow>
             ) : (
-              filteredServers?.map((server) => {
-                const lastMetric = server.metrics?.[0];
+              Object.entries(groupedServers || {}).map(([projectName, projectServers]) => {
+                const isCollapsed = collapsedProjects[projectName];
                 return (
-                  <TableRow key={server.id} className="group hover:bg-muted/20 border-b border-border/40 transition-colors">
-                    <TableCell className="pl-6 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary group-hover:scale-110 transition-transform duration-300">
-                          <Server className="h-4 w-4" />
+                  <Fragment key={projectName}>
+                    <TableRow className="bg-muted/10 hover:bg-muted/20 cursor-pointer transition-colors" onClick={() => toggleProject(projectName)}>
+                      <TableCell colSpan={8} className="py-3 px-6">
+                        <div className="flex items-center gap-2">
+                          {isCollapsed ? <ChevronRight className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+                          <Layout className="h-4 w-4 text-primary/60" />
+                          <span className="text-sm font-bold tracking-tight text-foreground/70 uppercase">{projectName}</span>
+                          <span className="text-[10px] font-medium bg-primary/10 text-primary px-2 py-0.5 rounded-full ml-2">
+                            {projectServers.length} {projectServers.length === 1 ? 'Server' : 'Servers'}
+                          </span>
                         </div>
-                        <span className="font-bold text-sm tracking-tight">{server.hostname}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="py-4 font-mono text-[10px]">
-                      <code className="bg-secondary/50 px-2 py-1 rounded-md border border-border/50 text-foreground/80 shadow-inner">
-                        {server.ipAddress || "0.0.0.0"}
-                      </code>
-                    </TableCell>
-                    <TableCell className="py-4">
-                      <div className="flex flex-col gap-0.5">
-                        <div className="flex items-center gap-1.5 grayscale group-hover:grayscale-0 transition-all duration-300">
-                          {server.os?.toLowerCase().includes("win") ? <Layout className="h-3 w-3 text-blue-500" /> : <Terminal className="h-3 w-3 text-primary" />}
-                          <span className="text-xs font-semibold">{server.os || "Linux"}</span>
-                        </div>
-                        <span className="text-[10px] text-muted-foreground font-medium pl-4.5">{server.osVersion || "Unknown"}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="py-4">
-                      <div className="flex flex-col gap-1">
-                        <div className="flex items-center gap-1.5">
-                          <User className="h-3 w-3 text-muted-foreground" />
-                          <span className="text-xs font-mono font-bold text-foreground/80">{server.sshUser || "root"}</span>
-                        </div>
-                        {server.sshKey && (
-                          <div className="flex items-center gap-1.5 opacity-60">
-                            <Key className="h-2.5 w-2.5" />
-                            <span className="text-[9px] font-mono truncate max-w-[80px]">{server.sshKey}</span>
-                          </div>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell className="py-4">
-                      <UsageBar
-                        value={lastMetric?.cpuUsage || 0}
-                        label={`${server.cpuCores} vCPUs`}
-                      />
-                    </TableCell>
-                    <TableCell className="py-4">
-                      <UsageBar
-                        value={lastMetric?.memoryUsage || 0}
-                        label={`${server.totalRam} GB`}
-                      />
-                    </TableCell>
-                    <TableCell className="py-4">
-                      <UsageBar
-                        value={lastMetric?.diskUsage || 0}
-                        label={`${server.totalDisk} GB`}
-                      />
-                    </TableCell>
+                      </TableCell>
+                    </TableRow>
+                    {!isCollapsed && projectServers.map((server) => {
+                      const lastMetric = server.metrics?.[0];
+                      return (
+                        <TableRow key={server.id} className="group hover:bg-muted/20 border-b border-border/40 transition-colors">
+                          <TableCell className="pl-8 py-4">
+                            <div className="flex items-center gap-3">
+                              <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary group-hover:scale-110 transition-transform duration-300">
+                                <Server className="h-4 w-4" />
+                              </div>
+                              <div className="flex flex-col">
+                                <span className="font-bold text-sm tracking-tight">{server.name || server.hostname}</span>
+                                {server.name && server.name !== server.hostname && (
+                                  <span className="text-[10px] text-muted-foreground font-mono">{server.hostname}</span>
+                                )}
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell className="py-4 font-mono text-[10px]">
+                            <code className="bg-secondary/50 px-2 py-1 rounded-md border border-border/50 text-foreground/80 shadow-inner">
+                              {server.ipAddress || "0.0.0.0"}
+                            </code>
+                          </TableCell>
+                          <TableCell className="py-4">
+                            <div className="flex flex-col gap-0.5">
+                              <div className="flex items-center gap-1.5 grayscale group-hover:grayscale-0 transition-all duration-300">
+                                {server.os?.toLowerCase().includes("win") ? <Layout className="h-3 w-3 text-blue-500" /> : <Terminal className="h-3 w-3 text-primary" />}
+                                <span className="text-xs font-semibold">{server.os || "Linux"}</span>
+                              </div>
+                              <span className="text-[10px] text-muted-foreground font-medium pl-4.5">{server.osVersion || "Unknown"}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="py-4">
+                            <div className="flex flex-col gap-1">
+                              <div className="flex items-center gap-1.5">
+                                <User className="h-3 w-3 text-muted-foreground" />
+                                <span className="text-xs font-mono font-bold text-foreground/80">{server.sshUser || "root"}</span>
+                              </div>
+                              {server.sshKey && (
+                                <div className="flex items-center gap-1.5 opacity-60">
+                                  <Key className="h-2.5 w-2.5" />
+                                  <span className="text-[9px] font-mono truncate max-w-[80px]">{server.sshKey}</span>
+                                </div>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell className="py-4">
+                            <UsageBar
+                              value={lastMetric?.cpuUsage || 0}
+                              label={`${server.cpuCores} vCPUs`}
+                            />
+                          </TableCell>
+                          <TableCell className="py-4">
+                            <UsageBar
+                              value={lastMetric?.memoryUsage || 0}
+                              label={`${server.totalRam} GB`}
+                            />
+                          </TableCell>
+                          <TableCell className="py-4">
+                            <UsageBar
+                              value={lastMetric?.diskUsage || 0}
+                              label={`${server.totalDisk} GB`}
+                            />
+                          </TableCell>
 
-                    <TableCell className="py-4 text-right pr-6">
-                      <div className="flex justify-end gap-1 transition-all duration-300">
-                        <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-primary/20 hover:text-primary transition-colors" onClick={() => { setSelectedServerId(server.id); setIsDetailOpen(true); }}>
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-accent/20 hover:text-accent transition-colors" onClick={() => handleEdit(server)}>
-                          <Edit2 className="h-4 w-4" />
-                        </Button>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-destructive/20 hover:text-destructive transition-colors" onClick={() => handleDelete(server.id)}>
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
+                          <TableCell className="py-4 text-right pr-6">
+                            <div className="flex justify-end gap-1 transition-all duration-300">
+                              <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-primary/20 hover:text-primary transition-colors" onClick={() => { setSelectedServerId(server.id); setIsDetailOpen(true); }}>
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                              <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-accent/20 hover:text-accent transition-colors" onClick={() => handleEdit(server)}>
+                                <Edit2 className="h-4 w-4" />
+                              </Button>
+                              <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-destructive/20 hover:text-destructive transition-colors" onClick={() => handleDelete(server.id)}>
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </Fragment>
                 );
               })
             )}
@@ -290,7 +347,7 @@ export default function ServersPage() {
 
       {/* Detail Dialog */}
       <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto bg-background/95 backdrop-blur-md border-border/50 shadow-2xl">
           <DialogHeader>
             <DialogTitle className="text-2xl font-display flex items-center gap-2">
               <Server className="h-6 w-6 text-primary" />
@@ -303,7 +360,7 @@ export default function ServersPage() {
 
       {/* Add/Edit Dialog */}
       <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
-        <DialogContent className="sm:max-w-[650px]">
+        <DialogContent className="sm:max-w-[650px] bg-background/95 backdrop-blur-md border-border/50 shadow-2xl">
           <DialogHeader>
             <DialogTitle>{editingServer ? "Edit Server" : "Add New Server"}</DialogTitle>
           </DialogHeader>
@@ -312,15 +369,29 @@ export default function ServersPage() {
               <div className="grid grid-cols-2 gap-4">
                 <FormField
                   control={form.control}
-                  name="hostname"
+                  name="name"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Hostname</FormLabel>
-                      <FormControl><Input {...field} placeholder="web-srv-01" /></FormControl>
+                      <FormLabel>Friendly Name</FormLabel>
+                      <FormControl><Input {...field} placeholder="Main Web Server" /></FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
+                <FormField
+                  control={form.control}
+                  name="hostname"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Hostname / Technical ID</FormLabel>
+                      <FormControl><Input {...field} placeholder="web-srv-01" disabled={!!editingServer} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
                 <FormField
                   control={form.control}
                   name="ipAddress"
@@ -328,6 +399,34 @@ export default function ServersPage() {
                     <FormItem>
                       <FormLabel>IP Address</FormLabel>
                       <FormControl><Input {...field} placeholder="192.168.1.10" /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="projectId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Project</FormLabel>
+                      <Select
+                        onValueChange={(val) => field.onChange(val === "none" ? null : Number(val))}
+                        value={field.value?.toString() || "none"}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select a project" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent className="bg-background border-border shadow-xl">
+                          <SelectItem value="none">No Project</SelectItem>
+                          {projects?.map((p) => (
+                            <SelectItem key={p.id} value={p.id.toString()}>
+                              {p.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -484,6 +583,62 @@ export default function ServersPage() {
           </Form>
         </DialogContent>
       </Dialog>
+
+      {/* Project Creation Dialog */}
+      <Dialog open={isProjectFormOpen} onOpenChange={setIsProjectFormOpen}>
+        <DialogContent className="sm:max-w-[425px] bg-background/95 backdrop-blur-md border-border/50 shadow-2xl">
+          <DialogHeader>
+            <DialogTitle>Create New Project</DialogTitle>
+            <DialogDescription>Group your servers by organization or department.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label>Project Name</Label>
+              <Input
+                placeholder="e.g. Marketing, FinOps"
+                value={newProject.name}
+                onChange={(e) => setNewProject({ ...newProject, name: e.target.value })}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label>Description (Optional)</Label>
+              <Input
+                placeholder="Brief purpose of this project"
+                value={newProject.description}
+                onChange={(e) => setNewProject({ ...newProject, description: e.target.value })}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsProjectFormOpen(false);
+                setNewProject({ name: "", description: "" });
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={async () => {
+                if (!newProject.name) return;
+                try {
+                  await createProject.mutateAsync(newProject);
+                  toast({ title: "Project created successfully" });
+                  queryClient.invalidateQueries({ queryKey: [api.projects.list.path] });
+                  setIsProjectFormOpen(false);
+                  setNewProject({ name: "", description: "" });
+                } catch (err) {
+                  toast({ title: "Failed to create project", variant: "destructive" });
+                }
+              }}
+              disabled={createProject.isPending}
+            >
+              Create Project
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Shell>
   );
 }
@@ -510,12 +665,23 @@ function ServerDetailView({ id }: { id: number | null }) {
             </h3>
             <div className="bg-secondary/20 rounded-xl p-5 border border-border/50 space-y-4">
               <div className="flex justify-between items-center">
+                <span className="text-sm text-muted-foreground">Display Name</span>
+                <span className="font-bold text-primary">{server.name || "None"}</span>
+              </div>
+              <div className="flex justify-between items-center">
                 <span className="text-sm text-muted-foreground">Hostname</span>
                 <span className="font-mono font-medium">{server.hostname}</span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-sm text-muted-foreground">IP Address</span>
                 <span className="font-mono text-primary font-medium">{server.ipAddress || "-"}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-muted-foreground">Project</span>
+                <div className="flex items-center gap-1.5 font-bold text-primary">
+                  <Folder className="h-3.5 w-3.5" />
+                  <span>{(server as any).project?.name || "None"}</span>
+                </div>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-sm text-muted-foreground">Operating System</span>

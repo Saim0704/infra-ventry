@@ -8,7 +8,9 @@ import {
   databases,
   databaseMetrics,
   clusters,
-  clusterMetrics
+  clusterMetrics,
+  projects,
+  insertProjectSchema
 } from './schema';
 
 // Shared error schemas
@@ -52,6 +54,56 @@ export const api = {
     },
   },
 
+  // === PROJECTS ===
+  projects: {
+    list: {
+      method: 'GET' as const,
+      path: '/api/projects' as const,
+      responses: {
+        200: z.array(z.custom<typeof projects.$inferSelect>()),
+      },
+    },
+    create: {
+      method: 'POST' as const,
+      path: '/api/projects' as const,
+      input: insertProjectSchema,
+      responses: {
+        201: z.custom<typeof projects.$inferSelect>(),
+      },
+    },
+    update: {
+      method: 'PATCH' as const,
+      path: '/api/projects/:id' as const,
+      input: insertProjectSchema.partial(),
+      responses: {
+        200: z.custom<typeof projects.$inferSelect>(),
+        404: errorSchemas.notFound,
+      },
+    },
+    delete: {
+      method: 'DELETE' as const,
+      path: '/api/projects/:id' as const,
+      responses: {
+        204: z.void(),
+        404: errorSchemas.notFound,
+      },
+    },
+    resources: {
+      method: 'GET' as const,
+      path: '/api/projects/:id/resources' as const,
+      responses: {
+        200: z.object({
+          project: z.custom<typeof projects.$inferSelect>(),
+          servers: z.array(z.custom<typeof servers.$inferSelect & { metrics: any[] }>()),
+          databases: z.array(z.custom<typeof databases.$inferSelect>()),
+          clusters: z.array(z.custom<typeof clusters.$inferSelect>()),
+          tokens: z.array(z.custom<typeof tokens.$inferSelect>()),
+        }),
+        404: errorSchemas.notFound,
+      },
+    },
+  },
+
   // === DASHBOARD DATA ===
   dashboard: {
     stats: {
@@ -75,14 +127,14 @@ export const api = {
       method: 'GET' as const,
       path: '/api/servers' as const,
       responses: {
-        200: z.array(z.custom<typeof servers.$inferSelect & { metrics: typeof serverMetrics.$inferSelect[] }>()),
+        200: z.array(z.custom<typeof servers.$inferSelect & { metrics: typeof serverMetrics.$inferSelect[], project?: typeof projects.$inferSelect }>()),
       },
     },
     get: {
       method: 'GET' as const,
       path: '/api/servers/:id' as const,
       responses: {
-        200: z.custom<typeof servers.$inferSelect & { metrics: typeof serverMetrics.$inferSelect[] }>(),
+        200: z.custom<typeof servers.$inferSelect & { metrics: typeof serverMetrics.$inferSelect[], project?: typeof projects.$inferSelect }>(),
         404: errorSchemas.notFound,
       },
     },

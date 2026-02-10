@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Configuration
-SERVER_URL="${SERVER_URL:-http://localhost:5000}"
+SERVER_URL="${SERVER_URL:-http://14.195.22.58:5400}"
 AGENT_TOKEN="${AGENT_TOKEN:-infra_inventory_agent_secret_2026}"
 
 # Basic System Specs

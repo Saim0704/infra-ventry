@@ -32,6 +32,7 @@ export const tokens = pgTable("tokens", {
   name: text("name").notNull(), // e.g., "Production VM Agent"
   token: text("token").notNull().unique(),
   type: text("type").notNull(), // "vm", "database", "kubernetes"
+  projectId: integer("project_id").references(() => projects.id),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -39,6 +40,7 @@ export const tokens = pgTable("tokens", {
 export const servers = pgTable("servers", {
   id: serial("id").primaryKey(),
   hostname: text("hostname").notNull().unique(),
+  name: text("name"),
   os: text("os"),
   cpuCores: integer("cpu_cores"),
   totalRam: real("total_ram"), // in GB
@@ -47,7 +49,16 @@ export const servers = pgTable("servers", {
   osVersion: text("os_version"),
   sshUser: text("ssh_user"),
   sshKey: text("ssh_key"),
+  projectId: integer("project_id").references(() => projects.id),
   lastSeen: timestamp("last_seen").defaultNow(),
+});
+
+// === PROJECTS ===
+export const projects = pgTable("projects", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull().unique(),
+  description: text("description"),
+  createdAt: timestamp("created_at").defaultNow(),
 });
 
 export const serverMetrics = pgTable("server_metrics", {
@@ -67,6 +78,7 @@ export const databases = pgTable("databases", {
   version: text("version"),
   host: text("host"),
   port: integer("port"),
+  projectId: integer("project_id").references(() => projects.id),
   lastSeen: timestamp("last_seen").defaultNow(),
 });
 
@@ -86,6 +98,7 @@ export const clusters = pgTable("clusters", {
   nodeCount: integer("node_count"),
   totalCpu: real("total_cpu"),
   totalMemory: real("total_memory"),
+  projectId: integer("project_id").references(() => projects.id),
   lastSeen: timestamp("last_seen").defaultNow(),
 });
 
@@ -99,8 +112,19 @@ export const clusterMetrics = pgTable("cluster_metrics", {
 });
 
 // === RELATIONS ===
-export const serversRelations = relations(servers, ({ many }) => ({
+export const projectsRelations = relations(projects, ({ many }) => ({
+  servers: many(servers),
+  databases: many(databases),
+  clusters: many(clusters),
+  tokens: many(tokens),
+}));
+
+export const serversRelations = relations(servers, ({ one, many }) => ({
   metrics: many(serverMetrics),
+  project: one(projects, {
+    fields: [servers.projectId],
+    references: [projects.id],
+  }),
 }));
 
 export const serverMetricsRelations = relations(serverMetrics, ({ one }) => ({
@@ -110,8 +134,12 @@ export const serverMetricsRelations = relations(serverMetrics, ({ one }) => ({
   }),
 }));
 
-export const databasesRelations = relations(databases, ({ many }) => ({
+export const databasesRelations = relations(databases, ({ one, many }) => ({
   metrics: many(databaseMetrics),
+  project: one(projects, {
+    fields: [databases.projectId],
+    references: [projects.id],
+  }),
 }));
 
 export const databaseMetricsRelations = relations(databaseMetrics, ({ one }) => ({
@@ -121,8 +149,12 @@ export const databaseMetricsRelations = relations(databaseMetrics, ({ one }) => 
   }),
 }));
 
-export const clustersRelations = relations(clusters, ({ many }) => ({
+export const clustersRelations = relations(clusters, ({ one, many }) => ({
   metrics: many(clusterMetrics),
+  project: one(projects, {
+    fields: [clusters.projectId],
+    references: [projects.id],
+  }),
 }));
 
 export const clusterMetricsRelations = relations(clusterMetrics, ({ one }) => ({
@@ -132,11 +164,19 @@ export const clusterMetricsRelations = relations(clusterMetrics, ({ one }) => ({
   }),
 }));
 
+export const tokensRelations = relations(tokens, ({ one }) => ({
+  project: one(projects, {
+    fields: [tokens.projectId],
+    references: [projects.id],
+  }),
+}));
+
 
 // === ZOD SCHEMAS ===
 export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertTokenSchema = createInsertSchema(tokens).omit({ id: true, createdAt: true });
 
+export const insertProjectSchema = createInsertSchema(projects).omit({ id: true, createdAt: true });
 export const insertServerSchema = createInsertSchema(servers).omit({ id: true, lastSeen: true });
 export const insertServerMetricSchema = createInsertSchema(serverMetrics).omit({ id: true, createdAt: true });
 
@@ -149,6 +189,7 @@ export const insertClusterMetricSchema = createInsertSchema(clusterMetrics).omit
 // Form Schema for Manual Server Entry
 export const serverWithMetricsSchema = z.object({
   hostname: z.string().min(1, "Hostname is required"),
+  name: z.string().optional(),
   ipAddress: z.string().optional(),
   os: z.string().optional(),
   osVersion: z.string().optional(),
@@ -157,6 +198,7 @@ export const serverWithMetricsSchema = z.object({
   totalDisk: z.number().min(0, "Total Disk must be positive"),
   sshUser: z.string().optional(),
   sshKey: z.string().optional(),
+  projectId: z.number().nullable().optional(),
   cpuUsage: z.number().min(0).max(100, "CPU Usage must be between 0 and 100").optional(),
   ramUsed: z.number().min(0, "RAM Used must be positive").optional(),
   storageUsed: z.number().min(0, "Storage Used must be positive").optional(),
@@ -168,6 +210,8 @@ export const serverWithMetricsSchema = z.object({
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type Token = typeof tokens.$inferSelect;
+export type Project = typeof projects.$inferSelect;
+export type InsertProject = z.infer<typeof insertProjectSchema>;
 export type Server = typeof servers.$inferSelect;
 export type ServerMetric = typeof serverMetrics.$inferSelect;
 export type Database = typeof databases.$inferSelect;
