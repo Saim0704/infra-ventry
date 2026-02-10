@@ -155,6 +155,8 @@ export default function ProjectDetailPage() {
                                                 className="memory-usage-bar"
                                             />
                                         </div>
+
+                                        <ProcessList processes={(server as any).metrics?.[0]?.topProcesses} />
                                     </CardContent>
                                 </Card>
                             ))
@@ -235,6 +237,40 @@ function EmptyState({ icon, message }: any) {
         <div className="col-span-full py-20 flex flex-col items-center justify-center bg-muted/20 border border-dashed border-border/40 rounded-3xl text-muted-foreground">
             <div className="h-16 w-16 mb-4 opacity-20">{icon}</div>
             <p className="font-bold tracking-tight">{message}</p>
+        </div>
+    );
+}
+
+function ProcessList({ processes }: { processes: any[] }) {
+    if (!processes || processes.length === 0) return null;
+
+    return (
+        <div className="mt-6 pt-4 border-t border-border/40">
+            <h4 className="flex items-center gap-2 text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-3">
+                <Activity className="w-3 h-3" /> Top Processes
+            </h4>
+            <div className="rounded-xl border border-border/40 bg-background/50 overflow-hidden">
+                <div className="grid grid-cols-12 gap-2 text-[10px] font-bold text-muted-foreground bg-muted/30 px-3 py-2 border-b border-border/40">
+                    <div className="col-span-2">PID</div>
+                    <div className="col-span-6">NAME</div>
+                    <div className="col-span-2 text-right">CPU</div>
+                    <div className="col-span-2 text-right">MEM</div>
+                </div>
+                <div className="divide-y divide-border/40">
+                    {processes.slice(0, 5).map((p, i) => (
+                        <div key={i} className="grid grid-cols-12 gap-2 text-[11px] px-3 py-2 items-center hover:bg-muted/30 transition-colors">
+                            <div className="col-span-2 font-mono text-muted-foreground/80">{p.pid}</div>
+                            <div className="col-span-6 font-medium truncate" title={p.name}>{p.name}</div>
+                            <div className={`col-span-2 text-right font-mono font-bold ${p.cpu > 50 ? 'text-red-500' : p.cpu > 20 ? 'text-amber-500' : 'text-emerald-500'}`}>
+                                {p.cpu.toFixed(1)}%
+                            </div>
+                            <div className={`col-span-2 text-right font-mono font-bold ${p.memory > 50 ? 'text-blue-500' : 'text-sky-500'}`}>
+                                {p.memory.toFixed(1)}%
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
         </div>
     );
 }

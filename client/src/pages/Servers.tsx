@@ -755,6 +755,37 @@ function ServerDetailView({ id }: { id: number | null }) {
         </div>
 
       </div>
+
+      {/* Top Processes */}
+      {!!lastMetric?.topProcesses && (Array.isArray(lastMetric.topProcesses) && lastMetric.topProcesses.length > 0) && (
+        <section>
+          <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-4 flex items-center gap-2">
+            <Activity className="h-4 w-4" /> Top Processes
+          </h3>
+          <div className="bg-secondary/20 rounded-xl border border-border/50 overflow-hidden">
+            <Table>
+              <TableHeader className="bg-muted/40">
+                <TableRow className="border-border/50 hover:bg-transparent">
+                  <TableHead className="h-10 text-[10px] uppercase font-bold text-muted-foreground pl-6">PID</TableHead>
+                  <TableHead className="h-10 text-[10px] uppercase font-bold text-muted-foreground w-full">Process Name</TableHead>
+                  <TableHead className="h-10 text-[10px] uppercase font-bold text-muted-foreground text-right">CPU %</TableHead>
+                  <TableHead className="h-10 text-[10px] uppercase font-bold text-muted-foreground text-right pr-6">Mem %</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {(lastMetric.topProcesses as any[]).map((proc: any, idx: number) => (
+                  <TableRow key={idx} className="border-border/40 hover:bg-muted/20">
+                    <TableCell className="py-2.5 font-mono text-xs pl-6">{proc.pid}</TableCell>
+                    <TableCell className="py-2.5 font-medium text-sm">{proc.name}</TableCell>
+                    <TableCell className="py-2.5 text-right font-mono text-xs">{proc.cpu}%</TableCell>
+                    <TableCell className="py-2.5 text-right font-mono text-xs pr-6">{proc.memory}%</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </section>
+      )}
     </div>
   );
 }

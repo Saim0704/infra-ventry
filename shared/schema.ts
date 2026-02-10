@@ -67,6 +67,7 @@ export const serverMetrics = pgTable("server_metrics", {
   cpuUsage: real("cpu_usage"), // %
   memoryUsage: real("memory_usage"), // %
   diskUsage: real("disk_usage"), // %
+  topProcesses: jsonb("top_processes"), // Array of { pid, name, cpu, memory }
   createdAt: timestamp("created_at").defaultNow(),
 });
 

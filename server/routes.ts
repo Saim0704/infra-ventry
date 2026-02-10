@@ -45,6 +45,8 @@ export async function registerRoutes(
 
       const projectId = tokenData?.projectId || null;
       console.log(`[DEBUG] Associated Project ID:`, projectId);
+      console.log(`[DEBUG] Metrics received:`, JSON.stringify(metrics));
+      console.log(`[DEBUG] Top Processes:`, metrics.topProcesses);
 
       // Upsert server with project association
       const server = await storage.upsertServer({ ...serverInfo, projectId });

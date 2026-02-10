@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Configuration
-SERVER_URL="${SERVER_URL:-http://14.195.22.58:5400}"
+SERVER_URL="${SERVER_URL:-http://localhost:5000}"
 AGENT_TOKEN="${AGENT_TOKEN:-infra_inventory_agent_secret_2026}"
 
 # Basic System Specs
@@ -27,6 +27,19 @@ CPU_USAGE=$(top -bn1 | grep "Cpu(s)" | sed "s/.*, *\([0-9.]*\)%* id.*/\1/" | awk
 MEMORY_USAGE=$(free | grep Mem | awk '{print $3/$2 * 100.0}')
 DISK_USAGE=$(df / | awk 'NR==2{print $5}' | sed 's/%//')
 
+# Top 5 Processes by CPU
+# Get top 5 processes and format as JSON array using awk
+TOP_PROCESSES=$(ps aux --sort=-%cpu | awk 'BEGIN{printf "["} NR>1 && NR<=6 {
+    if (NR>2) printf ",";
+    gsub(/"/, "\\\"", $11);
+    printf "{\"pid\":%s,\"name\":\"%s\",\"cpu\":%.1f,\"memory\":%.1f}", $2, $11, $3, $4
+} END{printf "]"}')
+
+# Fallback to empty array if something went wrong
+if [ -z "$TOP_PROCESSES" ] || [ "$TOP_PROCESSES" = "[" ] || [ "$TOP_PROCESSES" = "[]" ]; then
+    TOP_PROCESSES="[]"
+fi
+
 # Construct JSON Payload
 DATA_JSON=$(cat <<EOF
 {
@@ -40,7 +53,8 @@ DATA_JSON=$(cat <<EOF
   "metrics": {
     "cpuUsage": $CPU_USAGE,
     "memoryUsage": $MEMORY_USAGE,
-    "diskUsage": $DISK_USAGE
+    "diskUsage": $DISK_USAGE,
+    "topProcesses": $TOP_PROCESSES
   }
 }
 EOF

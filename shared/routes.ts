@@ -221,6 +221,12 @@ export const api = {
             cpuUsage: z.number(),
             memoryUsage: z.number(),
             diskUsage: z.number(),
+            topProcesses: z.array(z.object({
+              pid: z.number(),
+              name: z.string(),
+              cpu: z.number(),
+              memory: z.number(),
+            })).optional(),
           }),
         }),
       }),

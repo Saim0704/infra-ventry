@@ -66,7 +66,7 @@ export function RegistrationModal({ open, onOpenChange, token, projectName }: Re
     };
 
     const serverUrl = typeof window !== 'undefined' ? window.location.origin : "http://YOUR_SERVER_IP:5400";
-    const baseVmCommand = `curl -s -L "https://gitlab.bigohtech.com/devops-public/infrawatch-bash-scripts/-/raw/53fbf518be7941299f6654467c184ab2df6d32a4/vm_agent.sh" | bash -s -- ${serverUrl} ${token || "YOUR_TOKEN"}`;
+    const baseVmCommand = `curl -s -L "https://gitlab.bigohtech.com/devops-public/infrawatch-bash-scripts/-/raw/dd01770d64390aa48ec3ed83c3a4888d885650c5/vm_agent.sh" | bash -s -- ${serverUrl} ${token || "YOUR_TOKEN"}`;
 
     const vmCommand = baseVmCommand;
     const dbCommand = `docker run -d --name infra-db-agent -e AGENT_TOKEN=${token || "YOUR_TOKEN"} infrawatch/db-agent:latest`;
