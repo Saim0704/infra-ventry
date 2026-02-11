@@ -9,22 +9,9 @@ import { db } from "./db";
 import { eq } from "drizzle-orm";
 import connectPg from "connect-pg-simple";
 
-const scryptAsync = promisify(scrypt);
+import { hashPassword, comparePassword } from "./lib/auth-utils";
 
 const PgSession = connectPg(session);
-
-async function hashPassword(password: string) {
-    const salt = randomBytes(16).toString("hex");
-    const buf = (await scryptAsync(password, salt, 64)) as Buffer;
-    return `${buf.toString("hex")}.${salt}`;
-}
-
-async function comparePassword(supplied: string, stored: string) {
-    const [hashed, salt] = stored.split(".");
-    const hashedBuf = Buffer.from(hashed, "hex");
-    const suppliedBuf = (await scryptAsync(supplied, salt, 64)) as Buffer;
-    return timingSafeEqual(hashedBuf, suppliedBuf);
-}
 
 export function setupAuth(app: Express) {
     const sessionSettings: session.SessionOptions = {
@@ -99,8 +86,11 @@ export function setupAuth(app: Express) {
             const hashedPassword = await hashPassword("password");
             await db.insert(users).values({
                 username: "admin",
+                email: "admin@example.com",
                 password: hashedPassword,
-                isAdmin: true,
+                role: "admin",
+                firstName: "System",
+                lastName: "Administrator"
             });
             console.log("Created default user 'admin' with password 'password'");
         }
@@ -112,10 +102,10 @@ export function registerAuthRoutes(app: Express) {
         res.status(200).json(req.user);
     });
 
-    app.post("/api/logout", (req, res, next) => {
+    app.all("/api/logout", (req, res, next) => {
         req.logout((err) => {
             if (err) return next(err);
-            res.redirect("/");
+            res.status(200).json({ message: "Logged out successfully" });
         });
     });
 

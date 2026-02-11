@@ -4,6 +4,16 @@ import { storage } from "./storage";
 import { api } from "@shared/routes";
 import { setupAuth, registerAuthRoutes, isAuthenticated } from "./auth";
 import { z } from "zod";
+import { insertUserSchema } from "@shared/schema";
+import { hashPassword } from "./lib/auth-utils";
+
+// Middleware to check if user is admin
+const isAdmin = (req: any, res: any, next: any) => {
+  if (req.isAuthenticated() && req.user.role === 'admin') {
+    return next();
+  }
+  res.status(403).json({ message: "Forbidden: Admin access required" });
+};
 
 export async function registerRoutes(
   httpServer: Server,
@@ -252,6 +262,57 @@ export async function registerRoutes(
   app.delete(api.servers.delete.path, isAuthenticated, async (req, res) => {
     await storage.deleteServer(Number(req.params.id));
     res.status(204).send();
+  });
+
+  // === USER MANAGEMENT ===
+  // Admin only: List users
+  app.get("/api/admin/users", isAdmin, async (req, res) => {
+    const usersList = await storage.getUsers();
+    // Remove sensitive data (passwords)
+    const safeUsers = usersList.map(({ password, ...rest }) => rest);
+    res.json(safeUsers);
+  });
+
+  // Admin only: Create user
+  app.post("/api/admin/users", isAdmin, async (req, res) => {
+    try {
+      const input = insertUserSchema.parse(req.body);
+      const hashedPassword = await hashPassword(input.password);
+      const user = await storage.createUser({ ...input, password: hashedPassword });
+      const { password, ...safeUser } = user;
+      res.status(201).json(safeUser);
+    } catch (err) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid data", errors: err.errors });
+      }
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // Admin only: Change any user password
+  app.patch("/api/admin/users/:id/password", isAdmin, async (req, res) => {
+    try {
+      const { password } = z.object({ password: z.string().min(6) }).parse(req.body);
+      const hashedPassword = await hashPassword(password);
+      const user = await storage.updateUser(req.params.id, { password: hashedPassword });
+      if (!user) return res.status(404).json({ message: "User not found" });
+      res.json({ message: "Password updated successfully" });
+    } catch (err) {
+      res.status(400).json({ message: "Invalid password format" });
+    }
+  });
+
+  // Self: Change own password
+  app.patch("/api/user/password", isAuthenticated, async (req, res) => {
+    try {
+      const { password } = z.object({ password: z.string().min(6) }).parse(req.body);
+      const hashedPassword = await hashPassword(password);
+      const user = req.user as any;
+      await storage.updateUser(user.id, { password: hashedPassword });
+      res.json({ message: "Password updated successfully" });
+    } catch (err) {
+      res.status(400).json({ message: "Invalid password format" });
+    }
   });
 
 

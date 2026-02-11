@@ -15,13 +15,15 @@ export const sessions = pgTable(
   (table) => [index("IDX_session_expire").on(table.expire)]
 );
 
-// === USERS (Replit Auth) ===
+// === USERS ===
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  email: varchar("email").unique(),
+  email: varchar("email").unique().notNull(),
   username: text("username").unique().notNull(),
   password: text("password").notNull(),
-  isAdmin: boolean("is_admin").default(false),
+  firstName: text("first_name"),
+  lastName: text("last_name"),
+  role: text("role").default("read").notNull(), // 'admin' or 'read'
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -174,7 +176,11 @@ export const tokensRelations = relations(tokens, ({ one }) => ({
 
 
 // === ZOD SCHEMAS ===
-export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertUserSchema = createInsertSchema(users, {
+  email: z.string().email("Invalid email address"),
+  username: z.string().min(3, "Username must be at least 3 characters"),
+  password: z.string().min(6, "Password must be at least 6 characters"),
+}).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertTokenSchema = createInsertSchema(tokens).omit({ id: true, createdAt: true });
 
 export const insertProjectSchema = createInsertSchema(projects).omit({ id: true, createdAt: true });

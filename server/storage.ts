@@ -4,7 +4,7 @@ import {
   users, tokens, servers, serverMetrics, databases, databaseMetrics, clusters, clusterMetrics, projects,
   type User, type Token, type Server, type ServerMetric, type Database, type DatabaseMetric, type Cluster, type ClusterMetric, type Project
 } from "@shared/schema";
-import { insertTokenSchema, insertServerSchema, insertServerMetricSchema, insertDatabaseSchema, insertDatabaseMetricSchema, insertClusterSchema, insertClusterMetricSchema, insertProjectSchema } from "@shared/schema";
+import { insertTokenSchema, insertServerSchema, insertServerMetricSchema, insertDatabaseSchema, insertDatabaseMetricSchema, insertClusterSchema, insertClusterMetricSchema, insertProjectSchema, insertUserSchema } from "@shared/schema";
 import { z } from "zod";
 
 export interface IStorage {
@@ -48,6 +48,13 @@ export interface IStorage {
   getCluster(id: number): Promise<(Cluster & { metrics: ClusterMetric[] }) | undefined>;
   upsertCluster(data: z.infer<typeof insertClusterSchema>): Promise<Cluster>;
   addClusterMetric(data: z.infer<typeof insertClusterMetricSchema>): Promise<void>;
+
+  // === USERS ===
+  getUsers(): Promise<User[]>;
+  getUser(id: string): Promise<User | undefined>;
+  createUser(data: z.infer<typeof insertUserSchema>): Promise<User>;
+  updateUser(id: string, data: Partial<User>): Promise<User | undefined>;
+  deleteUser(id: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -331,6 +338,30 @@ export class DatabaseStorage implements IStorage {
 
   async addClusterMetric(data: z.infer<typeof insertClusterMetricSchema>): Promise<void> {
     await db.insert(clusterMetrics).values(data);
+  }
+
+  // === USERS ===
+  async getUsers(): Promise<User[]> {
+    return await db.select().from(users).orderBy(desc(users.createdAt));
+  }
+
+  async getUser(id: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user;
+  }
+
+  async createUser(data: z.infer<typeof insertUserSchema>): Promise<User> {
+    const [user] = await db.insert(users).values(data).returning();
+    return user;
+  }
+
+  async updateUser(id: string, data: Partial<User>): Promise<User | undefined> {
+    const [user] = await db.update(users).set({ ...data, updatedAt: new Date() }).where(eq(users.id, id)).returning();
+    return user;
+  }
+
+  async deleteUser(id: string): Promise<void> {
+    await db.delete(users).where(eq(users.id, id));
   }
 }
 
