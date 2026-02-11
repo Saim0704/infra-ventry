@@ -38,9 +38,11 @@ export interface IStorage {
   addServerMetric(data: z.infer<typeof insertServerMetricSchema>): Promise<void>;
 
   // === DATABASES ===
-  getDatabases(): Promise<Database[]>;
+  getDatabases(): Promise<(Database & { metrics: DatabaseMetric[], project?: Project })[]>;
   getDatabase(id: number): Promise<(Database & { metrics: DatabaseMetric[] }) | undefined>;
   upsertDatabase(data: z.infer<typeof insertDatabaseSchema>): Promise<Database>;
+  updateDatabase(id: number, data: Partial<z.infer<typeof insertDatabaseSchema>>): Promise<Database | undefined>;
+  deleteDatabase(id: number): Promise<void>;
   addDatabaseMetric(data: z.infer<typeof insertDatabaseMetricSchema>): Promise<void>;
 
   // === CLUSTERS ===
@@ -240,14 +242,19 @@ export class DatabaseStorage implements IStorage {
   }
 
   // === DATABASES ===
-  async getDatabases(): Promise<(Database & { project?: Project })[]> {
+  async getDatabases(): Promise<(Database & { metrics: DatabaseMetric[], project?: Project })[]> {
     const allDbs = await db.select().from(databases).orderBy(desc(databases.lastSeen));
     return await Promise.all(allDbs.map(async (dbItem) => {
+      const metrics = await db.select().from(databaseMetrics)
+        .where(eq(databaseMetrics.databaseId, dbItem.id))
+        .orderBy(desc(databaseMetrics.createdAt))
+        .limit(1);
+
       let project;
       if (dbItem.projectId) {
         [project] = await db.select().from(projects).where(eq(projects.id, dbItem.projectId));
       }
-      return { ...dbItem, project };
+      return { ...dbItem, metrics, project };
     }));
   }
 
@@ -290,6 +297,19 @@ export class DatabaseStorage implements IStorage {
         .returning();
       return created;
     }
+  }
+
+  async updateDatabase(id: number, data: Partial<z.infer<typeof insertDatabaseSchema>>): Promise<Database | undefined> {
+    const [updated] = await db.update(databases)
+      .set({ ...data, lastSeen: new Date() })
+      .where(eq(databases.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteDatabase(id: number): Promise<void> {
+    await db.delete(databaseMetrics).where(eq(databaseMetrics.databaseId, id));
+    await db.delete(databases).where(eq(databases.id, id));
   }
 
   async addDatabaseMetric(data: z.infer<typeof insertDatabaseMetricSchema>): Promise<void> {

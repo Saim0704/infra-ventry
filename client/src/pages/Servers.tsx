@@ -16,7 +16,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { serverWithMetricsSchema } from "@shared/schema";
 import { useState, Fragment } from "react";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { format } from "date-fns";
+import { format, formatDistanceToNow } from "date-fns";
 import { Server, Cpu, HardDrive, CircuitBoard, Plus, Edit2, Trash2, Eye, Terminal, Layout, Activity, Shield, Globe, User, Key, Search, ChevronDown, ChevronRight, Folder } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
@@ -215,10 +215,10 @@ export default function ServersPage() {
               <TableHead className="py-6 text-[10px] uppercase tracking-[0.2em] font-black text-muted-foreground/60 pl-8">Identifier</TableHead>
               <TableHead className="py-6 text-[10px] uppercase tracking-[0.2em] font-black text-muted-foreground/60">Network</TableHead>
               <TableHead className="py-6 text-[10px] uppercase tracking-[0.2em] font-black text-muted-foreground/60">System</TableHead>
-              <TableHead className="py-6 text-[10px] uppercase tracking-[0.2em] font-black text-muted-foreground/60">User & Key</TableHead>
               <TableHead className="py-6 text-[10px] uppercase tracking-[0.2em] font-black text-muted-foreground/60 w-[160px]">vCPU Load</TableHead>
               <TableHead className="py-6 text-[10px] uppercase tracking-[0.2em] font-black text-muted-foreground/60 w-[160px]">RAM Usage</TableHead>
               <TableHead className="py-6 text-[10px] uppercase tracking-[0.2em] font-black text-muted-foreground/60 w-[160px]">Disk Space</TableHead>
+              <TableHead className="py-6 text-[10px] uppercase tracking-[0.2em] font-black text-muted-foreground/60 w-[140px]">Last Active</TableHead>
               <TableHead className="py-6 text-[10px] uppercase tracking-[0.2em] font-black text-muted-foreground/60 text-right pr-8">Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -289,20 +289,6 @@ export default function ServersPage() {
                             </div>
                           </TableCell>
                           <TableCell className="py-4">
-                            <div className="flex flex-col gap-1">
-                              <div className="flex items-center gap-1.5">
-                                <User className="h-3 w-3 text-muted-foreground" />
-                                <span className="text-xs font-mono font-bold text-foreground/80">{server.sshUser || "root"}</span>
-                              </div>
-                              {server.sshKey && (
-                                <div className="flex items-center gap-1.5 opacity-60">
-                                  <Key className="h-2.5 w-2.5" />
-                                  <span className="text-[9px] font-mono truncate max-w-[80px]">{server.sshKey}</span>
-                                </div>
-                              )}
-                            </div>
-                          </TableCell>
-                          <TableCell className="py-4">
                             <UsageBar
                               value={lastMetric?.cpuUsage || 0}
                               label={`${server.cpuCores} vCPUs`}
@@ -319,6 +305,14 @@ export default function ServersPage() {
                               value={lastMetric?.diskUsage || 0}
                               label={`${server.totalDisk} GB`}
                             />
+                          </TableCell>
+                          <TableCell className="py-4">
+                            <div className="flex flex-col">
+                              <span className="text-xs font-bold text-foreground/80">
+                                {server.lastSeen ? formatDistanceToNow(new Date(server.lastSeen), { addSuffix: true }) : "Never"}
+                              </span>
+                              <span className="text-[9px] text-muted-foreground uppercase tracking-wider font-semibold">Heartbeat</span>
+                            </div>
                           </TableCell>
 
                           <TableCell className="py-4 text-right pr-6">

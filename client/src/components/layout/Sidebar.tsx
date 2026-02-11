@@ -3,6 +3,8 @@ import { LayoutDashboard, Server, Database, Cloud, Settings, LogOut, Terminal, F
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
 
+import { ThemeToggle } from "./ThemeToggle";
+
 export function Sidebar() {
   const [location] = useLocation();
   const { logout } = useAuth();
@@ -18,14 +20,17 @@ export function Sidebar() {
 
   return (
     <div className="h-screen w-64 bg-card border-r border-border flex flex-col fixed left-0 top-0 z-50 shadow-xl">
-      <div className="p-6 flex items-center gap-3 border-b border-border/50">
-        <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center shadow-lg shadow-primary/25">
-          <Terminal className="text-white h-6 w-6" />
+      <div className="p-6 flex items-center justify-between border-b border-border/50">
+        <div className="flex items-center gap-3">
+          <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center shadow-lg shadow-primary/25">
+            <Terminal className="text-white h-6 w-6" />
+          </div>
+          <div>
+            <h1 className="font-display font-bold text-lg leading-none">InfraWatch</h1>
+            <span className="text-xs text-muted-foreground font-medium">System Monitor</span>
+          </div>
         </div>
-        <div>
-          <h1 className="font-display font-bold text-lg leading-none">InfraWatch</h1>
-          <span className="text-xs text-muted-foreground font-medium">System Monitor</span>
-        </div>
+        <ThemeToggle />
       </div>
 
       <nav className="flex-1 p-4 space-y-1 overflow-y-auto">

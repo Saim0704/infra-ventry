@@ -39,127 +39,168 @@ export default function SettingsPage() {
   };
 
   return (
-    <Shell title="Settings" description="Manage access tokens, user profiles, and system access.">
-      <Tabs defaultValue="tokens" className="space-y-6">
-        <TabsList className="bg-muted/50 p-1 border border-border/50">
-          <TabsTrigger value="tokens" className="gap-2">
-            <Shield className="h-4 w-4" /> Tokens
-          </TabsTrigger>
-          <TabsTrigger value="profile" className="gap-2">
-            <User className="h-4 w-4" /> Profile
-          </TabsTrigger>
-          {user?.role === 'admin' && (
-            <TabsTrigger value="users" className="gap-2">
-              <UserCog className="h-4 w-4" /> User Management
-            </TabsTrigger>
-          )}
-        </TabsList>
-
-        <TabsContent value="tokens">
-          <Card className="border-border/50">
-            <CardHeader className="flex flex-row items-center justify-between">
-              <div>
-                <CardTitle>Agent Tokens</CardTitle>
-                <CardDescription>Tokens used by agents to authenticate and send metrics.</CardDescription>
-              </div>
-              <CreateTokenDialog />
-            </CardHeader>
-            <CardContent>
-              {tokensLoading ? (
-                <div className="text-center py-8 text-muted-foreground">Loading tokens...</div>
-              ) : tokens?.length === 0 ? (
-                <div className="text-center py-12 border-2 border-dashed rounded-xl bg-secondary/10">
-                  <p className="text-muted-foreground">No active tokens found.</p>
-                  <p className="text-xs text-muted-foreground mt-1">Create a token to connect your first agent.</p>
-                </div>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Name</TableHead>
-                      <TableHead>Type</TableHead>
-                      <TableHead>Created At</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {tokens?.map((token) => (
-                      <TableRow key={token.id}>
-                        <TableCell className="font-medium">{token.name}</TableCell>
-                        <TableCell className="capitalize">
-                          <span className="px-2 py-1 rounded-full text-xs font-semibold bg-primary/10 text-primary">
-                            {token.type}
-                          </span>
-                        </TableCell>
-                        <TableCell className="text-muted-foreground text-sm">
-                          {new Date(token.createdAt || "").toLocaleDateString()}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleRevoke(token.id)}
-                            className="hover:text-destructive hover:bg-destructive/10"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="profile">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <Card className="border-border/50">
-              <CardHeader>
-                <CardTitle>Account Details</CardTitle>
-                <CardDescription>Your personal profile information.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-xs font-semibold text-muted-foreground uppercase">First Name</p>
-                    <p className="font-medium">{(user as any)?.firstName || "-"}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs font-semibold text-muted-foreground uppercase">Last Name</p>
-                    <p className="font-medium">{(user as any)?.lastName || "-"}</p>
-                  </div>
-                </div>
-                <div>
-                  <p className="text-xs font-semibold text-muted-foreground uppercase">Email</p>
-                  <p className="font-medium">{(user as any)?.email || "-"}</p>
-                </div>
-                <div>
-                  <p className="text-xs font-semibold text-muted-foreground uppercase">Username</p>
-                  <p className="font-mono text-sm">{user?.username}</p>
-                </div>
-                <div>
-                  <p className="text-xs font-semibold text-muted-foreground uppercase">Role</p>
-                  <span className="px-2 py-1 rounded-full text-[10px] font-bold bg-primary/10 text-primary uppercase tracking-wider">
-                    {(user as any)?.role}
-                  </span>
-                </div>
-              </CardContent>
-            </Card>
-
-            <ChangePasswordCard />
-          </div>
-        </TabsContent>
-
-        {user?.role === 'admin' && (
-          <TabsContent value="users">
-            <div className="grid gap-8">
-              <UserManagementTable />
+    <Shell title="Settings" description="Manage your preferences, security tokens, and organization members.">
+      <div className="flex flex-col md:flex-row gap-8 items-start">
+        <Tabs defaultValue="tokens" className="w-full flex flex-col md:flex-row gap-8">
+          <aside className="md:w-64 w-full shrink-0 space-y-2">
+            <div className="px-3 py-2">
+              <h2 className="mb-2 px-4 text-lg font-semibold tracking-tight">Configuration</h2>
+              <TabsList className="flex flex-col h-auto bg-transparent border-none p-0 space-y-1">
+                <TabsTrigger
+                  value="tokens"
+                  className="w-full justify-start gap-3 px-4 py-3 h-auto data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-xl transition-all duration-200 border border-transparent data-[state=active]:border-primary/20"
+                >
+                  <Shield className="h-4 w-4" />
+                  <span className="font-medium">API Tokens</span>
+                </TabsTrigger>
+                <TabsTrigger
+                  value="profile"
+                  className="w-full justify-start gap-3 px-4 py-3 h-auto data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-xl transition-all duration-200 border border-transparent data-[state=active]:border-primary/20"
+                >
+                  <User className="h-4 w-4" />
+                  <span className="font-medium">My Profile</span>
+                </TabsTrigger>
+                {user?.role === 'admin' && (
+                  <TabsTrigger
+                    value="users"
+                    className="w-full justify-start gap-3 px-4 py-3 h-auto data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-xl transition-all duration-200 border border-transparent data-[state=active]:border-primary/20"
+                  >
+                    <UserCog className="h-4 w-4" />
+                    <span className="font-medium">User Management</span>
+                  </TabsTrigger>
+                )}
+              </TabsList>
             </div>
-          </TabsContent>
-        )}
-      </Tabs>
+
+            <div className="px-7 py-4 bg-muted/30 rounded-2xl border border-border/50 text-[11px] text-muted-foreground leading-relaxed">
+              <p>LoggedIn as <span className="font-bold text-foreground">{user?.username}</span></p>
+              <p className="mt-1 opacity-70">Changes made here affect your account and organizational visibility.</p>
+            </div>
+          </aside>
+
+          <div className="flex-1 w-full space-y-6">
+            <TabsContent value="tokens" className="mt-0 outline-none">
+              <Card className="border-border/40 shadow-sm bg-card/50 backdrop-blur-sm">
+                <CardHeader className="flex flex-row items-center justify-between border-b border-border/40 pb-6 mb-2">
+                  <div className="space-y-1">
+                    <CardTitle className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-br from-foreground to-foreground/70">Agent Tokens</CardTitle>
+                    <CardDescription>Secure keys for agent authentication and metric ingestion.</CardDescription>
+                  </div>
+                  <CreateTokenDialog />
+                </CardHeader>
+                <CardContent className="pt-6">
+                  {tokensLoading ? (
+                    <div className="text-center py-12 text-muted-foreground animate-pulse">Loading tokens...</div>
+                  ) : tokens?.length === 0 ? (
+                    <div className="text-center py-16 border-2 border-dashed rounded-3xl bg-secondary/5 border-border/50">
+                      <div className="mx-auto w-12 h-12 rounded-2xl bg-muted/50 flex items-center justify-center mb-4">
+                        <Key className="h-6 w-6 text-muted-foreground" />
+                      </div>
+                      <h3 className="text-lg font-medium">No active tokens</h3>
+                      <p className="text-sm text-muted-foreground mt-1 max-w-[250px] mx-auto">Generate your first token to start monitoring your infrastructure.</p>
+                      <div className="mt-6 flex justify-center">
+                        <CreateTokenDialog />
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="rounded-xl border border-border/40 overflow-hidden">
+                      <Table>
+                        <TableHeader className="bg-muted/30">
+                          <TableRow>
+                            <TableHead className="py-4">Name</TableHead>
+                            <TableHead className="py-4">Type</TableHead>
+                            <TableHead className="py-4">Created At</TableHead>
+                            <TableHead className="py-4 text-right">Actions</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {tokens?.map((token) => (
+                            <TableRow key={token.id} className="hover:bg-muted/20 transition-colors">
+                              <TableCell className="font-semibold">{token.name}</TableCell>
+                              <TableCell className="capitalize tabular-nums">
+                                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-primary/10 text-primary border border-primary/20 uppercase">
+                                  {token.type}
+                                </span>
+                              </TableCell>
+                              <TableCell className="text-muted-foreground text-sm font-medium">
+                                {new Date(token.createdAt || "").toLocaleDateString()}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => handleRevoke(token.id)}
+                                  className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="profile" className="mt-0 outline-none">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <Card className="border-border/40 shadow-sm bg-card/50 backdrop-blur-sm overflow-hidden">
+                  <div className="h-24 bg-gradient-to-r from-primary/20 via-accent/20 to-primary/20" />
+                  <CardHeader className="-mt-12 relative z-10">
+                    <div className="h-20 w-20 rounded-2xl bg-background border-4 border-card shadow-xl flex items-center justify-center mb-2">
+                      <User className="h-10 w-10 text-primary" />
+                    </div>
+                    <div>
+                      <CardTitle className="text-2xl font-bold">Account Details</CardTitle>
+                      <CardDescription>Manage your personal information and roles.</CardDescription>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-6 pt-2 pb-8">
+                    <div className="grid grid-cols-2 gap-6 bg-muted/20 p-4 rounded-2xl border border-border/30">
+                      <div>
+                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-1.5 opacity-70">First Name</p>
+                        <p className="font-semibold text-foreground">{(user as any)?.firstName || "-"}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-1.5 opacity-70">Last Name</p>
+                        <p className="font-semibold text-foreground">{(user as any)?.lastName || "-"}</p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-4 px-1">
+                      <div className="flex items-center justify-between py-1 border-b border-border/30">
+                        <span className="text-sm font-medium text-muted-foreground">Email Address</span>
+                        <span className="text-sm font-semibold">{(user as any)?.email || "-"}</span>
+                      </div>
+                      <div className="flex items-center justify-between py-1 border-b border-border/30">
+                        <span className="text-sm font-medium text-muted-foreground">Username</span>
+                        <span className="text-sm font-mono font-medium lowercase tracking-tight">{user?.username}</span>
+                      </div>
+                      <div className="flex items-center justify-between py-1">
+                        <span className="text-sm font-medium text-muted-foreground">System Role</span>
+                        <span className="px-3 py-1 rounded-lg text-[10px] font-black bg-primary/10 text-primary border border-primary/20 uppercase tracking-tighter">
+                          {(user as any)?.role}
+                        </span>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <ChangePasswordCard />
+              </div>
+            </TabsContent>
+
+            {user?.role === 'admin' && (
+              <TabsContent value="users" className="mt-0 outline-none">
+                <UserManagementTable />
+              </TabsContent>
+            )}
+          </div>
+        </Tabs>
+      </div>
     </Shell>
   );
 }
@@ -191,32 +232,46 @@ function ChangePasswordCard({ targetUserId }: { targetUserId?: string }) {
   });
 
   return (
-    <Card className="border-border/50">
+    <Card className="border-border/40 shadow-sm bg-card/50 backdrop-blur-sm h-full">
       <CardHeader>
-        <CardTitle>{targetUserId ? "Reset User Password" : "Change Password"}</CardTitle>
-        <CardDescription>
-          {targetUserId ? "Set a new password for this user." : "Update your account password."}
+        <div className="mx-auto w-12 h-12 rounded-2xl bg-amber-500/10 flex items-center justify-center mb-4">
+          <Key className="h-6 w-6 text-amber-500" />
+        </div>
+        <CardTitle className="text-xl font-bold text-center">
+          {targetUserId ? "Reset User Password" : "Change Password"}
+        </CardTitle>
+        <CardDescription className="text-center px-4">
+          {targetUserId ? "Set a new temporary password for this user." : "Ensure your account stays secure with a strong password."}
         </CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="pb-8">
         <Form {...form}>
-          <form onSubmit={form.handleSubmit((data) => mutation.mutate(data.password))} className="space-y-4">
+          <form onSubmit={form.handleSubmit((data) => mutation.mutate(data.password))} className="space-y-6">
             <FormField
               control={form.control}
               name="password"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>New Password</FormLabel>
+                  <FormLabel className="text-xs font-bold uppercase tracking-wider opacity-70">New Secure Password</FormLabel>
                   <FormControl>
-                    <Input type="password" {...field} />
+                    <Input
+                      type="password"
+                      placeholder="••••••••"
+                      className="h-12 bg-muted/20 border-border/40 focus:ring-primary/20 rounded-xl"
+                      {...field}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
-            <Button type="submit" className="w-full" disabled={mutation.isPending}>
-              <Key className="mr-2 h-4 w-4" />
-              {mutation.isPending ? "Updating..." : "Update Password"}
+            <Button type="submit" className="w-full h-12 rounded-xl bg-primary shadow-lg shadow-primary/20 hover:shadow-primary/40 transition-all font-bold" disabled={mutation.isPending}>
+              {mutation.isPending ? "Updating..." : (
+                <>
+                  <Key className="mr-2 h-4 w-4" />
+                  Update Password
+                </>
+              )}
             </Button>
           </form>
         </Form>
@@ -230,57 +285,118 @@ function UserManagementTable() {
     queryKey: ['/api/admin/users']
   });
   const [resetUserId, setResetUserId] = useState<string | null>(null);
+  const { toast } = useToast();
+  const { user: currentUser } = useAuth();
+
+  const deleteMutation = useMutation({
+    mutationFn: async (userId: string) => {
+      const res = await fetch(`/api/admin/users/${userId}`, {
+        method: 'DELETE'
+      });
+      if (!res.ok) throw new Error(await res.text());
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/admin/users'] });
+      toast({ title: "User deleted", description: "The user has been successfully removed." });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    }
+  });
+
+  const handleDelete = (userId: string, username: string) => {
+    if (confirm(`Are you sure you want to delete user "${username}"? This action cannot be undone.`)) {
+      deleteMutation.mutate(userId);
+    }
+  };
 
   return (
-    <Card className="border-border/50">
-      <CardHeader className="flex flex-row items-center justify-between">
-        <div>
-          <CardTitle>User Accounts</CardTitle>
-          <CardDescription>Manage system users and reset their passwords.</CardDescription>
+    <Card className="border-border/40 shadow-sm bg-card/50 backdrop-blur-sm">
+      <CardHeader className="flex flex-row items-center justify-between border-b border-border/40 pb-6 mb-2">
+        <div className="space-y-1">
+          <CardTitle className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-br from-foreground to-foreground/70">User Accounts</CardTitle>
+          <CardDescription>Manage your team's access and roles across the organization.</CardDescription>
         </div>
         <CreateUserDialog />
       </CardHeader>
-      <CardContent>
+      <CardContent className="pt-6">
         {isLoading ? (
-          <div className="text-center py-8 text-muted-foreground">Loading users...</div>
+          <div className="text-center py-12 text-muted-foreground animate-pulse">Loading users...</div>
         ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Username</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Role</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {users?.map((u) => (
-                <TableRow key={u.id}>
-                  <TableCell className="font-medium">{u.firstName} {u.lastName}</TableCell>
-                  <TableCell className="font-mono text-xs">{u.username}</TableCell>
-                  <TableCell>{u.email}</TableCell>
-                  <TableCell>
-                    <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase ${u.role === 'admin' ? 'bg-primary/10 text-primary' : 'bg-secondary/50 text-muted-foreground'}`}>
-                      {u.role}
-                    </span>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Dialog open={resetUserId === u.id} onOpenChange={(open) => setResetUserId(open ? u.id : null)}>
-                      <DialogTrigger asChild>
-                        <Button variant="ghost" size="sm" className="gap-2">
-                          <Key className="h-3 w-3" /> Reset
-                        </Button>
-                      </DialogTrigger>
-                      <DialogContent>
-                        <ChangePasswordCard targetUserId={u.id} />
-                      </DialogContent>
-                    </Dialog>
-                  </TableCell>
+          <div className="rounded-xl border border-border/40 overflow-hidden">
+            <Table>
+              <TableHeader className="bg-muted/30">
+                <TableRow className="hover:bg-transparent">
+                  <TableHead className="py-4">Member</TableHead>
+                  <TableHead className="py-4">Credentials</TableHead>
+                  <TableHead className="py-4">Role</TableHead>
+                  <TableHead className="py-4 text-right px-6">Management</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {users?.map((u) => (
+                  <TableRow key={u.id} className="group hover:bg-muted/20 transition-colors">
+                    <TableCell className="py-4">
+                      <div className="flex items-center gap-3">
+                        <div className="h-9 w-9 rounded-xl bg-primary/10 flex items-center justify-center font-bold text-primary text-xs border border-primary/20">
+                          {u.firstName?.[0]}{u.lastName?.[0]}
+                        </div>
+                        <div>
+                          <p className="font-semibold text-sm leading-none">{u.firstName} {u.lastName}</p>
+                          <p className="text-[10px] text-muted-foreground font-medium mt-1 uppercase tracking-tighter opacity-70 italic">ID: {u.id.slice(0, 8)}</p>
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell className="py-4">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-1.5">
+                          <User className="h-3 w-3 text-muted-foreground opacity-50" />
+                          <span className="font-mono text-[11px] leading-none lowercase tracking-tighter">{u.username}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <Check className="h-3 w-3 text-emerald-500 opacity-50" />
+                          <span className="text-[11px] text-muted-foreground font-medium">{u.email}</span>
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell className="py-4">
+                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-tighter border ${u.role === 'admin' ? 'bg-primary/10 text-primary border-primary/20' : 'bg-muted/50 text-muted-foreground border-border/50'}`}>
+                        {u.role}
+                      </span>
+                    </TableCell>
+                    <TableCell className="py-4 text-right px-6">
+                      <div className="flex justify-end gap-2">
+                        <Dialog open={resetUserId === u.id} onOpenChange={(open) => setResetUserId(open ? u.id : null)}>
+                          <DialogTrigger asChild>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-8 gap-2 bg-background/50 border-border/40 hover:bg-muted font-bold text-[11px] rounded-lg"
+                            >
+                              <Key className="h-3 w-3" /> Reset
+                            </Button>
+                          </DialogTrigger>
+                          <DialogContent className="max-w-sm p-0 overflow-hidden border-none bg-transparent">
+                            <ChangePasswordCard targetUserId={u.id} />
+                          </DialogContent>
+                        </Dialog>
+
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          disabled={u.id === currentUser?.id || deleteMutation.isPending}
+                          onClick={() => handleDelete(u.id, u.username)}
+                          className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
         )}
       </CardContent>
     </Card>
@@ -325,103 +441,118 @@ function CreateUserDialog() {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button className="gap-2">
-          <UserPlus className="h-4 w-4" /> Create User
+        <Button className="gap-2 bg-primary shadow-lg shadow-primary/20 hover:shadow-primary/40 rounded-xl font-bold h-10 px-5 transition-all">
+          <UserPlus className="h-4 w-4" /> Create Member
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Create New User</DialogTitle>
-        </DialogHeader>
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit((data) => mutation.mutate(data))} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="firstName"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>First Name</FormLabel>
-                    <FormControl>
-                      <Input {...field} />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="lastName"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Last Name</FormLabel>
-                    <FormControl>
-                      <Input {...field} />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
-            </div>
-            <FormField
-              control={form.control}
-              name="email"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Email</FormLabel>
-                  <FormControl>
-                    <Input type="email" {...field} />
-                  </FormControl>
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="username"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Username</FormLabel>
-                  <FormControl>
-                    <Input {...field} />
-                  </FormControl>
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="password"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Password</FormLabel>
-                  <FormControl>
-                    <Input type="password" {...field} />
-                  </FormControl>
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="role"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Role</FormLabel>
-                  <FormControl>
-                    <select
-                      className="w-full p-2 rounded-md bg-transparent border border-border"
-                      {...field}
-                    >
-                      <option value="read">Read Only</option>
-                      <option value="admin">Administrator</option>
-                    </select>
-                  </FormControl>
-                </FormItem>
-              )}
-            />
-            <DialogFooter>
-              <Button type="submit" className="w-full" disabled={mutation.isPending}>
-                {mutation.isPending ? "Creating..." : "Create User"}
-              </Button>
-            </DialogFooter>
-          </form>
-        </Form>
+      <DialogContent className="sm:max-w-xl p-0 overflow-hidden border-border/20 shadow-2xl bg-card/95 backdrop-blur-xl rounded-2xl">
+        <div className="h-2 w-full bg-gradient-to-r from-primary via-accent to-primary" />
+        <div className="p-8">
+          <DialogHeader className="mb-6">
+            <DialogTitle className="text-2xl font-bold tracking-tight">Add New Member</DialogTitle>
+            <p className="text-sm text-muted-foreground">Fill in the details below to grant system access to a new member.</p>
+          </DialogHeader>
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit((data) => mutation.mutate(data))} className="space-y-6">
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="firstName"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-[10px] font-bold uppercase tracking-widest text-foreground/70">First Name</FormLabel>
+                      <FormControl>
+                        <Input placeholder="John" className="h-11 bg-muted/20 border-border/40 focus:ring-primary/20 rounded-xl px-4" {...field} />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="lastName"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-[10px] font-bold uppercase tracking-widest text-foreground/70">Last Name</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Doe" className="h-11 bg-muted/20 border-border/40 focus:ring-primary/20 rounded-xl px-4" {...field} />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="email"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-[10px] font-bold uppercase tracking-widest text-foreground/70">Email Address</FormLabel>
+                      <FormControl>
+                        <Input type="email" placeholder="john@example.com" className="h-11 bg-muted/20 border-border/40 focus:ring-primary/20 rounded-xl px-4" {...field} />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="username"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-[10px] font-bold uppercase tracking-widest text-foreground/70">Username</FormLabel>
+                      <FormControl>
+                        <Input placeholder="johndoe" className="h-11 bg-muted/20 border-border/40 focus:ring-primary/20 rounded-xl px-4 font-mono text-sm" {...field} />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="password"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-[10px] font-bold uppercase tracking-widest text-foreground/70">Initial Password</FormLabel>
+                      <FormControl>
+                        <Input type="password" placeholder="••••••••" className="h-11 bg-muted/20 border-border/40 focus:ring-primary/20 rounded-xl px-4" {...field} />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="role"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-[10px] font-bold uppercase tracking-widest text-foreground/70">Organizational Role</FormLabel>
+                      <FormControl>
+                        <select
+                          className="w-full h-11 px-4 rounded-xl bg-muted/20 border border-border/40 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 appearance-none bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20width%3D%2224%22%20height%3D%2224%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%3E%3Cpath%20d%3D%22M7%2010L12%2015L17%2010%22%20stroke%3D%22currentColor%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22/%3E%3C/svg%3E')] bg-[length:20px] bg-[right_12px_center] bg-no-repeat"
+                          {...field}
+                        >
+                          <option value="read">Read Only</option>
+                          <option value="admin">Administrator</option>
+                        </select>
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <DialogFooter className="pt-4 border-t border-border/30 mt-8">
+                <Button
+                  type="submit"
+                  className="w-full h-12 rounded-xl bg-primary shadow-lg shadow-primary/10 hover:shadow-primary/25 transition-all text-sm font-black uppercase tracking-wider"
+                  disabled={mutation.isPending}
+                >
+                  {mutation.isPending ? "Configuring Account..." : "Confirm & Create Member"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </Form>
+        </div>
       </DialogContent>
     </Dialog>
   );
@@ -438,22 +569,17 @@ function CreateTokenDialog() {
     defaultValues: {
       name: "",
       type: "vm",
-      token: "will-be-generated-by-backend-but-schema-requires-it", // This field is technically required by insert schema but backend generates it.
-      // Ideally we'd omit it in a separate CreateRequestSchema.
-      // For now, we'll pass a placeholder and backend overrides it.
+      token: "will-be-generated-by-backend-but-schema-requires-it",
     },
   });
 
   const onSubmit = (data: z.infer<typeof insertTokenSchema>) => {
-    // Generate a random token on client just to satisfy schema,
-    // though ideally backend handles this.
-    // The backend route handler ignores the input token and generates a new one.
     const payload = { ...data, token: crypto.randomUUID() };
 
     createMutation.mutate(payload, {
       onSuccess: (result) => {
         setNewToken(result.token);
-        toast({ title: "Token created", description: "Copy the token now, you won't see it again!" });
+        toast({ title: "Token created", description: "Securely store this token now." });
       },
       onError: (err) => {
         toast({ title: "Error", description: err.message, variant: "destructive" });
@@ -477,81 +603,95 @@ function CreateTokenDialog() {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button className="gap-2 shadow-lg shadow-primary/25">
-          <Plus className="h-4 w-4" /> Generate Token
+        <Button className="gap-2 bg-primary shadow-lg shadow-primary/20 hover:shadow-primary/40 rounded-xl font-bold h-10 px-5 transition-all">
+          <Plus className="h-4 w-4" /> Generate Key
         </Button>
       </DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Generate New Agent Token</DialogTitle>
-        </DialogHeader>
+      <DialogContent className="sm:max-w-md p-0 overflow-hidden border-border/20 shadow-2xl bg-card/95 backdrop-blur-xl rounded-2xl">
+        <div className="h-2 w-full bg-gradient-to-r from-primary via-accent to-primary" />
+        <div className="p-8">
+          <DialogHeader className="mb-6">
+            <DialogTitle className="text-2xl font-bold tracking-tight">New Agent Key</DialogTitle>
+            <p className="text-sm text-muted-foreground">Tokens authenticate your infrastructure agents with our secure API.</p>
+          </DialogHeader>
 
-        {!newToken ? (
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-              <FormField
-                control={form.control}
-                name="name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Agent Name</FormLabel>
-                    <FormControl>
-                      <Input placeholder="e.g. Production Web Server" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="type"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Agent Type</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+          {!newToken ? (
+            <Form {...form}>
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+                <FormField
+                  control={form.control}
+                  name="name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-[10px] font-bold uppercase tracking-widest text-foreground/70">Identifier</FormLabel>
                       <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select type" />
-                        </SelectTrigger>
+                        <Input placeholder="e.g. AWS Production East" className="h-11 bg-muted/20 border-border/40 focus:ring-primary/20 rounded-xl px-4" {...field} />
                       </FormControl>
-                      <SelectContent>
-                        <SelectItem value="vm">Virtual Machine / Server</SelectItem>
-                        <SelectItem value="database">Database</SelectItem>
-                        <SelectItem value="kubernetes">Kubernetes Cluster</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="type"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-[10px] font-bold uppercase tracking-widest text-foreground/70">Resource Category</FormLabel>
+                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormControl>
+                          <SelectTrigger className="h-11 bg-muted/20 border-border/40 focus:ring-primary/20 rounded-xl px-4">
+                            <SelectValue placeholder="Select type" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent className="rounded-xl border-border/40 shadow-xl">
+                          <SelectItem value="vm">Server Instance (VM/Bare Metal)</SelectItem>
+                          <SelectItem value="database">Database System</SelectItem>
+                          <SelectItem value="kubernetes">Kubernetes Node/Cluster</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <DialogFooter className="pt-4 border-t border-border/30 mt-8">
+                  <Button
+                    type="submit"
+                    className="w-full h-12 rounded-xl bg-primary shadow-lg shadow-primary/10 hover:shadow-primary/25 transition-all text-sm font-black uppercase tracking-wider"
+                    disabled={createMutation.isPending}
+                  >
+                    {createMutation.isPending ? "Generating Secure Key..." : "Confirm & Generate Key"}
+                  </Button>
+                </DialogFooter>
+              </form>
+            </Form>
+          ) : (
+            <div className="space-y-6">
+              <div className="p-6 bg-amber-500/5 rounded-2xl border border-amber-500/20 text-center">
+                <div className="mx-auto w-10 h-10 rounded-full bg-amber-500/10 flex items-center justify-center mb-4">
+                  <Shield className="h-5 w-5 text-amber-500" />
+                </div>
+                <p className="text-xs font-bold text-amber-500 uppercase tracking-widest mb-3">Copy your credentials</p>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 p-3 bg-background/80 border border-border/40 rounded-xl font-mono text-xs break-all text-foreground shadow-inner">
+                    {newToken}
+                  </code>
+                  <Button size="icon" variant="outline" onClick={handleCopy} className="h-10 w-10 rounded-xl border-border/40 hover:bg-muted shrink-0">
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                </div>
+                <div className="mt-4 flex items-center gap-2 justify-center py-2 px-3 bg-destructive/10 text-destructive rounded-lg border border-destructive/20">
+                  <Check className="h-3 w-3" />
+                  <p className="text-[10px] font-bold uppercase tracking-tighter">This token will be hidden forever after you exit.</p>
+                </div>
+              </div>
               <DialogFooter>
-                <Button type="submit" disabled={createMutation.isPending}>
-                  {createMutation.isPending ? "Generating..." : "Generate Token"}
+                <Button onClick={handleClose} className="w-full h-11 rounded-xl font-bold bg-muted hover:bg-muted/80 text-foreground transition-all border border-border/40">
+                  I have securely saved this key
                 </Button>
               </DialogFooter>
-            </form>
-          </Form>
-        ) : (
-          <div className="space-y-4">
-            <div className="p-4 bg-secondary/30 rounded-lg border border-border text-center">
-              <p className="text-sm font-medium mb-2">Your Agent Token</p>
-              <div className="flex items-center gap-2">
-                <code className="flex-1 p-2 bg-background border rounded font-mono text-sm break-all">
-                  {newToken}
-                </code>
-                <Button size="icon" variant="outline" onClick={handleCopy}>
-                  <Copy className="h-4 w-4" />
-                </Button>
-              </div>
-              <p className="text-xs text-muted-foreground mt-2 text-destructive">
-                Copy this now. It will not be shown again.
-              </p>
             </div>
-            <DialogFooter>
-              <Button onClick={handleClose}>Done</Button>
-            </DialogFooter>
-          </div>
-        )}
+          )}
+        </div>
       </DialogContent>
     </Dialog>
   );

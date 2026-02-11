@@ -190,6 +190,41 @@ export async function registerRoutes(
     res.json(database);
   });
 
+  app.post(api.databases.create.path, isAuthenticated, async (req, res) => {
+    try {
+      const input = api.databases.create.input.parse(req.body);
+      const database = await storage.upsertDatabase(input);
+      res.status(201).json(database);
+    } catch (err) {
+      console.error("Database Create Error:", err);
+      if (err instanceof z.ZodError) {
+        console.error("Validation details:", JSON.stringify((err as z.ZodError).errors, null, 2));
+      }
+      res.status(400).json({ message: "Invalid data format", details: err });
+    }
+  });
+
+  app.patch(api.databases.update.path, isAuthenticated, async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const input = api.databases.update.input.parse(req.body);
+      const database = await storage.updateDatabase(id, input);
+      if (!database) return res.status(404).json({ message: "Database not found" });
+      res.json(database);
+    } catch (err) {
+      console.error("Database Update Error:", err);
+      if (err instanceof z.ZodError) {
+        console.error("Validation details:", JSON.stringify((err as z.ZodError).errors, null, 2));
+      }
+      res.status(400).json({ message: "Invalid data format", details: err });
+    }
+  });
+
+  app.delete(api.databases.delete.path, isAuthenticated, async (req, res) => {
+    await storage.deleteDatabase(Number(req.params.id));
+    res.status(204).send();
+  });
+
   // Clusters
   app.get(api.clusters.list.path, isAuthenticated, async (req, res) => {
     const clusters = await storage.getClusters();
@@ -299,6 +334,20 @@ export async function registerRoutes(
       res.json({ message: "Password updated successfully" });
     } catch (err) {
       res.status(400).json({ message: "Invalid password format" });
+    }
+  });
+
+  // Admin only: Delete user
+  app.delete("/api/admin/users/:id", isAdmin, async (req, res) => {
+    try {
+      if (req.params.id === (req.user as any).id) {
+        return res.status(400).json({ message: "You cannot delete your own account" });
+      }
+      await storage.deleteUser(req.params.id);
+      res.status(204).send();
+    } catch (err) {
+      console.error("Error deleting user:", err);
+      res.status(500).json({ message: "Internal server error" });
     }
   });
 

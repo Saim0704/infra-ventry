@@ -10,7 +10,8 @@ import {
   clusters,
   clusterMetrics,
   projects,
-  insertProjectSchema
+  insertProjectSchema,
+  insertDatabaseSchema
 } from './schema';
 
 // Shared error schemas
@@ -171,7 +172,15 @@ export const api = {
       method: 'GET' as const,
       path: '/api/databases' as const,
       responses: {
-        200: z.array(z.custom<typeof databases.$inferSelect>()),
+        200: z.array(z.custom<typeof databases.$inferSelect & { metrics: typeof databaseMetrics.$inferSelect[], project?: typeof projects.$inferSelect }>()),
+      },
+    },
+    create: {
+      method: 'POST' as const,
+      path: '/api/databases' as const,
+      input: insertDatabaseSchema,
+      responses: {
+        201: z.custom<typeof databases.$inferSelect>(),
       },
     },
     get: {
@@ -179,6 +188,30 @@ export const api = {
       path: '/api/databases/:id' as const,
       responses: {
         200: z.custom<typeof databases.$inferSelect & { metrics: typeof databaseMetrics.$inferSelect[] }>(),
+        404: errorSchemas.notFound,
+      },
+    },
+    update: {
+      method: 'PATCH' as const,
+      path: '/api/databases/:id' as const,
+      input: z.object({
+        name: z.string().optional(),
+        host: z.string().optional(),
+        port: z.number().optional(),
+        engine: z.string().optional(),
+        version: z.string().optional(),
+        projectId: z.number().nullable().optional(),
+      }),
+      responses: {
+        200: z.custom<typeof databases.$inferSelect>(),
+        404: errorSchemas.notFound,
+      },
+    },
+    delete: {
+      method: 'DELETE' as const,
+      path: '/api/databases/:id' as const,
+      responses: {
+        204: z.void(),
         404: errorSchemas.notFound,
       },
     },
