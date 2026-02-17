@@ -8,6 +8,17 @@ import { insertUserSchema } from "@shared/schema";
 import { hashPassword } from "./lib/auth-utils";
 import { fromError } from "zod-validation-error";
 
+// Safe logging helper that won't crash if file doesn't exist
+function safeLog(message: string) {
+  try {
+    const fs = require("fs");
+    fs.appendFileSync("alerts_debug.log", message);
+  } catch (err) {
+    // Silently fail or use console.log as fallback
+    console.log(message.trim());
+  }
+}
+
 // Middleware to check if user is admin
 const isAdmin = (req: any, res: any, next: any) => {
   if (req.isAuthenticated() && req.user.role === 'admin') {
@@ -375,22 +386,19 @@ export async function registerRoutes(
   });
 
   app.patch(api.settings.smtp.upsert.path, isAuthenticated, async (req, res) => {
-    const logPath = "/home/saim-bigoh/saim/Infra-Inventory/alerts_debug.log";
     try {
-      const fs = await import("fs");
-      fs.appendFileSync(logPath, `[${new Date().toISOString()}] PATCH SMTP UPSERT REQUEST. Body: ${JSON.stringify(req.body)}\n`);
+      safeLog(`[${new Date().toISOString()}] PATCH SMTP UPSERT REQUEST. Body: ${JSON.stringify(req.body)}\n`);
 
       const input = api.settings.smtp.upsert.input.parse(req.body);
       const settings = await storage.upsertSmtpSettings(input);
       res.json(settings);
     } catch (err: any) {
-      const fs = await import("fs");
       if (err instanceof z.ZodError) {
         const validationError = fromError(err);
-        fs.appendFileSync(logPath, `[${new Date().toISOString()}] SMTP Validation error: ${validationError.message}\n`);
+        safeLog(`[${new Date().toISOString()}] SMTP Validation error: ${validationError.message}\n`);
         res.status(400).json({ message: validationError.message });
       } else {
-        fs.appendFileSync(logPath, `[${new Date().toISOString()}] Error upserting SMTP: ${err}\n`);
+        safeLog(`[${new Date().toISOString()}] Error upserting SMTP: ${err}\n`);
         res.status(400).json({ message: "Invalid SMTP settings format" });
       }
     }
@@ -419,9 +427,8 @@ export async function registerRoutes(
 
   app.post(api.settings.smtp.test.path, isAuthenticated, async (req, res) => {
     try {
-      const fs = await import("fs");
       const { recipient, settings: bodySettings } = api.settings.smtp.test.input.parse(req.body);
-      fs.appendFileSync("alerts_debug.log", `[${new Date().toISOString()}] TEST EMAIL REQUEST for ${recipient}\n`);
+      safeLog(`[${new Date().toISOString()}] TEST EMAIL REQUEST for ${recipient}\n`);
 
       let settingsToUse: any = bodySettings;
       if (!settingsToUse) {

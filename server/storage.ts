@@ -14,6 +14,17 @@ import {
 import { EmailService } from "./lib/email";
 import { z } from "zod";
 
+// Safe logging helper that won't crash if file doesn't exist
+function safeLog(message: string) {
+  try {
+    const fs = require("fs");
+    fs.appendFileSync("alerts_debug.log", message);
+  } catch (err) {
+    // Silently fail or use console.log as fallback
+    console.log(message.trim());
+  }
+}
+
 export interface IStorage {
   // === TOKENS ===
   getTokens(projectId?: number | null): Promise<Token[]>;
@@ -270,14 +281,13 @@ export class DatabaseStorage implements IStorage {
 
   async checkAndTriggerAlert(resourceId: number, type: 'server' | 'database' | 'cluster', currentMetrics: { type: string, value: number | null | undefined, operator: '>' | '<=' }[]): Promise<void> {
     try {
-      const fs = await import("fs");
       const logMsg = `[${new Date().toISOString()}] CHECKING ALERTS for ${type} (ID: ${resourceId}). Metrics: ${JSON.stringify(currentMetrics)}\n`;
-      fs.appendFileSync("alerts_debug.log", logMsg);
+      safeLog(logMsg);
 
       // Get SMTP settings (needed for sending emails)
       const smtpSettings = await this.getSmtpSettings();
       if (!smtpSettings) {
-        fs.appendFileSync("alerts_debug.log", `[${new Date().toISOString()}] NO SMTP SETTINGS FOUND\n`);
+        safeLog(`[${new Date().toISOString()}] NO SMTP SETTINGS FOUND\n`);
         return;
       }
 
@@ -308,18 +318,18 @@ export class DatabaseStorage implements IStorage {
 
       // If no project, skip alerts
       if (!projectId) {
-        fs.appendFileSync("alerts_debug.log", `[${new Date().toISOString()}] Resource ${resourceName} has no project, skipping alerts\n`);
+        safeLog(`[${new Date().toISOString()}] Resource ${resourceName} has no project, skipping alerts\n`);
         return;
       }
 
       // Get project-specific alert settings
       const projectAlertConfig = await this.getProjectAlertSettings(projectId);
       if (!projectAlertConfig) {
-        fs.appendFileSync("alerts_debug.log", `[${new Date().toISOString()}] No alert settings for project ${projectId}\n`);
+        safeLog(`[${new Date().toISOString()}] No alert settings for project ${projectId}\n`);
         return;
       }
 
-      fs.appendFileSync("alerts_debug.log", `[${new Date().toISOString()}] Project alert settings found. Recipients: ${JSON.stringify(projectAlertConfig.alertRecipients)}\n`);
+      safeLog(`[${new Date().toISOString()}] Project alert settings found. Recipients: ${JSON.stringify(projectAlertConfig.alertRecipients)}\n`);
 
       const thresholds = {
         cpu: projectAlertConfig.cpuThreshold,
@@ -336,7 +346,7 @@ export class DatabaseStorage implements IStorage {
         const isBreached = m.operator === '>' ? m.value > threshold : m.value <= threshold;
 
         if (isBreached) {
-          fs.appendFileSync("alerts_debug.log", `[${new Date().toISOString()}] BREACH DETECTED for ${resourceName} ${m.type}. Value: ${m.value}, Threshold: ${threshold}\n`);
+          safeLog(`[${new Date().toISOString()}] BREACH DETECTED for ${resourceName} ${m.type}. Value: ${m.value}, Threshold: ${threshold}\n`);
           // Check if alert was already sent recently (within 1 hour)
           const [lastAlert] = await db.select().from(alerts)
             .where(sql`${alerts.type} = ${m.type} AND ${alerts.sentAt} > NOW() - INTERVAL '1 hour' AND (
@@ -377,10 +387,10 @@ export class DatabaseStorage implements IStorage {
                 branding
               );
             }
-            fs.appendFileSync("alerts_debug.log", `[${new Date().toISOString()}] Alert emails SENT to ${recipients.join(', ')}\n`);
+            safeLog(`[${new Date().toISOString()}] Alert emails SENT to ${recipients.join(', ')}\n`);
             console.log(`[ALERTS] Alert emails sent to ${recipients.join(', ')}`);
           } else {
-            fs.appendFileSync("alerts_debug.log", `[${new Date().toISOString()}] Alert SKIPPED (spam protection) for ${resourceName} ${m.type}\n`);
+            safeLog(`[${new Date().toISOString()}] Alert SKIPPED (spam protection) for ${resourceName} ${m.type}\n`);
             console.log(`[ALERTS] Alert for ${resourceName} ${m.type} already sent within the last hour. Skipping.`);
           }
         }
@@ -398,11 +408,10 @@ export class DatabaseStorage implements IStorage {
 
   async upsertSmtpSettings(data: any): Promise<SmtpSettings> {
     try {
-      const fs = await import("fs");
-      fs.appendFileSync("alerts_debug.log", `[${new Date().toISOString()}] UPSERTIING SMTP SETTINGS.\n`);
+      safeLog(`[${new Date().toISOString()}] UPSERTIING SMTP SETTINGS.\n`);
       const existing = await this.getSmtpSettings();
       if (existing) {
-        fs.appendFileSync("alerts_debug.log", `[${new Date().toISOString()}] Updating existing settings ID: ${existing.id}\n`);
+        safeLog(`[${new Date().toISOString()}] Updating existing settings ID: ${existing.id}\n`);
         const [updated] = await db.update(smtpSettings)
           .set({ ...data, updatedAt: new Date() })
           .where(eq(smtpSettings.id, existing.id))
@@ -410,14 +419,13 @@ export class DatabaseStorage implements IStorage {
         EmailService.clearTransporter();
         return updated as SmtpSettings;
       }
-      fs.appendFileSync("alerts_debug.log", `[${new Date().toISOString()}] Inserting new settings\n`);
+      safeLog(`[${new Date().toISOString()}] Inserting new settings\n`);
       const [newSettings] = await db.insert(smtpSettings)
         .values(data)
         .returning();
       return newSettings as SmtpSettings;
     } catch (err) {
-      const fs = await import("fs");
-      fs.appendFileSync("alerts_debug.log", `[${new Date().toISOString()}] Error in upsertSmtpSettings: ${err}\n`);
+      safeLog(`[${new Date().toISOString()}] Error in upsertSmtpSettings: ${err}\n`);
       throw err;
     }
   }
