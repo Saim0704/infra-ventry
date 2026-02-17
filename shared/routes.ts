@@ -254,6 +254,7 @@ export const api = {
             cpuUsage: z.number(),
             memoryUsage: z.number(),
             diskUsage: z.number(),
+            sslUsage: z.number().optional(),
             topProcesses: z.array(z.object({
               pid: z.number(),
               name: z.string(),
@@ -311,6 +312,97 @@ export const api = {
       responses: {
         200: z.object({ success: z.boolean() }),
         401: errorSchemas.unauthorized,
+      },
+    },
+  },
+
+  // === SETTINGS ===
+  settings: {
+    smtp: {
+      get: {
+        method: 'GET' as const,
+        path: '/api/settings/smtp' as const,
+        responses: {
+          200: z.custom<any>(), // SmtpSettings
+          404: errorSchemas.notFound,
+        },
+      },
+      upsert: {
+        method: 'PATCH' as const,
+        path: '/api/settings/smtp' as const,
+        input: z.object({
+          host: z.string().min(1, "Host is required"),
+          port: z.number().int().min(1, "Port is required"),
+          user: z.string().min(1, "User is required"),
+          pass: z.string().min(1, "Password is required"),
+          fromEmail: z.string().email("Invalid from email"),
+        }),
+        responses: {
+          200: z.custom<any>(),
+        },
+      },
+      test: {
+        method: 'POST' as const,
+        path: '/api/settings/smtp/test' as const,
+        input: z.object({
+          recipient: z.string().email("Invalid recipient email"),
+          settings: z.object({
+            host: z.string().min(1, "Host is required"),
+            port: z.number().int().min(1, "Port is required"),
+            user: z.string().min(1, "User is required"),
+            pass: z.string().min(1, "Password is required"),
+            fromEmail: z.string().email("Invalid from email"),
+          }).optional(),
+        }),
+        responses: {
+          200: z.object({ success: z.boolean(), message: z.string().optional() }),
+          400: z.object({ message: z.string() }),
+        },
+      },
+    },
+    projectAlerts: {
+      get: {
+        method: 'GET' as const,
+        path: '/api/projects/:id/alert-settings' as const,
+        responses: {
+          200: z.custom<any>(),
+          404: errorSchemas.notFound,
+        },
+      },
+      update: {
+        method: 'PATCH' as const,
+        path: '/api/projects/:id/alert-settings' as const,
+        input: z.object({
+          alertRecipients: z.array(z.string().email("Invalid alert email")).optional(),
+          companyName: z.string().nullable().optional(),
+          logoUrl: z.string().nullable().optional(),
+          cpuThreshold: z.number().min(0).max(100).nullable().optional(),
+          memoryThreshold: z.number().min(0).max(100).nullable().optional(),
+          sslThreshold: z.number().min(0).max(365).nullable().optional(),
+          storageThreshold: z.number().min(0).max(100).nullable().optional(),
+        }),
+        responses: {
+          200: z.custom<any>(),
+          404: errorSchemas.notFound,
+        },
+      },
+    },
+  },
+
+  // === ALERTS ===
+  alerts: {
+    list: {
+      method: 'GET' as const,
+      path: '/api/servers/:serverId/alerts' as const,
+      responses: {
+        200: z.array(z.custom<any>()), // Alert[]
+      },
+    },
+    history: {
+      method: 'GET' as const,
+      path: '/api/alerts/history' as const,
+      responses: {
+        200: z.array(z.custom<any>()), // Alert[] with server info
       },
     },
   },

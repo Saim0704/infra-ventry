@@ -6,6 +6,7 @@ import { setupAuth, registerAuthRoutes, isAuthenticated } from "./auth";
 import { z } from "zod";
 import { insertUserSchema } from "@shared/schema";
 import { hashPassword } from "./lib/auth-utils";
+import { fromError } from "zod-validation-error";
 
 // Middleware to check if user is admin
 const isAdmin = (req: any, res: any, next: any) => {
@@ -22,6 +23,8 @@ export async function registerRoutes(
   // Setup Auth
   setupAuth(app);
   registerAuthRoutes(app);
+
+  console.log(`Registering SMTP test route: ${api.settings.smtp.test.method} ${api.settings.smtp.test.path}`);
 
   // === PUBLIC API (Ingestion) ===
   // These routes are protected by Agent Tokens, not User Auth
@@ -362,6 +365,96 @@ export async function registerRoutes(
     } catch (err) {
       res.status(400).json({ message: "Invalid password format" });
     }
+  });
+
+  // === SETTINGS ===
+  app.get(api.settings.smtp.get.path, isAuthenticated, async (req, res) => {
+    const settings = await storage.getSmtpSettings();
+    if (!settings) return res.status(404).json({ message: "SMTP settings not found" });
+    res.json(settings);
+  });
+
+  app.patch(api.settings.smtp.upsert.path, isAuthenticated, async (req, res) => {
+    const logPath = "/home/saim-bigoh/saim/Infra-Inventory/alerts_debug.log";
+    try {
+      const fs = await import("fs");
+      fs.appendFileSync(logPath, `[${new Date().toISOString()}] PATCH SMTP UPSERT REQUEST. Body: ${JSON.stringify(req.body)}\n`);
+
+      const input = api.settings.smtp.upsert.input.parse(req.body);
+      const settings = await storage.upsertSmtpSettings(input);
+      res.json(settings);
+    } catch (err: any) {
+      const fs = await import("fs");
+      if (err instanceof z.ZodError) {
+        const validationError = fromError(err);
+        fs.appendFileSync(logPath, `[${new Date().toISOString()}] SMTP Validation error: ${validationError.message}\n`);
+        res.status(400).json({ message: validationError.message });
+      } else {
+        fs.appendFileSync(logPath, `[${new Date().toISOString()}] Error upserting SMTP: ${err}\n`);
+        res.status(400).json({ message: "Invalid SMTP settings format" });
+      }
+    }
+  });
+
+  // Project Alert Settings
+  app.get(api.settings.projectAlerts.get.path, isAuthenticated, async (req, res) => {
+    const settings = await storage.getProjectAlertSettings(Number(req.params.id));
+    if (!settings) return res.status(404).json({ message: "Project alert settings not found" });
+    res.json(settings);
+  });
+
+  app.patch(api.settings.projectAlerts.update.path, isAuthenticated, async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const input = api.settings.projectAlerts.update.input.parse(req.body);
+      const settings = await storage.upsertProjectAlertSettings(id, input);
+      res.json(settings);
+    } catch (err: any) {
+      if (err instanceof z.ZodError) {
+        return res.status(400).json({ message: fromError(err).message });
+      }
+      res.status(500).json({ message: "Failed to update project alert settings" });
+    }
+  });
+
+  app.post(api.settings.smtp.test.path, isAuthenticated, async (req, res) => {
+    try {
+      const fs = await import("fs");
+      const { recipient, settings: bodySettings } = api.settings.smtp.test.input.parse(req.body);
+      fs.appendFileSync("alerts_debug.log", `[${new Date().toISOString()}] TEST EMAIL REQUEST for ${recipient}\n`);
+
+      let settingsToUse: any = bodySettings;
+      if (!settingsToUse) {
+        settingsToUse = await storage.getSmtpSettings();
+      }
+
+      if (!settingsToUse) {
+        return res.status(400).json({ message: "Provide SMTP settings or configure them in settings first" });
+      }
+
+      const EmailService = (await import("./lib/email")).EmailService;
+      await EmailService.sendTestEmail(settingsToUse as any, recipient);
+      res.json({ success: true, message: "Test email sent successfully" });
+    } catch (err: any) {
+      console.error("Test email failed:", err);
+      // Return a more descriptive error if possible
+      res.status(400).json({
+        success: false,
+        message: err.message || "Failed to send test email. Check your SMTP configuration and network."
+      });
+    }
+  });
+
+  // === ALERTS ===
+  app.get(api.alerts.list.path, isAuthenticated, async (req, res) => {
+    const serverId = Number(req.params.serverId);
+    const alerts = await storage.getRecentAlerts(serverId);
+    res.json(alerts);
+  });
+
+  app.get(api.alerts.history.path, isAuthenticated, async (req, res) => {
+    const alerts = await storage.getAlertHistory();
+    res.json(alerts);
   });
 
 

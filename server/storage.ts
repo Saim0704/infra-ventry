@@ -2,9 +2,16 @@ import { db } from "./db";
 import { eq, desc, sql } from "drizzle-orm";
 import {
   users, tokens, servers, serverMetrics, databases, databaseMetrics, clusters, clusterMetrics, projects,
-  type User, type Token, type Server, type ServerMetric, type Database, type DatabaseMetric, type Cluster, type ClusterMetric, type Project
+  smtpSettings, alerts, projectAlertSettings,
+  type User, type Token, type Server, type ServerMetric, type Database, type DatabaseMetric, type Cluster, type ClusterMetric, type Project,
+  type SmtpSettings, type Alert, type ProjectAlertSettings
 } from "@shared/schema";
-import { insertTokenSchema, insertServerSchema, insertServerMetricSchema, insertDatabaseSchema, insertDatabaseMetricSchema, insertClusterSchema, insertClusterMetricSchema, insertProjectSchema, insertUserSchema } from "@shared/schema";
+import {
+  insertTokenSchema, insertServerSchema, insertServerMetricSchema, insertDatabaseSchema,
+  insertDatabaseMetricSchema, insertClusterSchema, insertClusterMetricSchema, insertProjectSchema,
+  insertUserSchema, insertSmtpSettingsSchema, insertProjectAlertSettingsSchema
+} from "@shared/schema";
+import { EmailService } from "./lib/email";
 import { z } from "zod";
 
 export interface IStorage {
@@ -57,6 +64,19 @@ export interface IStorage {
   createUser(data: z.infer<typeof insertUserSchema>): Promise<User>;
   updateUser(id: string, data: Partial<User>): Promise<User | undefined>;
   deleteUser(id: string): Promise<void>;
+
+  // === SETTINGS ===
+  getSmtpSettings(): Promise<SmtpSettings | undefined>;
+  upsertSmtpSettings(data: z.infer<typeof insertSmtpSettingsSchema>): Promise<SmtpSettings>;
+
+  // === PROJECT ALERT SETTINGS ===
+  getProjectAlertSettings(projectId: number): Promise<ProjectAlertSettings | undefined>;
+  upsertProjectAlertSettings(projectId: number, data: Partial<z.infer<typeof insertProjectAlertSettingsSchema>>): Promise<ProjectAlertSettings>;
+
+  // === ALERTS ===
+  getRecentAlerts(serverId: number): Promise<Alert[]>;
+  getAlertHistory(): Promise<(Alert & { serverName: string })[]>;
+  createAlert(data: { serverId?: number, databaseId?: number, clusterId?: number, type: string, value: number, threshold: number }): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -239,6 +259,228 @@ export class DatabaseStorage implements IStorage {
 
   async addServerMetric(data: z.infer<typeof insertServerMetricSchema>): Promise<void> {
     await db.insert(serverMetrics).values(data);
+    if (!data.serverId) return;
+
+    await this.checkAndTriggerAlert(data.serverId, 'server', [
+      { type: 'cpu', value: data.cpuUsage, operator: '>' },
+      { type: 'memory', value: data.memoryUsage, operator: '>' },
+      { type: 'ssl', value: data.sslUsage, operator: '<=' },
+    ]);
+  }
+
+  async checkAndTriggerAlert(resourceId: number, type: 'server' | 'database' | 'cluster', currentMetrics: { type: string, value: number | null | undefined, operator: '>' | '<=' }[]): Promise<void> {
+    try {
+      const fs = await import("fs");
+      const logMsg = `[${new Date().toISOString()}] CHECKING ALERTS for ${type} (ID: ${resourceId}). Metrics: ${JSON.stringify(currentMetrics)}\n`;
+      fs.appendFileSync("alerts_debug.log", logMsg);
+
+      // Get SMTP settings (needed for sending emails)
+      const smtpSettings = await this.getSmtpSettings();
+      if (!smtpSettings) {
+        fs.appendFileSync("alerts_debug.log", `[${new Date().toISOString()}] NO SMTP SETTINGS FOUND\n`);
+        return;
+      }
+
+      // Get resource and its project ID
+      let resourceName = "";
+      let projectId: number | null = null;
+      let idFields: any = {};
+
+      if (type === 'server') {
+        const s = await this.getServer(resourceId);
+        if (!s) return;
+        resourceName = s.name || s.hostname;
+        projectId = s.projectId;
+        idFields.serverId = resourceId;
+      } else if (type === 'database') {
+        const d = await this.getDatabase(resourceId);
+        if (!d) return;
+        resourceName = d.name;
+        projectId = d.projectId;
+        idFields.databaseId = resourceId;
+      } else if (type === 'cluster') {
+        const c = await this.getCluster(resourceId);
+        if (!c) return;
+        resourceName = c.name;
+        projectId = c.projectId;
+        idFields.clusterId = resourceId;
+      }
+
+      // If no project, skip alerts
+      if (!projectId) {
+        fs.appendFileSync("alerts_debug.log", `[${new Date().toISOString()}] Resource ${resourceName} has no project, skipping alerts\n`);
+        return;
+      }
+
+      // Get project-specific alert settings
+      const projectAlertConfig = await this.getProjectAlertSettings(projectId);
+      if (!projectAlertConfig) {
+        fs.appendFileSync("alerts_debug.log", `[${new Date().toISOString()}] No alert settings for project ${projectId}\n`);
+        return;
+      }
+
+      fs.appendFileSync("alerts_debug.log", `[${new Date().toISOString()}] Project alert settings found. Recipients: ${JSON.stringify(projectAlertConfig.alertRecipients)}\n`);
+
+      const thresholds = {
+        cpu: projectAlertConfig.cpuThreshold,
+        memory: projectAlertConfig.memoryThreshold,
+        ssl: projectAlertConfig.sslThreshold,
+        storage: projectAlertConfig.storageThreshold,
+      };
+
+      for (const m of currentMetrics) {
+        const threshold = (thresholds as any)[m.type];
+        // If threshold is null, the alert type is disabled for this project
+        if (m.value === null || m.value === undefined || threshold === null || threshold === undefined) continue;
+
+        const isBreached = m.operator === '>' ? m.value > threshold : m.value <= threshold;
+
+        if (isBreached) {
+          fs.appendFileSync("alerts_debug.log", `[${new Date().toISOString()}] BREACH DETECTED for ${resourceName} ${m.type}. Value: ${m.value}, Threshold: ${threshold}\n`);
+          // Check if alert was already sent recently (within 1 hour)
+          const [lastAlert] = await db.select().from(alerts)
+            .where(sql`${alerts.type} = ${m.type} AND ${alerts.sentAt} > NOW() - INTERVAL '1 hour' AND (
+              (${alerts.serverId} IS NOT NULL AND ${alerts.serverId} = ${idFields.serverId || 0}) OR
+              (${alerts.databaseId} IS NOT NULL AND ${alerts.databaseId} = ${idFields.databaseId || 0}) OR
+              (${alerts.clusterId} IS NOT NULL AND ${alerts.clusterId} = ${idFields.clusterId || 0})
+            )`)
+            .limit(1);
+
+          if (!lastAlert) {
+            console.log(`[ALERTS] Triggering alert for ${resourceName}: ${m.type} value ${m.value} (threshold ${threshold})`);
+            await this.createAlert({
+              ...idFields,
+              type: m.type,
+              value: m.value,
+              threshold: threshold,
+            });
+
+            // Send to project-specific recipients
+            const recipients = projectAlertConfig.alertRecipients && projectAlertConfig.alertRecipients.length > 0
+              ? projectAlertConfig.alertRecipients
+              : [smtpSettings.fromEmail];
+
+            // Use project-specific branding
+            const branding = {
+              companyName: projectAlertConfig.companyName,
+              logoUrl: projectAlertConfig.logoUrl,
+            };
+
+            for (const recipient of recipients) {
+              await EmailService.sendAlertEmail(
+                recipient,
+                resourceName,
+                m.type,
+                m.value,
+                threshold,
+                smtpSettings,
+                branding
+              );
+            }
+            fs.appendFileSync("alerts_debug.log", `[${new Date().toISOString()}] Alert emails SENT to ${recipients.join(', ')}\n`);
+            console.log(`[ALERTS] Alert emails sent to ${recipients.join(', ')}`);
+          } else {
+            fs.appendFileSync("alerts_debug.log", `[${new Date().toISOString()}] Alert SKIPPED (spam protection) for ${resourceName} ${m.type}\n`);
+            console.log(`[ALERTS] Alert for ${resourceName} ${m.type} already sent within the last hour. Skipping.`);
+          }
+        }
+      }
+    } catch (err) {
+      console.error("Alert check error:", err);
+    }
+  }
+
+  // === SETTINGS ===
+  async getSmtpSettings(): Promise<SmtpSettings | undefined> {
+    const [settings] = await db.select().from(smtpSettings).limit(1);
+    return settings;
+  }
+
+  async upsertSmtpSettings(data: any): Promise<SmtpSettings> {
+    try {
+      const fs = await import("fs");
+      fs.appendFileSync("alerts_debug.log", `[${new Date().toISOString()}] UPSERTIING SMTP SETTINGS.\n`);
+      const existing = await this.getSmtpSettings();
+      if (existing) {
+        fs.appendFileSync("alerts_debug.log", `[${new Date().toISOString()}] Updating existing settings ID: ${existing.id}\n`);
+        const [updated] = await db.update(smtpSettings)
+          .set({ ...data, updatedAt: new Date() })
+          .where(eq(smtpSettings.id, existing.id))
+          .returning();
+        EmailService.clearTransporter();
+        return updated as SmtpSettings;
+      }
+      fs.appendFileSync("alerts_debug.log", `[${new Date().toISOString()}] Inserting new settings\n`);
+      const [newSettings] = await db.insert(smtpSettings)
+        .values(data)
+        .returning();
+      return newSettings as SmtpSettings;
+    } catch (err) {
+      const fs = await import("fs");
+      fs.appendFileSync("alerts_debug.log", `[${new Date().toISOString()}] Error in upsertSmtpSettings: ${err}\n`);
+      throw err;
+    }
+  }
+
+  // === PROJECT ALERT SETTINGS ===
+  async getProjectAlertSettings(projectId: number): Promise<ProjectAlertSettings | undefined> {
+    const [settings] = await db.select().from(projectAlertSettings)
+      .where(eq(projectAlertSettings.projectId, projectId))
+      .limit(1);
+    return settings;
+  }
+
+  async upsertProjectAlertSettings(projectId: number, data: Partial<z.infer<typeof insertProjectAlertSettingsSchema>>): Promise<ProjectAlertSettings> {
+    const existing = await this.getProjectAlertSettings(projectId);
+    const updateData: any = {
+      ...data,
+      updatedAt: new Date(),
+    };
+
+    if (existing) {
+      const [updated] = await db.update(projectAlertSettings)
+        .set(updateData)
+        .where(eq(projectAlertSettings.id, existing.id))
+        .returning();
+      return updated as ProjectAlertSettings;
+    }
+    const [newSettings] = await db.insert(projectAlertSettings)
+      .values({ projectId, ...data } as any)
+      .returning();
+    return newSettings as ProjectAlertSettings;
+  }
+
+  // === ALERTS ===
+  async getRecentAlerts(serverId: number): Promise<Alert[]> {
+    return await db.select().from(alerts)
+      .where(eq(alerts.serverId, serverId))
+      .orderBy(desc(alerts.sentAt))
+      .limit(10);
+  }
+
+  async getAlertHistory(): Promise<(Alert & { serverName: string })[]> {
+    const results = await db.select({
+      alert: alerts,
+      serverName: servers.name,
+      hostname: servers.hostname,
+      dbName: databases.name,
+      clusterName: clusters.name
+    })
+      .from(alerts)
+      .leftJoin(servers, eq(alerts.serverId, servers.id))
+      .leftJoin(databases, eq(alerts.databaseId, databases.id))
+      .leftJoin(clusters, eq(alerts.clusterId, clusters.id))
+      .orderBy(desc(alerts.sentAt))
+      .limit(50);
+
+    return results.map(r => ({
+      ...r.alert,
+      serverName: r.serverName || r.hostname || r.dbName || r.clusterName || "Unknown Resource"
+    }));
+  }
+
+  async createAlert(data: { serverId?: number, databaseId?: number, clusterId?: number, type: string, value: number, threshold: number }): Promise<void> {
+    await db.insert(alerts).values(data);
   }
 
   // === DATABASES ===
@@ -314,6 +556,11 @@ export class DatabaseStorage implements IStorage {
 
   async addDatabaseMetric(data: z.infer<typeof insertDatabaseMetricSchema>): Promise<void> {
     await db.insert(databaseMetrics).values(data);
+    if (!data.databaseId) return;
+
+    await this.checkAndTriggerAlert(data.databaseId, 'database', [
+      { type: 'storage', value: data.storageUsed, operator: '>' },
+    ]);
   }
 
   // === CLUSTERS ===
@@ -358,6 +605,12 @@ export class DatabaseStorage implements IStorage {
 
   async addClusterMetric(data: z.infer<typeof insertClusterMetricSchema>): Promise<void> {
     await db.insert(clusterMetrics).values(data);
+    if (!data.clusterId) return;
+
+    await this.checkAndTriggerAlert(data.clusterId, 'cluster', [
+      { type: 'cpu', value: data.cpuUsage, operator: '>' },
+      { type: 'memory', value: data.memoryUsage, operator: '>' },
+    ]);
   }
 
   // === USERS ===

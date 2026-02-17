@@ -1,3 +1,4 @@
+// Force restart at 2026-02-12T18:30:00
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
@@ -60,6 +61,7 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  console.log("--- BOOM: Registering Routes ---");
   await registerRoutes(httpServer, app);
 
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {

@@ -5,19 +5,23 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Trash2, Copy, Check, Plus } from "lucide-react";
+import {
+  Plus, Trash2, Mail, Bell, Settings, Terminal, Shield,
+  Database as DbIcon, Cpu, Layout, Server, Cloud,
+  Search, RefreshCw, Save, Check, X, Send, AlertTriangle,
+  Users, Trash, Copy, Key, UserPlus, User, UserCog
+} from "lucide-react";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
-import { useForm } from "react-hook-form";
+import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertTokenSchema } from "@shared/schema";
 import { z } from "zod";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/hooks/use-auth";
-import { User, Shield, UserCog, Key, UserPlus } from "lucide-react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { api } from "@shared/routes";
 import { queryClient } from "@/lib/queryClient";
@@ -40,8 +44,8 @@ export default function SettingsPage() {
 
   return (
     <Shell title="Settings" description="Manage your preferences, security tokens, and organization members.">
-      <div className="flex flex-col md:flex-row gap-8 items-start">
-        <Tabs defaultValue="tokens" className="w-full flex flex-col md:flex-row gap-8">
+      <Tabs defaultValue="tokens" className="w-full">
+        <div className="flex flex-col md:flex-row gap-8 items-start">
           <aside className="md:w-64 w-full shrink-0 space-y-2">
             <div className="px-3 py-2">
               <h2 className="mb-2 px-4 text-lg font-semibold tracking-tight">Configuration</h2>
@@ -61,13 +65,29 @@ export default function SettingsPage() {
                   <span className="font-medium">My Profile</span>
                 </TabsTrigger>
                 {user?.role === 'admin' && (
-                  <TabsTrigger
-                    value="users"
-                    className="w-full justify-start gap-3 px-4 py-3 h-auto data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-xl transition-all duration-200 border border-transparent data-[state=active]:border-primary/20"
-                  >
-                    <UserCog className="h-4 w-4" />
-                    <span className="font-medium">User Management</span>
-                  </TabsTrigger>
+                  <>
+                    <TabsTrigger
+                      value="smtp"
+                      className="w-full justify-start gap-3 px-4 py-3 h-auto data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-xl transition-all duration-200 border border-transparent data-[state=active]:border-primary/20"
+                    >
+                      <Mail className="h-4 w-4" />
+                      <span className="font-medium">SMTP & Alerts</span>
+                    </TabsTrigger>
+                    <TabsTrigger
+                      value="history"
+                      className="w-full justify-start gap-3 px-4 py-3 h-auto data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-xl transition-all duration-200 border border-transparent data-[state=active]:border-primary/20"
+                    >
+                      <Bell className="h-4 w-4" />
+                      <span className="font-medium">Alert History</span>
+                    </TabsTrigger>
+                    <TabsTrigger
+                      value="users"
+                      className="w-full justify-start gap-3 px-4 py-3 h-auto data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-xl transition-all duration-200 border border-transparent data-[state=active]:border-primary/20"
+                    >
+                      <UserCog className="h-4 w-4" />
+                      <span className="font-medium">User Management</span>
+                    </TabsTrigger>
+                  </>
                 )}
               </TabsList>
             </div>
@@ -194,14 +214,22 @@ export default function SettingsPage() {
             </TabsContent>
 
             {user?.role === 'admin' && (
-              <TabsContent value="users" className="mt-0 outline-none">
-                <UserManagementTable />
-              </TabsContent>
+              <>
+                <TabsContent value="smtp" className="mt-0 outline-none">
+                  <SmtpSettingsSection />
+                </TabsContent>
+                <TabsContent value="history" className="mt-0 outline-none">
+                  <AlertHistoryTable />
+                </TabsContent>
+                <TabsContent value="users" className="mt-0 outline-none">
+                  <UserManagementTable />
+                </TabsContent>
+              </>
             )}
           </div>
-        </Tabs>
-      </div>
-    </Shell>
+        </div>
+      </Tabs>
+    </Shell >
   );
 }
 
@@ -694,6 +722,277 @@ function CreateTokenDialog() {
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function SmtpSettingsSection() {
+  const { toast } = useToast();
+  const { data: settings, isLoading } = useQuery<any>({
+    queryKey: ['/api/settings/smtp']
+  });
+
+  const mutation = useMutation({
+    mutationFn: async (data: any) => {
+      const res = await fetch('/api/settings/smtp', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/settings/smtp'] });
+      toast({ title: "Settings updated", description: "SMTP and Alert settings have been saved." });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    }
+  });
+
+  const testMutation = useMutation({
+    mutationFn: async ({ recipient, settings }: { recipient: string, settings?: any }) => {
+      const res = await fetch('/api/settings/smtp/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ recipient, settings })
+      });
+
+      const contentType = res.headers.get("content-type");
+      if (contentType && contentType.includes("application/json")) {
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || `Error ${res.status}: Failed to send test email`);
+        return data;
+      } else {
+        const text = await res.text();
+        console.error("Non-JSON response received:", text);
+        if (!res.ok) {
+          throw new Error(`Server returned non-JSON error (${res.status}). Check server console for logs.`);
+        }
+        return { success: true, message: "Operation completed, but response was not JSON." };
+      }
+    },
+    onSuccess: () => {
+      toast({ title: "Success", description: "Test email sent successfully." });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    }
+  });
+
+  const [testRecipient, setTestRecipient] = useState("");
+
+  const form = useForm<any>({
+    values: settings || {
+      host: "",
+      port: 587,
+      user: "",
+      pass: "",
+      fromEmail: "",
+    }
+  });
+
+  const handleTestEmail = () => {
+    const currentValues = form.getValues();
+    testMutation.mutate({
+      recipient: testRecipient,
+      settings: currentValues
+    });
+  };
+
+  if (isLoading) return <div className="text-center py-12 animate-pulse">Loading settings...</div>;
+
+  return (
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit((data) => {
+        mutation.mutate(data);
+      })} className="space-y-6">
+        <div className="grid grid-cols-1 gap-8">
+          <Card className="border-border/40 shadow-sm bg-card/50 backdrop-blur-sm">
+            <CardHeader>
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                  <Mail className="h-5 w-5 text-primary" />
+                </div>
+                <div>
+                  <CardTitle className="text-xl font-bold">SMTP Configuration</CardTitle>
+                  <CardDescription>Configure your email server for sending alerts.</CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="host"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-[10px] font-bold uppercase tracking-widest text-foreground/70">SMTP Host</FormLabel>
+                      <FormControl>
+                        <Input placeholder="smtp.gmail.com" className="h-11 bg-muted/20 border-border/40 rounded-xl" {...field} />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="port"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-[10px] font-bold uppercase tracking-widest text-foreground/70">Port</FormLabel>
+                      <FormControl>
+                        <Input type="number" placeholder="587" className="h-11 bg-muted/20 border-border/40 rounded-xl" {...field} onChange={e => field.onChange(parseInt(e.target.value))} />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="user"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-[10px] font-bold uppercase tracking-widest text-foreground/70">Username</FormLabel>
+                      <FormControl>
+                        <Input placeholder="user@gmail.com" className="h-11 bg-muted/20 border-border/40 rounded-xl" {...field} />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="pass"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-[10px] font-bold uppercase tracking-widest text-foreground/70">Password</FormLabel>
+                      <FormControl>
+                        <Input type="password" placeholder="••••••••" className="h-11 bg-muted/20 border-border/40 rounded-xl" {...field} />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <div className="grid grid-cols-1 gap-4">
+                <FormField
+                  control={form.control}
+                  name="fromEmail"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-[10px] font-bold uppercase tracking-widest text-foreground/70">From Email Address</FormLabel>
+                      <FormControl>
+                        <Input placeholder="alerts@infrawatch.com" className="h-11 bg-muted/20 border-border/40 rounded-xl" {...field} />
+                      </FormControl>
+                      <FormDescription className="text-[10px]">This is the email address that will appear in the FROM field.</FormDescription>
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <div className="pt-4 border-t border-border/30 mt-6 bg-muted/10 p-4 rounded-xl">
+                <h4 className="text-[10px] font-bold uppercase tracking-widest text-foreground/70 mb-4 flex items-center gap-2">
+                  <Send className="h-3 w-3" /> Test Connection
+                </h4>
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="test@example.com"
+                    className="h-10 bg-background border-border/40 rounded-lg text-sm"
+                    value={testRecipient}
+                    onChange={(e) => setTestRecipient(e.target.value)}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-10 px-4 rounded-lg font-bold text-xs shrink-0"
+                    onClick={handleTestEmail}
+                    disabled={testMutation.isPending || !testRecipient}
+                  >
+                    {testMutation.isPending ? "Sending..." : "Send Test"}
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+        <Button type="submit" className="w-full h-12 rounded-xl bg-primary shadow-lg shadow-primary/10 font-black uppercase tracking-wider mt-4" disabled={mutation.isPending}>
+          {mutation.isPending ? "Saving..." : (
+            <>
+              <Save className="mr-2 h-4 w-4" /> Save All Configuration
+            </>
+          )}
+        </Button>
+      </form>
+    </Form>
+  );
+}
+
+function AlertHistoryTable() {
+  const { data: alerts, isLoading } = useQuery<any[]>({
+    queryKey: ['/api/alerts/history']
+  });
+
+  if (isLoading) return <div className="text-center py-12 animate-pulse">Loading history...</div>;
+
+  return (
+    <Card className="border-border/40 shadow-sm bg-card/50 backdrop-blur-sm">
+      <CardHeader>
+        <CardTitle className="text-xl font-bold">Alert History</CardTitle>
+        <CardDescription>A log of all alert emails sent by the system.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div className="rounded-xl border border-border/40 overflow-hidden bg-background/50">
+          <Table>
+            <TableHeader className="bg-muted/30">
+              <TableRow className="border-border/40 hover:bg-transparent">
+                <TableHead className="text-[10px] font-bold uppercase tracking-widest py-4">Timestamp</TableHead>
+                <TableHead className="text-[10px] font-bold uppercase tracking-widest py-4">Server</TableHead>
+                <TableHead className="text-[10px] font-bold uppercase tracking-widest py-4">Type</TableHead>
+                <TableHead className="text-[10px] font-bold uppercase tracking-widest py-4 text-center">Value</TableHead>
+                <TableHead className="text-[10px] font-bold uppercase tracking-widest py-4 text-center">Threshold</TableHead>
+                <TableHead className="text-[10px] font-bold uppercase tracking-widest py-4">Status</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {alerts?.map((alert) => (
+                <TableRow key={alert.id} className="border-border/40 hover:bg-muted/10 transition-colors">
+                  <TableCell className="text-xs font-medium text-muted-foreground whitespace-nowrap">
+                    {new Date(alert.sentAt).toLocaleString()}
+                  </TableCell>
+                  <TableCell className="font-bold text-sm tracking-tight">{alert.serverName}</TableCell>
+                  <TableCell>
+                    <div className={`text-[10px] font-black uppercase tracking-tighter w-fit px-2 py-0.5 rounded-full ${alert.type === 'cpu' ? 'bg-indigo-500/10 text-indigo-500' :
+                      alert.type === 'memory' ? 'bg-amber-500/10 text-amber-500' :
+                        'bg-rose-500/10 text-rose-500'
+                      }`}>
+                      {alert.type}
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-center font-mono text-xs font-bold">
+                    {alert.value.toFixed(2)}{alert.type === 'ssl' ? ' Days' : '%'}
+                  </TableCell>
+                  <TableCell className="text-center font-mono text-xs text-muted-foreground">
+                    {alert.threshold}{alert.type === 'ssl' ? ' Days' : '%'}
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-1 text-[10px] font-bold text-emerald-500">
+                      <Check className="h-3 w-3" /> Sent
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+              {(!alerts || alerts.length === 0) && (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center py-12 text-muted-foreground italic">
+                    No alert history found yet.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 

@@ -1,17 +1,23 @@
 import { useProjectResources } from "@/hooks/use-projects";
 import { useCreateToken } from "@/hooks/use-tokens";
+import { useProjectAlertSettings, useUpdateProjectAlertSettings } from "@/hooks/use-project-settings";
 import { useLocation, useParams } from "wouter";
 import { Shell } from "@/components/layout/Shell";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Server, Database, Cloud, Terminal, Plus, Activity, Layout, ChevronLeft, Globe, Shield, Key } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel } from "@/components/ui/form";
+import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
+import { Server, Database, Cloud, Terminal, Plus, Activity, Layout, ChevronLeft, Globe, Shield, Key, Bell, Mail, Save, Trash2, Send } from "lucide-react";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { UsageBar } from "@/components/ui/UsageBar";
 import { format } from "date-fns";
 import { useEffect, useState } from "react";
 import { RegistrationModal } from "@/components/RegistrationModal";
+import { useForm, useFieldArray } from "react-hook-form";
+import { useToast } from "@/hooks/use-toast";
 
 export default function ProjectDetailPage() {
     const { id } = useParams();
@@ -120,6 +126,9 @@ export default function ProjectDetailPage() {
                     <TabsTrigger value="clusters" className="rounded-xl px-8 h-12 data-[state=active]:bg-background data-[state=active]:shadow-sm font-bold tracking-tight">
                         Clusters ({clusters.length})
                     </TabsTrigger>
+                    <TabsTrigger value="settings" className="rounded-xl px-8 h-12 data-[state=active]:bg-background data-[state=active]:shadow-sm font-bold tracking-tight">
+                        Settings
+                    </TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="servers">
@@ -213,6 +222,10 @@ export default function ProjectDetailPage() {
                         )}
                     </div>
                 </TabsContent>
+
+                <TabsContent value="settings">
+                    <ProjectSettings projectId={project.id} />
+                </TabsContent>
             </Tabs>
         </Shell >
     );
@@ -272,5 +285,238 @@ function ProcessList({ processes }: { processes: any[] }) {
                 </div>
             </div>
         </div>
+    );
+}
+
+function ProjectSettings({ projectId }: { projectId: number }) {
+    const { data: settings, isLoading } = useProjectAlertSettings(projectId);
+    const updateSettings = useUpdateProjectAlertSettings(projectId);
+    const { toast } = useToast();
+    const [newRecipient, setNewRecipient] = useState("");
+
+    const form = useForm<any>({
+        values: settings ? {
+            ...settings,
+            alertRecipients: (settings.alertRecipients || []).map((email: string) => ({ email }))
+        } : {
+            alertRecipients: [],
+            companyName: "",
+            logoUrl: "",
+            cpuThreshold: 80,
+            memoryThreshold: 80,
+            sslThreshold: 30,
+            storageThreshold: 80,
+        }
+    });
+
+    const { fields, append, remove } = useFieldArray({
+        control: form.control,
+        name: "alertRecipients"
+    });
+
+    const handleAddRecipient = () => {
+        if (newRecipient && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newRecipient)) {
+            append({ email: newRecipient });
+            setNewRecipient("");
+        } else {
+            toast({ title: "Invalid Email", description: "Please enter a valid email address.", variant: "destructive" });
+        }
+    };
+
+    if (isLoading) return <div className="text-center py-12 animate-pulse">Loading project settings...</div>;
+
+    return (
+        <Form {...form}>
+            <form onSubmit={form.handleSubmit((data) => {
+                const submissionData = {
+                    ...data,
+                    alertRecipients: (data.alertRecipients || []).map((r: any) => r.email)
+                };
+                updateSettings.mutate(submissionData, {
+                    onSuccess: () => toast({ title: "Success", description: "Project settings updated successfully." })
+                });
+            })} className="space-y-6">
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+                    <Card className="border-border/40 shadow-sm bg-card/50 backdrop-blur-sm">
+                        <CardHeader>
+                            <div className="flex items-center gap-3">
+                                <div className="h-10 w-10 rounded-xl bg-indigo-500/10 flex items-center justify-center">
+                                    <Bell className="h-5 w-5 text-indigo-500" />
+                                </div>
+                                <div>
+                                    <CardTitle className="text-xl font-bold">Alert Configuration</CardTitle>
+                                    <CardDescription>Configure project-specific alert settings.</CardDescription>
+                                </div>
+                            </div>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                            <div className="space-y-4">
+                                <FormLabel className="text-[10px] font-bold uppercase tracking-widest text-foreground/70">Alert Recipient Emails</FormLabel>
+                                <div className="flex gap-2">
+                                    <Input
+                                        placeholder="admin@example.com"
+                                        className="h-10 bg-muted/20 border-border/40 rounded-xl"
+                                        value={newRecipient}
+                                        onChange={(e) => setNewRecipient(e.target.value)}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter') {
+                                                e.preventDefault();
+                                                handleAddRecipient();
+                                            }
+                                        }}
+                                    />
+                                    <Button type="button" onClick={handleAddRecipient} className="h-10 px-4 rounded-xl bg-primary/20 hover:bg-primary/30 text-primary border-0">
+                                        <Plus className="h-4 w-4 mr-2" /> Add
+                                    </Button>
+                                </div>
+
+                                <div className="rounded-xl border border-border/40 overflow-hidden bg-background/30">
+                                    <Table>
+                                        <TableBody>
+                                            {fields.map((field: any, index) => (
+                                                <TableRow key={field.id} className="border-border/40">
+                                                    <TableCell className="py-2 text-sm font-medium">{field.email}</TableCell>
+                                                    <TableCell className="py-2 text-right">
+                                                        <Button
+                                                            type="button"
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            className="h-8 w-8 p-0 text-rose-500 hover:text-rose-600 hover:bg-rose-500/10"
+                                                            onClick={() => remove(index)}
+                                                        >
+                                                            <Trash2 className="h-4 w-4" />
+                                                        </Button>
+                                                    </TableCell>
+                                                </TableRow>
+                                            ))}
+                                            {fields.length === 0 && (
+                                                <TableRow>
+                                                    <TableCell colSpan={2} className="py-4 text-center text-xs text-muted-foreground italic">
+                                                        No recipients added yet.
+                                                    </TableCell>
+                                                </TableRow>
+                                            )}
+                                        </TableBody>
+                                    </Table>
+                                </div>
+                            </div>
+
+                            <div className="pt-6 space-y-4 border-t border-border/30">
+                                <h4 className="text-[10px] font-bold uppercase tracking-widest text-foreground/70 flex items-center gap-2">
+                                    <Globe className="h-3 w-3" /> Branding
+                                </h4>
+                                <FormField
+                                    control={form.control}
+                                    name="companyName"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel className="text-[10px] font-bold uppercase tracking-widest text-foreground/70">Company Name</FormLabel>
+                                            <FormControl>
+                                                <Input placeholder="Acme Corp" className="h-11 bg-muted/20 border-border/40 rounded-xl" {...field} />
+                                            </FormControl>
+                                        </FormItem>
+                                    )}
+                                />
+                                <FormField
+                                    control={form.control}
+                                    name="logoUrl"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel className="text-[10px] font-bold uppercase tracking-widest text-foreground/70">Logo URL</FormLabel>
+                                            <FormControl>
+                                                <Input placeholder="https://example.com/logo.png" className="h-11 bg-muted/20 border-border/40 rounded-xl" {...field} />
+                                            </FormControl>
+                                        </FormItem>
+                                    )}
+                                />
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    <Card className="border-border/40 shadow-sm bg-card/50 backdrop-blur-sm">
+                        <CardHeader>
+                            <div className="flex items-center gap-3">
+                                <div className="h-10 w-10 rounded-xl bg-amber-500/10 flex items-center justify-center">
+                                    <Bell className="h-5 w-5 text-amber-500" />
+                                </div>
+                                <div>
+                                    <CardTitle className="text-xl font-bold">Alert Thresholds</CardTitle>
+                                    <CardDescription>Define when to trigger notifications for this project.</CardDescription>
+                                </div>
+                            </div>
+                        </CardHeader>
+                        <CardContent className="space-y-6">
+                            <FormField
+                                control={form.control}
+                                name="cpuThreshold"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <div className="flex justify-between items-center mb-1">
+                                            <FormLabel className="text-[10px] font-bold uppercase tracking-widest text-foreground/70">CPU Threshold (%)</FormLabel>
+                                            <span className="font-bold text-primary">{field.value}%</span>
+                                        </div>
+                                        <FormControl>
+                                            <Input type="range" min="0" max="100" step="1" className="accent-primary h-2 cursor-pointer" {...field} onChange={e => field.onChange(parseInt(e.target.value))} />
+                                        </FormControl>
+                                    </FormItem>
+                                )}
+                            />
+                            <FormField
+                                control={form.control}
+                                name="memoryThreshold"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <div className="flex justify-between items-center mb-1">
+                                            <FormLabel className="text-[10px] font-bold uppercase tracking-widest text-foreground/70">Memory Threshold (%)</FormLabel>
+                                            <span className="font-bold text-primary">{field.value}%</span>
+                                        </div>
+                                        <FormControl>
+                                            <Input type="range" min="0" max="100" step="1" className="accent-primary h-2 cursor-pointer" {...field} onChange={e => field.onChange(parseInt(e.target.value))} />
+                                        </FormControl>
+                                    </FormItem>
+                                )}
+                            />
+                            <FormField
+                                control={form.control}
+                                name="sslThreshold"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <div className="flex justify-between items-center mb-1">
+                                            <FormLabel className="text-[10px] font-bold uppercase tracking-widest text-foreground/70">SSL Expiry (Days)</FormLabel>
+                                            <span className="font-bold text-primary">{field.value} Days</span>
+                                        </div>
+                                        <FormControl>
+                                            <Input type="range" min="0" max="180" step="1" className="accent-primary h-2 cursor-pointer" {...field} onChange={e => field.onChange(parseInt(e.target.value))} />
+                                        </FormControl>
+                                    </FormItem>
+                                )}
+                            />
+                            <FormField
+                                control={form.control}
+                                name="storageThreshold"
+                                render={({ field }) => (
+                                    <FormItem>
+                                        <div className="flex justify-between items-center mb-1">
+                                            <FormLabel className="text-[10px] font-bold uppercase tracking-widest text-foreground/70">Storage Threshold (%)</FormLabel>
+                                            <span className="font-bold text-primary">{field.value}%</span>
+                                        </div>
+                                        <FormControl>
+                                            <Input type="range" min="0" max="100" step="1" className="accent-primary h-2 cursor-pointer" {...field} onChange={e => field.onChange(parseInt(e.target.value))} />
+                                        </FormControl>
+                                    </FormItem>
+                                )}
+                            />
+                        </CardContent>
+                    </Card>
+                </div>
+                <Button type="submit" className="w-full h-12 rounded-xl bg-primary shadow-lg shadow-primary/10 font-bold uppercase tracking-wider" disabled={updateSettings.isPending}>
+                    {updateSettings.isPending ? "Saving..." : (
+                        <>
+                            <Save className="mr-2 h-4 w-4" /> Save Project Settings
+                        </>
+                    )}
+                </Button>
+            </form>
+        </Form>
     );
 }
