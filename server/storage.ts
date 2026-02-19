@@ -2,14 +2,15 @@ import { db } from "./db";
 import { eq, desc, sql } from "drizzle-orm";
 import {
   users, tokens, servers, serverMetrics, databases, databaseMetrics, clusters, clusterMetrics, projects,
-  smtpSettings, alerts, projectAlertSettings,
+  smtpSettings, alerts, projectAlertSettings, webMonitors, webMonitorMetrics,
   type User, type Token, type Server, type ServerMetric, type Database, type DatabaseMetric, type Cluster, type ClusterMetric, type Project,
-  type SmtpSettings, type Alert, type ProjectAlertSettings
+  type SmtpSettings, type Alert, type ProjectAlertSettings, type WebMonitor, type WebMonitorMetric
 } from "@shared/schema";
 import {
   insertTokenSchema, insertServerSchema, insertServerMetricSchema, insertDatabaseSchema,
   insertDatabaseMetricSchema, insertClusterSchema, insertClusterMetricSchema, insertProjectSchema,
-  insertUserSchema, insertSmtpSettingsSchema, insertProjectAlertSettingsSchema
+  insertUserSchema, insertSmtpSettingsSchema, insertProjectAlertSettingsSchema,
+  insertWebMonitorSchema, insertWebMonitorMetricSchema
 } from "@shared/schema";
 import { EmailService } from "./lib/email";
 import { z } from "zod";
@@ -42,8 +43,8 @@ export interface IStorage {
     criticalServers: number;
   }>;
 
-  // === PROJECTS ===
   getProjects(): Promise<Project[]>;
+  getProjectStatusBySlug(slug: string): Promise<any | null>;
   createProject(data: z.infer<typeof insertProjectSchema>): Promise<Project>;
   deleteProject(id: number): Promise<void>;
 
@@ -69,6 +70,14 @@ export interface IStorage {
   upsertCluster(data: z.infer<typeof insertClusterSchema>): Promise<Cluster>;
   addClusterMetric(data: z.infer<typeof insertClusterMetricSchema>): Promise<void>;
 
+  // === WEB MONITORS ===
+  getWebMonitors(): Promise<(WebMonitor & { metrics: WebMonitorMetric[], project?: Project })[]>;
+  getWebMonitor(id: number): Promise<(WebMonitor & { metrics: WebMonitorMetric[] }) | undefined>;
+  createWebMonitor(data: z.infer<typeof insertWebMonitorSchema>): Promise<WebMonitor>;
+  updateWebMonitor(id: number, data: Partial<z.infer<typeof insertWebMonitorSchema>>): Promise<WebMonitor | undefined>;
+  deleteWebMonitor(id: number): Promise<void>;
+  addWebMonitorMetric(data: z.infer<typeof insertWebMonitorMetricSchema>): Promise<void>;
+
   // === USERS ===
   getUsers(): Promise<User[]>;
   getUser(id: string): Promise<User | undefined>;
@@ -87,7 +96,7 @@ export interface IStorage {
   // === ALERTS ===
   getRecentAlerts(serverId: number): Promise<Alert[]>;
   getAlertHistory(): Promise<(Alert & { serverName: string })[]>;
-  createAlert(data: { serverId?: number, databaseId?: number, clusterId?: number, type: string, value: number, threshold: number }): Promise<void>;
+  createAlert(data: { serverId?: number, databaseId?: number, clusterId?: number, webMonitorId?: number, type: string, value: number, threshold: number }): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -126,8 +135,41 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createProject(data: z.infer<typeof insertProjectSchema>): Promise<Project> {
-    const [project] = await db.insert(projects).values(data).returning();
+    const slug = data.name.toLowerCase().replace(/ /g, '-').replace(/[^\w-]+/g, '');
+    const [project] = await db.insert(projects).values({ ...data, slug }).returning();
     return project;
+  }
+
+  async getProjectStatusBySlug(slug: string) {
+    const [project] = await db.select().from(projects).where(eq(projects.slug, slug));
+    if (!project) return null;
+
+    const resources = await this.getProjectResources(project.id);
+    if (!resources) return null;
+
+    return {
+      project: {
+        name: project.name,
+        description: project.description,
+      },
+      servers: resources.servers.map(s => ({
+        name: s.name || s.hostname,
+        status: (s as any).lastSeen && (Date.now() - new Date((s as any).lastSeen).getTime() < 5 * 60 * 1000) ? 'up' : 'down',
+        lastSeen: (s as any).lastSeen,
+      })),
+      databases: resources.databases.map(d => ({
+        name: d.name,
+        status: (d as any).lastSeen && (Date.now() - new Date((d as any).lastSeen).getTime() < 5 * 60 * 1000) ? 'up' : 'down',
+        lastSeen: (d as any).lastSeen,
+      })),
+      webMonitors: resources.webMonitors.map(w => ({
+        name: w.name,
+        url: w.url,
+        status: w.lastStatus || 'pending',
+        lastCheck: w.lastCheck,
+        responseTime: w.metrics?.[0]?.responseTime || null,
+      })),
+    };
   }
 
   async updateProject(id: number, data: Partial<z.infer<typeof insertProjectSchema>>): Promise<Project> {
@@ -150,6 +192,7 @@ export class DatabaseStorage implements IStorage {
     const allServers = await this.getServers();
     const allDbs = await this.getDatabases();
     const allClusters = await this.getClusters();
+    const allWeb = await this.getWebMonitors();
     const projectTokens = await this.getTokens(projectId);
 
     return {
@@ -157,6 +200,7 @@ export class DatabaseStorage implements IStorage {
       servers: allServers.filter(s => s.projectId === projectId),
       databases: allDbs.filter(d => d.projectId === projectId),
       clusters: allClusters.filter(c => c.projectId === projectId),
+      webMonitors: allWeb.filter(w => w.projectId === projectId),
       tokens: projectTokens,
     };
   }
@@ -177,6 +221,7 @@ export class DatabaseStorage implements IStorage {
     const serverCount = await db.select({ count: sql<number>`count(*)` }).from(servers);
     const dbCount = await db.select({ count: sql<number>`count(*)` }).from(databases);
     const clusterCount = await db.select({ count: sql<number>`count(*)` }).from(clusters);
+    const webMonitorCount = await db.select({ count: sql<number>`count(*)` }).from(webMonitors);
 
     // Mock critical count for now, or fetch simple status
     // To make it real, we'd need to join with metrics.
@@ -184,6 +229,7 @@ export class DatabaseStorage implements IStorage {
       totalServers: Number(serverCount[0].count),
       totalDatabases: Number(dbCount[0].count),
       totalClusters: Number(clusterCount[0].count),
+      totalWebMonitors: Number(webMonitorCount[0].count),
       healthyServers: Number(serverCount[0].count), // Assume healthy for MVP
       criticalServers: 0,
     };
@@ -275,11 +321,11 @@ export class DatabaseStorage implements IStorage {
     await this.checkAndTriggerAlert(data.serverId, 'server', [
       { type: 'cpu', value: data.cpuUsage, operator: '>' },
       { type: 'memory', value: data.memoryUsage, operator: '>' },
-      { type: 'ssl', value: data.sslUsage, operator: '<=' },
+      { type: 'storage', value: data.diskUsage, operator: '>' },
     ]);
   }
 
-  async checkAndTriggerAlert(resourceId: number, type: 'server' | 'database' | 'cluster', currentMetrics: { type: string, value: number | null | undefined, operator: '>' | '<=' }[]): Promise<void> {
+  async checkAndTriggerAlert(resourceId: number, type: 'server' | 'database' | 'cluster' | 'web', currentMetrics: { type: string, value: number | null | undefined, operator: '>' | '<=' }[]): Promise<void> {
     try {
       const logMsg = `[${new Date().toISOString()}] CHECKING ALERTS for ${type} (ID: ${resourceId}). Metrics: ${JSON.stringify(currentMetrics)}\n`;
       safeLog(logMsg);
@@ -314,6 +360,12 @@ export class DatabaseStorage implements IStorage {
         resourceName = c.name;
         projectId = c.projectId;
         idFields.clusterId = resourceId;
+      } else if (type === 'web') {
+        const w = await this.getWebMonitor(resourceId);
+        if (!w) return;
+        resourceName = w.name;
+        projectId = w.projectId;
+        idFields.webMonitorId = resourceId;
       }
 
       // If no project, skip alerts
@@ -334,7 +386,6 @@ export class DatabaseStorage implements IStorage {
       const thresholds = {
         cpu: projectAlertConfig.cpuThreshold,
         memory: projectAlertConfig.memoryThreshold,
-        ssl: projectAlertConfig.sslThreshold,
         storage: projectAlertConfig.storageThreshold,
       };
 
@@ -472,22 +523,24 @@ export class DatabaseStorage implements IStorage {
       serverName: servers.name,
       hostname: servers.hostname,
       dbName: databases.name,
-      clusterName: clusters.name
+      clusterName: clusters.name,
+      webName: webMonitors.name
     })
       .from(alerts)
       .leftJoin(servers, eq(alerts.serverId, servers.id))
       .leftJoin(databases, eq(alerts.databaseId, databases.id))
       .leftJoin(clusters, eq(alerts.clusterId, clusters.id))
+      .leftJoin(webMonitors, eq(alerts.webMonitorId, webMonitors.id))
       .orderBy(desc(alerts.sentAt))
       .limit(50);
 
     return results.map(r => ({
       ...r.alert,
-      serverName: r.serverName || r.hostname || r.dbName || r.clusterName || "Unknown Resource"
+      serverName: r.serverName || r.hostname || r.dbName || r.clusterName || r.webName || "Unknown Resource"
     }));
   }
 
-  async createAlert(data: { serverId?: number, databaseId?: number, clusterId?: number, type: string, value: number, threshold: number }): Promise<void> {
+  async createAlert(data: { serverId?: number, databaseId?: number, clusterId?: number, webMonitorId?: number, type: string, value: number, threshold: number }): Promise<void> {
     await db.insert(alerts).values(data);
   }
 
@@ -643,6 +696,71 @@ export class DatabaseStorage implements IStorage {
 
   async deleteUser(id: string): Promise<void> {
     await db.delete(users).where(eq(users.id, id));
+  }
+
+  // === WEB MONITORS ===
+  async getWebMonitors(): Promise<(WebMonitor & { metrics: WebMonitorMetric[], project?: Project })[]> {
+    const allWebMonitors = await db.select().from(webMonitors).orderBy(desc(webMonitors.createdAt));
+    return await Promise.all(allWebMonitors.map(async (monitor) => {
+      const metrics = await db.select().from(webMonitorMetrics)
+        .where(eq(webMonitorMetrics.monitorId, monitor.id))
+        .orderBy(desc(webMonitorMetrics.createdAt))
+        .limit(1);
+
+      let project;
+      if (monitor.projectId) {
+        [project] = await db.select().from(projects).where(eq(projects.id, monitor.projectId));
+      }
+
+      return { ...monitor, metrics, project };
+    }));
+  }
+
+  async getWebMonitor(id: number): Promise<(WebMonitor & { metrics: WebMonitorMetric[], project?: Project }) | undefined> {
+    const [monitor] = await db.select().from(webMonitors).where(eq(webMonitors.id, id));
+    if (!monitor) return undefined;
+
+    const metrics = await db.select().from(webMonitorMetrics)
+      .where(eq(webMonitorMetrics.monitorId, id))
+      .orderBy(desc(webMonitorMetrics.createdAt))
+      .limit(50);
+
+    let project;
+    if (monitor.projectId) {
+      [project] = await db.select().from(projects).where(eq(projects.id, monitor.projectId));
+    }
+
+    return { ...monitor, metrics: metrics.reverse(), project };
+  }
+
+  async createWebMonitor(data: z.infer<typeof insertWebMonitorSchema>): Promise<WebMonitor> {
+    const [monitor] = await db.insert(webMonitors).values(data).returning();
+    return monitor;
+  }
+
+  async updateWebMonitor(id: number, data: Partial<WebMonitor>): Promise<WebMonitor | undefined> {
+    const [updated] = await db.update(webMonitors)
+      .set(data)
+      .where(eq(webMonitors.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteWebMonitor(id: number): Promise<void> {
+    await db.delete(webMonitorMetrics).where(eq(webMonitorMetrics.monitorId, id));
+    await db.delete(webMonitors).where(eq(webMonitors.id, id));
+  }
+
+  async addWebMonitorMetric(data: z.infer<typeof insertWebMonitorMetricSchema>): Promise<void> {
+    await db.insert(webMonitorMetrics).values(data);
+    if (!data.monitorId) return;
+
+    // Trigger alerts if DOWN
+    if (!data.isUp) {
+      await this.checkAndTriggerAlert(data.monitorId, 'web', [
+        { type: 'uptime', value: 0, operator: '<=' }, // 0 means down
+      ]);
+    }
   }
 }
 

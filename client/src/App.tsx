@@ -12,6 +12,8 @@ import ClustersPage from "@/pages/Clusters";
 import SettingsPage from "@/pages/Settings";
 import ProjectsPage from "@/pages/Projects";
 import ProjectDetailPage from "@/pages/ProjectDetail";
+import WebMonitoringPage from "@/pages/WebMonitoring";
+import StatusPage from "@/pages/StatusPage";
 import LoginPage from "@/pages/Login";
 import { Loader2 } from "lucide-react";
 
@@ -26,19 +28,23 @@ function Router() {
     );
   }
 
-  if (!user) {
-    return <LoginPage />;
-  }
-
   return (
     <Switch>
-      <Route path="/" component={Dashboard} />
-      <Route path="/projects" component={ProjectsPage} />
-      <Route path="/projects/:id" component={ProjectDetailPage} />
-      <Route path="/servers" component={ServersPage} />
-      <Route path="/databases" component={DatabasesPage} />
-      <Route path="/clusters" component={ClustersPage} />
-      <Route path="/settings" component={SettingsPage} />
+      <Route path="/status/:slug" component={StatusPage} />
+      {user ? (
+        <>
+          <Route path="/" component={Dashboard} />
+          <Route path="/projects" component={ProjectsPage} />
+          <Route path="/projects/:id" component={ProjectDetailPage} />
+          <Route path="/servers" component={ServersPage} />
+          <Route path="/databases" component={DatabasesPage} />
+          <Route path="/clusters" component={ClustersPage} />
+          <Route path="/web-monitoring" component={WebMonitoringPage} />
+          <Route path="/settings" component={SettingsPage} />
+        </>
+      ) : (
+        <Route component={LoginPage} />
+      )}
       <Route component={NotFound} />
     </Switch>
   );

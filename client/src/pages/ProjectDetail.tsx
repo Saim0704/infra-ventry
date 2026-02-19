@@ -10,7 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel } from "@/components/ui/form";
 import { Table, TableBody, TableCell, TableRow } from "@/components/ui/table";
-import { Server, Database, Cloud, Terminal, Plus, Activity, Layout, ChevronLeft, Globe, Shield, Key, Bell, Mail, Save, Trash2, Send } from "lucide-react";
+import { Server, Database, Cloud, Terminal, Plus, Activity, Layout, ChevronLeft, Globe, Shield, Key, Bell, Mail, Save, Trash2, Send, ExternalLink } from "lucide-react";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { UsageBar } from "@/components/ui/UsageBar";
 import { format } from "date-fns";
@@ -18,6 +18,7 @@ import { useEffect, useState } from "react";
 import { RegistrationModal } from "@/components/RegistrationModal";
 import { useForm, useFieldArray } from "react-hook-form";
 import { useToast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
 
 export default function ProjectDetailPage() {
     const { id } = useParams();
@@ -61,7 +62,7 @@ export default function ProjectDetailPage() {
         );
     }
 
-    const { project, servers, databases, clusters } = resources;
+    const { project, servers, databases, clusters, webMonitors } = resources;
 
     return (
         <Shell title={project.name} description={project.description || "Project Resource Overview"}>
@@ -80,6 +81,13 @@ export default function ProjectDetailPage() {
                         <p className="text-muted-foreground mt-1 text-lg max-w-2xl">{project.description}</p>
                     </div>
                     <div className="flex gap-3">
+                        <Button
+                            variant="outline"
+                            onClick={() => window.open(`/status/${(project as any).slug}`, '_blank')}
+                            className="rounded-xl border-emerald-500/20 text-emerald-500 font-bold hover:bg-emerald-500/10"
+                        >
+                            <ExternalLink className="mr-2 h-4 w-4" /> View Status Page
+                        </Button>
                         <Button variant="outline" onClick={() => setModalOpen(true)} className="rounded-xl border-primary/20 text-primary font-bold">
                             <Plus className="mr-2 h-4 w-4" /> Register Resource
                         </Button>
@@ -113,6 +121,12 @@ export default function ProjectDetailPage() {
                     icon={<Cloud className="h-5 w-5" />}
                     color="bg-amber-500/10 text-amber-500"
                 />
+                <MetricCard
+                    title="Web Monitors"
+                    value={webMonitors.length}
+                    icon={<Globe className="h-5 w-5" />}
+                    color="bg-purple-500/10 text-purple-500"
+                />
             </div>
 
             <Tabs defaultValue="servers" className="space-y-6">
@@ -125,6 +139,9 @@ export default function ProjectDetailPage() {
                     </TabsTrigger>
                     <TabsTrigger value="clusters" className="rounded-xl px-8 h-12 data-[state=active]:bg-background data-[state=active]:shadow-sm font-bold tracking-tight">
                         Clusters ({clusters.length})
+                    </TabsTrigger>
+                    <TabsTrigger value="web" className="rounded-xl px-8 h-12 data-[state=active]:bg-background data-[state=active]:shadow-sm font-bold tracking-tight">
+                        Web ({webMonitors.length})
                     </TabsTrigger>
                     <TabsTrigger value="settings" className="rounded-xl px-8 h-12 data-[state=active]:bg-background data-[state=active]:shadow-sm font-bold tracking-tight">
                         Settings
@@ -198,24 +215,51 @@ export default function ProjectDetailPage() {
                     </div>
                 </TabsContent>
 
-                <TabsContent value="clusters">
+                <TabsContent value="web">
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                        {clusters.length === 0 ? (
-                            <EmptyState icon={<Cloud />} message="No clusters in this project." />
+                        {webMonitors.length === 0 ? (
+                            <EmptyState icon={<Globe />} message="No web monitors in this project." />
                         ) : (
-                            clusters.map(cluster => (
-                                <Card key={cluster.id} className="border-border/40 bg-card/50">
-                                    <CardHeader>
-                                        <div className="flex justify-between">
+                            webMonitors.map(monitor => (
+                                <Card key={monitor.id} className="border-border/40 bg-card/50 overflow-hidden group hover:bg-muted/20 transition-colors">
+                                    <CardHeader className="pb-4">
+                                        <div className="flex justify-between items-start">
                                             <div className="flex items-center gap-3">
-                                                <Cloud className="h-5 w-5 text-amber-500" />
-                                                <CardTitle>{cluster.name}</CardTitle>
+                                                <div className="h-10 w-10 rounded-xl bg-purple-500/10 flex items-center justify-center text-purple-500 group-hover:scale-110 transition-transform">
+                                                    <Globe className="h-5 w-5" />
+                                                </div>
+                                                <div className="flex flex-col">
+                                                    <CardTitle className="text-lg font-bold">{monitor.name}</CardTitle>
+                                                    <CardDescription className="text-[10px] truncate max-w-[200px]">{monitor.url}</CardDescription>
+                                                </div>
                                             </div>
-                                            <StatusBadge lastSeen={(cluster as any).lastSeen} />
+                                            <div className={cn(
+                                                "inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border uppercase tracking-wider",
+                                                monitor.lastStatus === 'up' ? "text-emerald-500 bg-emerald-500/10 border-emerald-500/20" :
+                                                    monitor.lastStatus === 'down' ? "text-destructive bg-destructive/10 border-destructive/20" :
+                                                        "text-secondary bg-secondary/10 border-secondary/20"
+                                            )}>
+                                                {monitor.lastStatus || 'pending'}
+                                            </div>
                                         </div>
                                     </CardHeader>
-                                    <CardContent>
-                                        <p className="text-sm font-mono text-muted-foreground">Version: {cluster.version}</p>
+                                    <CardContent className="space-y-4">
+                                        <div className="flex justify-between text-xs">
+                                            <div className="flex items-center gap-2 text-muted-foreground">
+                                                <Activity className="h-3 w-3" />
+                                                Response Time
+                                            </div>
+                                            <div className="font-bold">{monitor.metrics?.[0]?.responseTime ?? 0}ms</div>
+                                        </div>
+                                        <div className="flex justify-between text-xs">
+                                            <div className="flex items-center gap-2 text-muted-foreground">
+                                                <Shield className="h-3 w-3" />
+                                                SSL Status
+                                            </div>
+                                            <div className={cn("font-bold truncate max-w-[150px]", monitor.sslStatus === 'valid' ? 'text-emerald-500' : 'text-amber-500')}>
+                                                {monitor.sslExpiryDate ? format(new Date(monitor.sslExpiryDate), "MMM dd, yyyy") : 'N/A'}
+                                            </div>
+                                        </div>
                                     </CardContent>
                                 </Card>
                             ))
@@ -304,7 +348,6 @@ function ProjectSettings({ projectId }: { projectId: number }) {
             logoUrl: "",
             cpuThreshold: 80,
             memoryThreshold: 80,
-            sslThreshold: 30,
             storageThreshold: 80,
         }
     });
@@ -476,21 +519,7 @@ function ProjectSettings({ projectId }: { projectId: number }) {
                                     </FormItem>
                                 )}
                             />
-                            <FormField
-                                control={form.control}
-                                name="sslThreshold"
-                                render={({ field }) => (
-                                    <FormItem>
-                                        <div className="flex justify-between items-center mb-1">
-                                            <FormLabel className="text-[10px] font-bold uppercase tracking-widest text-foreground/70">SSL Expiry (Days)</FormLabel>
-                                            <span className="font-bold text-primary">{field.value} Days</span>
-                                        </div>
-                                        <FormControl>
-                                            <Input type="range" min="0" max="180" step="1" className="accent-primary h-2 cursor-pointer" {...field} onChange={e => field.onChange(parseInt(e.target.value))} />
-                                        </FormControl>
-                                    </FormItem>
-                                )}
-                            />
+
                             <FormField
                                 control={form.control}
                                 name="storageThreshold"

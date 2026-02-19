@@ -2,6 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { api } from "@shared/routes";
+import { WebMonitorService } from "./lib/web-monitor-service";
 import { setupAuth, registerAuthRoutes, isAuthenticated } from "./auth";
 import { z } from "zod";
 import { insertUserSchema } from "@shared/schema";
@@ -180,6 +181,12 @@ export async function registerRoutes(
     res.json(resources);
   });
 
+  app.get(api.projects.status.path, async (req, res) => {
+    const status = await storage.getProjectStatusBySlug(req.params.slug);
+    if (!status) return res.status(404).json({ message: "Project status page not found" });
+    res.json(status);
+  });
+
   // Servers
   app.get(api.servers.list.path, isAuthenticated, async (req, res) => {
     const servers = await storage.getServers();
@@ -249,6 +256,46 @@ export async function registerRoutes(
     const cluster = await storage.getCluster(Number(req.params.id));
     if (!cluster) return res.status(404).json({ message: "Cluster not found" });
     res.json(cluster);
+  });
+
+  // Web Monitors
+  app.get(api.webMonitors.list.path, isAuthenticated, async (req, res) => {
+    const monitors = await storage.getWebMonitors();
+    res.json(monitors);
+  });
+
+  app.get(api.webMonitors.get.path, isAuthenticated, async (req, res) => {
+    const monitor = await storage.getWebMonitor(Number(req.params.id));
+    if (!monitor) return res.status(404).json({ message: "Monitor not found" });
+    res.json(monitor);
+  });
+
+  app.post(api.webMonitors.create.path, isAuthenticated, async (req, res) => {
+    try {
+      const input = api.webMonitors.create.input.parse(req.body);
+      const monitor = await storage.createWebMonitor(input);
+      res.status(201).json(monitor);
+    } catch (err) {
+      console.error(err);
+      res.status(400).json({ message: "Invalid data format" });
+    }
+  });
+
+  app.patch(api.webMonitors.update.path, isAuthenticated, async (req, res) => {
+    try {
+      const input = api.webMonitors.update.input.parse(req.body);
+      const monitor = await storage.updateWebMonitor(Number(req.params.id), input);
+      if (!monitor) return res.status(404).json({ message: "Monitor not found" });
+      res.json(monitor);
+    } catch (err) {
+      console.error(err);
+      res.status(400).json({ message: "Invalid data format" });
+    }
+  });
+
+  app.delete(api.webMonitors.delete.path, isAuthenticated, async (req, res) => {
+    await storage.deleteWebMonitor(Number(req.params.id));
+    res.status(204).send();
   });
 
   // === SERVER MANAGEMENT (Manual) ===
@@ -464,6 +511,8 @@ export async function registerRoutes(
     res.json(alerts);
   });
 
+  // === BACKGROUND SERVICES ===
+  WebMonitorService.start();
 
   // === SEED DATA ===
   await seedDatabase();

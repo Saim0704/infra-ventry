@@ -60,6 +60,7 @@ export const projects = pgTable("projects", {
   id: serial("id").primaryKey(),
   name: text("name").notNull().unique(),
   description: text("description"),
+  slug: text("slug").notNull().unique(),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -78,7 +79,6 @@ export const projectAlertSettings = pgTable("project_alert_settings", {
   // Thresholds (null means alert is disabled for this project)
   cpuThreshold: real("cpu_threshold").default(80),
   memoryThreshold: real("memory_threshold").default(80),
-  sslThreshold: real("ssl_threshold").default(30),
   storageThreshold: real("storage_threshold").default(80),
 
   updatedAt: timestamp("updated_at").defaultNow(),
@@ -91,7 +91,6 @@ export const serverMetrics = pgTable("server_metrics", {
   cpuUsage: real("cpu_usage"), // %
   memoryUsage: real("memory_usage"), // %
   diskUsage: real("disk_usage"), // %
-  sslUsage: real("ssl_usage"), // %
   topProcesses: jsonb("top_processes"), // Array of { pid, name, cpu, memory }
   createdAt: timestamp("created_at").defaultNow(),
 });
@@ -112,7 +111,8 @@ export const alerts = pgTable("alerts", {
   serverId: integer("server_id").references(() => servers.id),
   databaseId: integer("database_id").references(() => databases.id),
   clusterId: integer("cluster_id").references(() => clusters.id),
-  type: text("type").notNull(), // 'cpu', 'memory', 'ssl', 'storage'
+  webMonitorId: integer("web_monitor_id").references(() => webMonitors.id),
+  type: text("type").notNull(), // 'cpu', 'memory', 'storage', 'uptime'
   value: real("value").notNull(),
   threshold: real("threshold").notNull(),
   sentAt: timestamp("sent_at").defaultNow(),
@@ -159,11 +159,41 @@ export const clusterMetrics = pgTable("cluster_metrics", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// === WEB MONITOR ===
+export const webMonitors = pgTable("web_monitors", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  url: text("url").notNull(),
+  method: text("method").default("GET").notNull(),
+  expectedStatus: integer("expected_status").default(200).notNull(),
+  healthCheckString: text("health_check_string"),
+  followRedirects: boolean("follow_redirects").default(true).notNull(),
+  timeout: integer("timeout").default(10000).notNull(), // in ms
+  sslExpiryThreshold: integer("ssl_expiry_threshold").default(7).notNull(), // in days
+  projectId: integer("project_id").references(() => projects.id),
+  lastStatus: text("last_status"), // 'up', 'down', 'unknown'
+  sslStatus: text("ssl_status"), // 'valid', 'expiring', 'expired', 'invalid'
+  sslExpiryDate: timestamp("ssl_expiry_date"),
+  lastCheck: timestamp("last_check"),
+  nextCheck: timestamp("next_check"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const webMonitorMetrics = pgTable("web_monitor_metrics", {
+  id: serial("id").primaryKey(),
+  monitorId: integer("monitor_id").references(() => webMonitors.id),
+  responseTime: integer("response_time"), // in ms
+  status: integer("status"), // HTTP status code
+  isUp: boolean("is_up").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // === RELATIONS ===
 export const projectsRelations = relations(projects, ({ many, one }) => ({
   servers: many(servers),
   databases: many(databases),
   clusters: many(clusters),
+  webMonitors: many(webMonitors),
   tokens: many(tokens),
   alertSettings: one(projectAlertSettings, {
     fields: [projects.id],
@@ -191,6 +221,18 @@ export const alertsRelations = relations(alerts, ({ one }) => ({
   server: one(servers, {
     fields: [alerts.serverId],
     references: [servers.id],
+  }),
+  database: one(databases, {
+    fields: [alerts.databaseId],
+    references: [databases.id],
+  }),
+  cluster: one(clusters, {
+    fields: [alerts.clusterId],
+    references: [clusters.id],
+  }),
+  webMonitor: one(webMonitors, {
+    fields: [alerts.webMonitorId],
+    references: [webMonitors.id],
   }),
 }));
 
@@ -238,6 +280,21 @@ export const projectAlertSettingsRelations = relations(projectAlertSettings, ({ 
   }),
 }));
 
+export const webMonitorsRelations = relations(webMonitors, ({ one, many }) => ({
+  metrics: many(webMonitorMetrics),
+  project: one(projects, {
+    fields: [webMonitors.projectId],
+    references: [projects.id],
+  }),
+}));
+
+export const webMonitorMetricsRelations = relations(webMonitorMetrics, ({ one }) => ({
+  monitor: one(webMonitors, {
+    fields: [webMonitorMetrics.monitorId],
+    references: [webMonitors.id],
+  }),
+}));
+
 
 // === ZOD SCHEMAS ===
 export const insertUserSchema = createInsertSchema(users, {
@@ -247,7 +304,7 @@ export const insertUserSchema = createInsertSchema(users, {
 }).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertTokenSchema = createInsertSchema(tokens).omit({ id: true, createdAt: true });
 
-export const insertProjectSchema = createInsertSchema(projects).omit({ id: true, createdAt: true });
+export const insertProjectSchema = createInsertSchema(projects).omit({ id: true, slug: true, createdAt: true });
 export const insertServerSchema = createInsertSchema(servers).omit({ id: true, lastSeen: true });
 export const insertServerMetricSchema = createInsertSchema(serverMetrics).omit({ id: true, createdAt: true });
 
@@ -260,6 +317,9 @@ export const insertDatabaseMetricSchema = createInsertSchema(databaseMetrics).om
 
 export const insertClusterSchema = createInsertSchema(clusters).omit({ id: true, lastSeen: true });
 export const insertClusterMetricSchema = createInsertSchema(clusterMetrics).omit({ id: true, createdAt: true });
+
+export const insertWebMonitorSchema = createInsertSchema(webMonitors).omit({ id: true, createdAt: true, lastCheck: true, nextCheck: true, lastStatus: true, sslStatus: true, sslExpiryDate: true });
+export const insertWebMonitorMetricSchema = createInsertSchema(webMonitorMetrics).omit({ id: true, createdAt: true });
 
 // Form Schema for Manual Server Entry
 export const serverWithMetricsSchema = z.object({
@@ -279,7 +339,6 @@ export const serverWithMetricsSchema = z.object({
   storageUsed: z.number().min(0, "Storage Used must be positive").optional(),
   memoryUsage: z.number().min(0).max(100).optional(),
   diskUsage: z.number().min(0).max(100).optional(),
-  sslUsage: z.number().min(0).max(100).optional(),
 });
 
 // === TYPES ===
@@ -299,3 +358,10 @@ export type Cluster = typeof clusters.$inferSelect;
 export type ClusterMetric = typeof clusterMetrics.$inferSelect;
 export type ProjectAlertSettings = typeof projectAlertSettings.$inferSelect;
 export type InsertProjectAlertSettings = z.infer<typeof insertProjectAlertSettingsSchema>;
+export type WebMonitor = typeof webMonitors.$inferSelect;
+export type WebMonitorMetric = typeof webMonitorMetrics.$inferSelect;
+export type InsertWebMonitor = z.infer<typeof insertWebMonitorSchema>;
+export type InsertWebMonitorMetric = z.infer<typeof insertWebMonitorMetricSchema>;
+
+// For internal service updates (full object but optional fields)
+export type WebMonitorUpdate = Partial<WebMonitor>;

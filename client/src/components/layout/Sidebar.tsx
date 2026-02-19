@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { LayoutDashboard, Server, Database, Cloud, Settings, LogOut, Terminal, Folder } from "lucide-react";
+import { LayoutDashboard, Server, Database, Cloud, Globe, Settings, LogOut, Terminal, Folder } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
 
@@ -15,8 +15,11 @@ export function Sidebar() {
     { href: "/servers", label: "Servers", icon: Server },
     { href: "/databases", label: "Databases", icon: Database },
     { href: "/clusters", label: "Kubernetes", icon: Cloud },
-    { href: "/settings", label: "Settings", icon: Settings },
+    { href: "/web-monitoring", label: "Web Monitoring", icon: Globe },
   ];
+
+  const { user } = useAuth();
+  const userInitials = user ? (user.username?.slice(0, 2).toUpperCase() || "US") : "??";
 
   return (
     <div className="h-screen w-64 bg-card border-r border-border flex flex-col fixed left-0 top-0 z-50 shadow-xl">
@@ -54,10 +57,34 @@ export function Sidebar() {
         })}
       </nav>
 
-      <div className="p-4 border-t border-border/50 bg-secondary/20">
+      <div className="p-4 border-t border-border/50 bg-secondary/10 space-y-2">
+        <div className="flex items-center gap-3 px-4 py-3 mb-2 bg-background/50 rounded-xl border border-border/40">
+          <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary font-bold text-xs">
+            {userInitials}
+          </div>
+          <div className="overflow-hidden">
+            <p className="text-xs font-bold truncate">{user?.username}</p>
+            <p className="text-[10px] text-muted-foreground capitalize">{user?.role}</p>
+          </div>
+        </div>
+
+        <Link href="/settings">
+          <div
+            className={cn(
+              "flex items-center gap-3 px-4 py-2 rounded-xl font-medium transition-all duration-200 cursor-pointer group",
+              location === "/settings"
+                ? "bg-primary/10 text-primary border border-primary/20"
+                : "text-muted-foreground hover:bg-secondary/50 hover:text-foreground hover:translate-x-1"
+            )}
+          >
+            <Settings className={cn("h-5 w-5", location === "/settings" ? "text-primary" : "text-muted-foreground group-hover:text-primary")} />
+            Settings
+          </div>
+        </Link>
+
         <button
           onClick={() => logout()}
-          className="flex w-full items-center gap-3 px-4 py-3 rounded-xl font-medium text-destructive hover:bg-destructive/10 hover:translate-x-1 transition-all duration-200"
+          className="flex w-full items-center gap-3 px-4 py-2 rounded-xl font-medium text-destructive hover:bg-destructive/10 hover:translate-x-1 transition-all duration-200"
         >
           <LogOut className="h-5 w-5" />
           Sign Out

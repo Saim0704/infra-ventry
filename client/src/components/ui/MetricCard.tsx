@@ -13,17 +13,21 @@ interface MetricCardProps {
 
 export function MetricCard({ title, value, icon: Icon, description, className }: MetricCardProps) {
   return (
-    <Card className={cn("hover:shadow-lg transition-all duration-300 border-border/50 bg-gradient-to-br from-card to-secondary/30", className)}>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium text-muted-foreground">
+    <Card className={cn(
+      "hover:shadow-2xl hover:scale-[1.02] transition-all duration-500 border-border/30 bg-card/40 backdrop-blur-md relative overflow-hidden group/card",
+      className
+    )}>
+      <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full blur-3xl -mr-16 -mt-16 group-hover/card:bg-primary/10 transition-colors duration-500" />
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative z-10">
+        <CardTitle className="text-sm font-bold uppercase tracking-widest text-muted-foreground/70">
           {title}
         </CardTitle>
-        <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
-          <Icon className="h-4 w-4" />
+        <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary border border-primary/20 shadow-inner group-hover/card:scale-110 transition-transform duration-300">
+          <Icon className="h-5 w-5" />
         </div>
       </CardHeader>
-      <CardContent>
-        <div className="text-2xl font-bold font-display tracking-tight">{value}</div>
+      <CardContent className="relative z-10">
+        <div className="text-3xl font-black font-display tracking-tight bg-clip-text text-transparent bg-gradient-to-br from-foreground to-foreground/60">{value}</div>
         {description && (
           <p className="text-xs text-muted-foreground mt-1">
             {description}

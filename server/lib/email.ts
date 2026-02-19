@@ -72,11 +72,11 @@ export class EmailService {
           </tr>
           <tr>
             <td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Current Value:</strong></td>
-            <td style="padding: 8px; border-bottom: 1px solid #eee; color: #dc3545;"><strong>${value.toFixed(2)}${type === 'ssl' ? ' Days' : '%'}</strong></td>
+            <td style="padding: 8px; border-bottom: 1px solid #eee; color: #dc3545;"><strong>${value.toFixed(2)}%</strong></td>
           </tr>
           <tr>
             <td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Threshold:</strong></td>
-            <td style="padding: 8px; border-bottom: 1px solid #eee;">${threshold}${type === 'ssl' ? ' Days' : '%'}</td>
+            <td style="padding: 8px; border-bottom: 1px solid #eee;">${threshold}%</td>
           </tr>
         </table>
 
@@ -123,11 +123,11 @@ export class EmailService {
     }
 
     await transporter.sendMail({
-      from: `"${settings.companyName || "Infrastructure Monitor"}" <${settings.fromEmail}>`,
+      from: `"Infrastructure Monitor" <${settings.fromEmail}>`,
       to: recipient,
       subject: "SMTP Configuration Test",
       text: "If you are receiving this, your SMTP settings are correctly configured.",
-      html: `<h3>SMTP Configuration Success</h3><p>Your SMTP settings for <strong>${settings.companyName || "the monitor"}</strong> are working correctly.</p>`,
+      html: `<h3>SMTP Configuration Success</h3><p>Your SMTP settings are working correctly.</p>`,
     });
   }
 }

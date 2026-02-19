@@ -11,7 +11,10 @@ import {
   clusterMetrics,
   projects,
   insertProjectSchema,
-  insertDatabaseSchema
+  insertDatabaseSchema,
+  insertWebMonitorSchema,
+  webMonitors,
+  webMonitorMetrics
 } from './schema';
 
 // Shared error schemas
@@ -98,7 +101,38 @@ export const api = {
           servers: z.array(z.custom<typeof servers.$inferSelect & { metrics: any[] }>()),
           databases: z.array(z.custom<typeof databases.$inferSelect>()),
           clusters: z.array(z.custom<typeof clusters.$inferSelect>()),
+          webMonitors: z.array(z.custom<typeof webMonitors.$inferSelect & { metrics: any[] }>()),
           tokens: z.array(z.custom<typeof tokens.$inferSelect>()),
+        }),
+        404: errorSchemas.notFound,
+      },
+    },
+    status: {
+      method: 'GET' as const,
+      path: '/api/status/:slug' as const,
+      responses: {
+        200: z.object({
+          project: z.object({
+            name: z.string(),
+            description: z.string().nullable(),
+          }),
+          servers: z.array(z.object({
+            name: z.string(),
+            status: z.string(),
+            lastSeen: z.string().nullable(),
+          })),
+          databases: z.array(z.object({
+            name: z.string(),
+            status: z.string(),
+            lastSeen: z.string().nullable(),
+          })),
+          webMonitors: z.array(z.object({
+            name: z.string(),
+            url: z.string(),
+            status: z.string(),
+            lastCheck: z.string().nullable(),
+            responseTime: z.number().nullable(),
+          })),
         }),
         404: errorSchemas.notFound,
       },
@@ -115,6 +149,7 @@ export const api = {
           totalServers: z.number(),
           totalDatabases: z.number(),
           totalClusters: z.number(),
+          totalWebMonitors: z.number(),
           healthyServers: z.number(),
           criticalServers: z.number(), // Disk > 90% or offline
         }),
@@ -236,6 +271,50 @@ export const api = {
     },
   },
 
+  // === WEB MONITORS ===
+  webMonitors: {
+    list: {
+      method: 'GET' as const,
+      path: '/api/web-monitors' as const,
+      responses: {
+        200: z.array(z.custom<typeof webMonitors.$inferSelect & { metrics: typeof webMonitorMetrics.$inferSelect[], project?: typeof projects.$inferSelect }>()),
+      },
+    },
+    get: {
+      method: 'GET' as const,
+      path: '/api/web-monitors/:id' as const,
+      responses: {
+        200: z.custom<typeof webMonitors.$inferSelect & { metrics: typeof webMonitorMetrics.$inferSelect[] }>(),
+        404: errorSchemas.notFound,
+      },
+    },
+    create: {
+      method: 'POST' as const,
+      path: '/api/web-monitors' as const,
+      input: insertWebMonitorSchema,
+      responses: {
+        201: z.custom<typeof webMonitors.$inferSelect>(),
+      },
+    },
+    update: {
+      method: 'PATCH' as const,
+      path: '/api/web-monitors/:id' as const,
+      input: insertWebMonitorSchema.partial(),
+      responses: {
+        200: z.custom<typeof webMonitors.$inferSelect>(),
+        404: errorSchemas.notFound,
+      },
+    },
+    delete: {
+      method: 'DELETE' as const,
+      path: '/api/web-monitors/:id' as const,
+      responses: {
+        204: z.void(),
+        404: errorSchemas.notFound,
+      },
+    },
+  },
+
   // === INGESTION (Used by Agents) ===
   ingest: {
     vm: {
@@ -254,7 +333,6 @@ export const api = {
             cpuUsage: z.number(),
             memoryUsage: z.number(),
             diskUsage: z.number(),
-            sslUsage: z.number().optional(),
             topProcesses: z.array(z.object({
               pid: z.number(),
               name: z.string(),
@@ -378,7 +456,6 @@ export const api = {
           logoUrl: z.string().nullable().optional(),
           cpuThreshold: z.number().min(0).max(100).nullable().optional(),
           memoryThreshold: z.number().min(0).max(100).nullable().optional(),
-          sslThreshold: z.number().min(0).max(365).nullable().optional(),
           storageThreshold: z.number().min(0).max(100).nullable().optional(),
         }),
         responses: {

@@ -1,3 +1,4 @@
+import { Link, useLocation } from "wouter";
 import { Shell } from "@/components/layout/Shell";
 import { useTokens, useCreateToken, useRevokeToken } from "@/hooks/use-tokens";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -31,6 +32,11 @@ export default function SettingsPage() {
   const { data: tokens, isLoading: tokensLoading } = useTokens();
   const revokeMutation = useRevokeToken();
   const { toast } = useToast();
+  const [location] = useLocation();
+
+  // Handle tab deep linking from URL query params
+  const searchParams = new URLSearchParams(window.location.search);
+  const defaultTab = searchParams.get('tab') || 'tokens';
 
   const handleRevoke = (id: number) => {
     if (confirm("Are you sure you want to revoke this token? The agent using it will disconnect.")) {
@@ -44,7 +50,7 @@ export default function SettingsPage() {
 
   return (
     <Shell title="Settings" description="Manage your preferences, security tokens, and organization members.">
-      <Tabs defaultValue="tokens" className="w-full">
+      <Tabs defaultValue={defaultTab} className="w-full">
         <div className="flex flex-col md:flex-row gap-8 items-start">
           <aside className="md:w-64 w-full shrink-0 space-y-2">
             <div className="px-3 py-2">
@@ -969,10 +975,10 @@ function AlertHistoryTable() {
                     </div>
                   </TableCell>
                   <TableCell className="text-center font-mono text-xs font-bold">
-                    {alert.value.toFixed(2)}{alert.type === 'ssl' ? ' Days' : '%'}
+                    {alert.value.toFixed(2)}%
                   </TableCell>
                   <TableCell className="text-center font-mono text-xs text-muted-foreground">
-                    {alert.threshold}{alert.type === 'ssl' ? ' Days' : '%'}
+                    {alert.threshold}%
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1 text-[10px] font-bold text-emerald-500">
