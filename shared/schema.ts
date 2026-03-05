@@ -34,7 +34,7 @@ export const tokens = pgTable("tokens", {
   name: text("name").notNull(), // e.g., "Production VM Agent"
   token: text("token").notNull().unique(),
   type: text("type").notNull(), // "vm", "database", "kubernetes"
-  projectId: integer("project_id").references(() => projects.id),
+  projectId: integer("project_id").references(() => projects.id, { onDelete: 'cascade' }),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -51,7 +51,7 @@ export const servers = pgTable("servers", {
   osVersion: text("os_version"),
   sshUser: text("ssh_user"),
   sshKey: text("ssh_key"),
-  projectId: integer("project_id").references(() => projects.id),
+  projectId: integer("project_id").references(() => projects.id, { onDelete: 'cascade' }),
   lastSeen: timestamp("last_seen").defaultNow(),
 });
 
@@ -67,7 +67,7 @@ export const projects = pgTable("projects", {
 // === PROJECT ALERT SETTINGS ===
 export const projectAlertSettings = pgTable("project_alert_settings", {
   id: serial("id").primaryKey(),
-  projectId: integer("project_id").references(() => projects.id).notNull().unique(),
+  projectId: integer("project_id").references(() => projects.id, { onDelete: 'cascade' }).notNull().unique(),
 
   // Alert Recipients
   alertRecipients: jsonb("alert_recipients").$type<string[]>().notNull().default([]),
@@ -115,7 +115,7 @@ export const projectAlertSettings = pgTable("project_alert_settings", {
 // === EMAIL TEMPLATES ===
 export const projectEmailTemplates = pgTable("project_email_templates", {
   id: serial("id").primaryKey(),
-  projectId: integer("project_id").references(() => projects.id).notNull(),
+  projectId: integer("project_id").references(() => projects.id, { onDelete: 'cascade' }).notNull(),
   alertType: text("alert_type").notNull(), // 'server_down', 'cpu_high', 'memory_high', 'storage_high', 'db_storage_high', 'db_conn_high', 'web_down', 'web_ssl_expiring', 'domain_expiring'
   subject: text("subject").notNull(),
   body: text("body").notNull(),
@@ -127,7 +127,7 @@ export const projectEmailTemplates = pgTable("project_email_templates", {
 
 export const serverMetrics = pgTable("server_metrics", {
   id: serial("id").primaryKey(),
-  serverId: integer("server_id").references(() => servers.id),
+  serverId: integer("server_id").references(() => servers.id, { onDelete: 'cascade' }),
   cpuUsage: real("cpu_usage"), // %
   memoryUsage: real("memory_usage"), // %
   diskUsage: real("disk_usage"), // %
@@ -168,13 +168,13 @@ export const databases = pgTable("databases", {
   version: text("version"),
   host: text("host"),
   port: integer("port"),
-  projectId: integer("project_id").references(() => projects.id),
+  projectId: integer("project_id").references(() => projects.id, { onDelete: 'cascade' }),
   lastSeen: timestamp("last_seen").defaultNow(),
 });
 
 export const databaseMetrics = pgTable("database_metrics", {
   id: serial("id").primaryKey(),
-  databaseId: integer("database_id").references(() => databases.id),
+  databaseId: integer("database_id").references(() => databases.id, { onDelete: 'cascade' }),
   storageUsed: real("storage_used"), // GB
   activeConnections: integer("active_connections"),
   createdAt: timestamp("created_at").defaultNow(),
@@ -188,13 +188,13 @@ export const clusters = pgTable("clusters", {
   nodeCount: integer("node_count"),
   totalCpu: real("total_cpu"),
   totalMemory: real("total_memory"),
-  projectId: integer("project_id").references(() => projects.id),
+  projectId: integer("project_id").references(() => projects.id, { onDelete: 'cascade' }),
   lastSeen: timestamp("last_seen").defaultNow(),
 });
 
 export const clusterMetrics = pgTable("cluster_metrics", {
   id: serial("id").primaryKey(),
-  clusterId: integer("cluster_id").references(() => clusters.id),
+  clusterId: integer("cluster_id").references(() => clusters.id, { onDelete: 'cascade' }),
   cpuUsage: real("cpu_usage"),
   memoryUsage: real("memory_usage"),
   podCount: integer("pod_count"),
@@ -212,7 +212,7 @@ export const webMonitors = pgTable("web_monitors", {
   followRedirects: boolean("follow_redirects").default(true).notNull(),
   timeout: integer("timeout").default(10000).notNull(), // in ms
   sslExpiryThreshold: integer("ssl_expiry_threshold").default(7).notNull(), // in days
-  projectId: integer("project_id").references(() => projects.id),
+  projectId: integer("project_id").references(() => projects.id, { onDelete: 'cascade' }),
   lastStatus: text("last_status"), // 'up', 'down', 'unknown'
   sslStatus: text("ssl_status"), // 'valid', 'expiring', 'expired', 'invalid'
   sslExpiryDate: timestamp("ssl_expiry_date"),
@@ -223,7 +223,7 @@ export const webMonitors = pgTable("web_monitors", {
 
 export const webMonitorMetrics = pgTable("web_monitor_metrics", {
   id: serial("id").primaryKey(),
-  monitorId: integer("monitor_id").references(() => webMonitors.id),
+  monitorId: integer("monitor_id").references(() => webMonitors.id, { onDelete: 'cascade' }),
   responseTime: integer("response_time"), // in ms
   status: integer("status"), // HTTP status code
   isUp: boolean("is_up").notNull(),
@@ -234,7 +234,7 @@ export const webMonitorMetrics = pgTable("web_monitor_metrics", {
 export const domainMonitors = pgTable("domain_monitors", {
   id: serial("id").primaryKey(),
   domain: text("domain").notNull(),
-  projectId: integer("project_id").references(() => projects.id),
+  projectId: integer("project_id").references(() => projects.id, { onDelete: 'cascade' }),
   expiryDate: timestamp("expiry_date"),
   lastCheck: timestamp("last_check"),
   nextCheck: timestamp("next_check"),
