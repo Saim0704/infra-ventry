@@ -13,6 +13,7 @@ import SettingsPage from "@/pages/Settings";
 import ProjectsPage from "@/pages/Projects";
 import ProjectDetailPage from "@/pages/ProjectDetail";
 import WebMonitoringPage from "@/pages/WebMonitoring";
+import DomainMonitoringPage from "@/pages/DomainMonitoring";
 import StatusPage from "@/pages/StatusPage";
 import LoginPage from "@/pages/Login";
 import { Loader2 } from "lucide-react";
@@ -40,6 +41,7 @@ function Router() {
           <Route path="/databases" component={DatabasesPage} />
           <Route path="/clusters" component={ClustersPage} />
           <Route path="/web-monitoring" component={WebMonitoringPage} />
+          <Route path="/domain-monitoring" component={DomainMonitoringPage} />
           <Route path="/settings" component={SettingsPage} />
         </>
       ) : (

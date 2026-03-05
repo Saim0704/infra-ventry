@@ -14,7 +14,9 @@ import {
   insertDatabaseSchema,
   insertWebMonitorSchema,
   webMonitors,
-  webMonitorMetrics
+  webMonitorMetrics,
+  domainMonitors,
+  insertDomainMonitorSchema,
 } from './schema';
 
 // Shared error schemas
@@ -102,6 +104,7 @@ export const api = {
           databases: z.array(z.custom<typeof databases.$inferSelect>()),
           clusters: z.array(z.custom<typeof clusters.$inferSelect>()),
           webMonitors: z.array(z.custom<typeof webMonitors.$inferSelect & { metrics: any[] }>()),
+          domainMonitors: z.array(z.custom<typeof domainMonitors.$inferSelect>()).optional(),
           tokens: z.array(z.custom<typeof tokens.$inferSelect>()),
         }),
         404: errorSchemas.notFound,
@@ -133,8 +136,40 @@ export const api = {
             lastCheck: z.string().nullable(),
             responseTime: z.number().nullable(),
           })),
+          domainMonitors: z.array(z.object({
+            domain: z.string(),
+            status: z.string(),
+            expiryDate: z.string().nullable(),
+          })).optional(),
         }),
         404: errorSchemas.notFound,
+      },
+    },
+    emailTemplates: {
+      list: {
+        method: 'GET' as const,
+        path: '/api/projects/:id/email-templates' as const,
+        responses: {
+          200: z.array(z.custom<any>()),
+        },
+      },
+      upsert: {
+        method: 'PATCH' as const,
+        path: '/api/projects/:id/email-templates/:alertType' as const,
+        input: z.object({
+          subject: z.string().min(1, "Subject is required"),
+          body: z.string().min(1, "Body is required"),
+        }),
+        responses: {
+          200: z.custom<any>(),
+        },
+      },
+      delete: {
+        method: 'DELETE' as const,
+        path: '/api/projects/:id/email-templates/:alertType' as const,
+        responses: {
+          204: z.void(),
+        },
       },
     },
   },
@@ -315,6 +350,41 @@ export const api = {
     },
   },
 
+  // === DOMAIN MONITORS ===
+  domainMonitors: {
+    list: {
+      method: 'GET' as const,
+      path: '/api/domain-monitors' as const,
+      responses: {
+        200: z.array(z.custom<typeof domainMonitors.$inferSelect & { project?: typeof projects.$inferSelect }>()),
+      },
+    },
+    get: {
+      method: 'GET' as const,
+      path: '/api/domain-monitors/:id' as const,
+      responses: {
+        200: z.custom<typeof domainMonitors.$inferSelect>(),
+        404: errorSchemas.notFound,
+      },
+    },
+    create: {
+      method: 'POST' as const,
+      path: '/api/domain-monitors' as const,
+      input: insertDomainMonitorSchema,
+      responses: {
+        201: z.custom<typeof domainMonitors.$inferSelect>(),
+      },
+    },
+    delete: {
+      method: 'DELETE' as const,
+      path: '/api/domain-monitors/:id' as const,
+      responses: {
+        204: z.void(),
+        404: errorSchemas.notFound,
+      },
+    },
+  },
+
   // === INGESTION (Used by Agents) ===
   ingest: {
     vm: {
@@ -414,6 +484,7 @@ export const api = {
           user: z.string().min(1, "User is required"),
           pass: z.string().min(1, "Password is required"),
           fromEmail: z.string().email("Invalid from email"),
+          senderName: z.string().optional(),
         }),
         responses: {
           200: z.custom<any>(),
@@ -430,6 +501,7 @@ export const api = {
             user: z.string().min(1, "User is required"),
             pass: z.string().min(1, "Password is required"),
             fromEmail: z.string().email("Invalid from email"),
+            senderName: z.string().optional(),
           }).optional(),
         }),
         responses: {
@@ -457,6 +529,24 @@ export const api = {
           cpuThreshold: z.number().min(0).max(100).nullable().optional(),
           memoryThreshold: z.number().min(0).max(100).nullable().optional(),
           storageThreshold: z.number().min(0).max(100).nullable().optional(),
+          dbStorageThreshold: z.number().min(0).max(100).nullable().optional(),
+          dbConnectionThreshold: z.number().int().min(0).nullable().optional(),
+          clusterCpuThreshold: z.number().min(0).max(100).nullable().optional(),
+          clusterMemoryThreshold: z.number().min(0).max(100).nullable().optional(),
+          webResponseThreshold: z.number().int().min(0).nullable().optional(),
+          webSslExpiryThreshold: z.number().int().min(0).nullable().optional(),
+          showWebMonitors: z.boolean().optional(),
+          showServers: z.boolean().optional(),
+          showDatabases: z.boolean().optional(),
+          showClusters: z.boolean().optional(),
+          showDomainMonitors: z.boolean().optional(),
+          domainExpiryThreshold: z.number().int().min(0).nullable().optional(),
+          smtpHost: z.string().nullable().optional(),
+          smtpPort: z.number().int().nullable().optional(),
+          smtpUser: z.string().nullable().optional(),
+          smtpPass: z.string().nullable().optional(),
+          smtpSenderName: z.string().nullable().optional(),
+          smtpSenderEmail: z.string().nullable().optional(),
         }),
         responses: {
           200: z.custom<any>(),

@@ -2,15 +2,16 @@ import { db } from "./db";
 import { eq, desc, sql } from "drizzle-orm";
 import {
   users, tokens, servers, serverMetrics, databases, databaseMetrics, clusters, clusterMetrics, projects,
-  smtpSettings, alerts, projectAlertSettings, webMonitors, webMonitorMetrics,
+  smtpSettings, alerts, projectAlertSettings, webMonitors, webMonitorMetrics, domainMonitors, projectEmailTemplates,
   type User, type Token, type Server, type ServerMetric, type Database, type DatabaseMetric, type Cluster, type ClusterMetric, type Project,
-  type SmtpSettings, type Alert, type ProjectAlertSettings, type WebMonitor, type WebMonitorMetric
+  type SmtpSettings, type Alert, type ProjectAlertSettings, type WebMonitor, type WebMonitorMetric, type DomainMonitor, type DomainMonitorUpdate,
+  type ProjectEmailTemplate, type InsertProjectEmailTemplate
 } from "@shared/schema";
 import {
   insertTokenSchema, insertServerSchema, insertServerMetricSchema, insertDatabaseSchema,
   insertDatabaseMetricSchema, insertClusterSchema, insertClusterMetricSchema, insertProjectSchema,
   insertUserSchema, insertSmtpSettingsSchema, insertProjectAlertSettingsSchema,
-  insertWebMonitorSchema, insertWebMonitorMetricSchema
+  insertWebMonitorSchema, insertWebMonitorMetricSchema, insertDomainMonitorSchema,
 } from "@shared/schema";
 import { EmailService } from "./lib/email";
 import { z } from "zod";
@@ -78,6 +79,13 @@ export interface IStorage {
   deleteWebMonitor(id: number): Promise<void>;
   addWebMonitorMetric(data: z.infer<typeof insertWebMonitorMetricSchema>): Promise<void>;
 
+  // === DOMAIN MONITORS ===
+  getDomainMonitors(): Promise<(DomainMonitor & { project?: Project })[]>;
+  getDomainMonitor(id: number): Promise<(DomainMonitor & { project?: Project }) | undefined>;
+  createDomainMonitor(data: z.infer<typeof insertDomainMonitorSchema>): Promise<DomainMonitor>;
+  updateDomainMonitor(id: number, data: DomainMonitorUpdate): Promise<DomainMonitor | undefined>;
+  deleteDomainMonitor(id: number): Promise<void>;
+
   // === USERS ===
   getUsers(): Promise<User[]>;
   getUser(id: string): Promise<User | undefined>;
@@ -97,6 +105,11 @@ export interface IStorage {
   getRecentAlerts(serverId: number): Promise<Alert[]>;
   getAlertHistory(): Promise<(Alert & { serverName: string })[]>;
   createAlert(data: { serverId?: number, databaseId?: number, clusterId?: number, webMonitorId?: number, type: string, value: number, threshold: number }): Promise<void>;
+
+  // === PROJECT EMAIL TEMPLATES ===
+  getProjectEmailTemplates(projectId: number): Promise<ProjectEmailTemplate[]>;
+  upsertProjectEmailTemplate(projectId: number, alertType: string, data: { subject: string, body: string }): Promise<ProjectEmailTemplate>;
+  deleteProjectEmailTemplate(projectId: number, alertType: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -147,28 +160,60 @@ export class DatabaseStorage implements IStorage {
     const resources = await this.getProjectResources(project.id);
     if (!resources) return null;
 
+    const [settings] = await db.select().from(projectAlertSettings).where(eq(projectAlertSettings.projectId, project.id));
+    const showWeb = settings?.showWebMonitors ?? true;
+    const showServers = settings?.showServers ?? true;
+    const showDatabases = settings?.showDatabases ?? true;
+    const showClusters = settings?.showClusters ?? true;
+    const showDomains = settings?.showDomainMonitors ?? true;
+    const domainThreshold = settings?.domainExpiryThreshold ?? 30;
+
     return {
       project: {
-        name: project.name,
+        name: settings?.companyName || project.name,
         description: project.description,
+        logoUrl: settings?.logoUrl || null,
+        domainExpiryThreshold: domainThreshold,
       },
-      servers: resources.servers.map(s => ({
+      servers: showServers ? resources.servers.map(s => ({
         name: s.name || s.hostname,
         status: (s as any).lastSeen && (Date.now() - new Date((s as any).lastSeen).getTime() < 5 * 60 * 1000) ? 'up' : 'down',
         lastSeen: (s as any).lastSeen,
-      })),
-      databases: resources.databases.map(d => ({
+      })) : [],
+      databases: showDatabases ? resources.databases.map(d => ({
         name: d.name,
         status: (d as any).lastSeen && (Date.now() - new Date((d as any).lastSeen).getTime() < 5 * 60 * 1000) ? 'up' : 'down',
         lastSeen: (d as any).lastSeen,
-      })),
-      webMonitors: resources.webMonitors.map(w => ({
-        name: w.name,
-        url: w.url,
-        status: w.lastStatus || 'pending',
-        lastCheck: w.lastCheck,
-        responseTime: w.metrics?.[0]?.responseTime || null,
-      })),
+      })) : [],
+      clusters: showClusters ? resources.clusters.map(c => ({
+        name: c.name,
+        status: (c as any).lastSeen && (Date.now() - new Date((c as any).lastSeen).getTime() < 5 * 60 * 1000) ? 'up' : 'down',
+        lastSeen: (c as any).lastSeen,
+      })) : [],
+      webMonitors: showWeb ? await Promise.all(resources.webMonitors.map(async w => {
+        const lastMetrics = await db.select().from(webMonitorMetrics)
+          .where(eq(webMonitorMetrics.monitorId, w.id))
+          .orderBy(desc(webMonitorMetrics.createdAt))
+          .limit(40);
+
+        return {
+          name: w.name,
+          url: w.url,
+          status: w.lastStatus || 'pending',
+          lastCheck: w.lastCheck,
+          responseTime: w.metrics?.[0]?.responseTime || null,
+          history: lastMetrics.reverse().map(m => ({
+            isUp: m.isUp,
+            responseTime: m.responseTime,
+            createdAt: m.createdAt
+          }))
+        };
+      })) : [],
+      domainMonitors: showDomains ? resources.domainMonitors.map(d => ({
+        domain: d.domain,
+        expiryDate: d.expiryDate,
+        status: d.expiryDate && (Math.ceil((new Date(d.expiryDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)) > domainThreshold) ? 'active' : 'warning',
+      })) : [],
     };
   }
 
@@ -193,6 +238,7 @@ export class DatabaseStorage implements IStorage {
     const allDbs = await this.getDatabases();
     const allClusters = await this.getClusters();
     const allWeb = await this.getWebMonitors();
+    const allDomains = await this.getDomainMonitors();
     const projectTokens = await this.getTokens(projectId);
 
     return {
@@ -201,6 +247,7 @@ export class DatabaseStorage implements IStorage {
       databases: allDbs.filter(d => d.projectId === projectId),
       clusters: allClusters.filter(c => c.projectId === projectId),
       webMonitors: allWeb.filter(w => w.projectId === projectId),
+      domainMonitors: allDomains.filter(d => d.projectId === projectId),
       tokens: projectTokens,
     };
   }
@@ -222,6 +269,7 @@ export class DatabaseStorage implements IStorage {
     const dbCount = await db.select({ count: sql<number>`count(*)` }).from(databases);
     const clusterCount = await db.select({ count: sql<number>`count(*)` }).from(clusters);
     const webMonitorCount = await db.select({ count: sql<number>`count(*)` }).from(webMonitors);
+    const domainMonitorCount = await db.select({ count: sql<number>`count(*)` }).from(domainMonitors);
 
     // Mock critical count for now, or fetch simple status
     // To make it real, we'd need to join with metrics.
@@ -230,6 +278,7 @@ export class DatabaseStorage implements IStorage {
       totalDatabases: Number(dbCount[0].count),
       totalClusters: Number(clusterCount[0].count),
       totalWebMonitors: Number(webMonitorCount[0].count),
+      totalDomainMonitors: Number(domainMonitorCount[0].count),
       healthyServers: Number(serverCount[0].count), // Assume healthy for MVP
       criticalServers: 0,
     };
@@ -325,7 +374,7 @@ export class DatabaseStorage implements IStorage {
     ]);
   }
 
-  async checkAndTriggerAlert(resourceId: number, type: 'server' | 'database' | 'cluster' | 'web', currentMetrics: { type: string, value: number | null | undefined, operator: '>' | '<=' }[]): Promise<void> {
+  async checkAndTriggerAlert(resourceId: number, type: 'server' | 'database' | 'cluster' | 'web' | 'domain', currentMetrics: { type: string, value: number | null | undefined, operator: '>' | '<=' }[]): Promise<void> {
     try {
       const logMsg = `[${new Date().toISOString()}] CHECKING ALERTS for ${type} (ID: ${resourceId}). Metrics: ${JSON.stringify(currentMetrics)}\n`;
       safeLog(logMsg);
@@ -366,6 +415,12 @@ export class DatabaseStorage implements IStorage {
         resourceName = w.name;
         projectId = w.projectId;
         idFields.webMonitorId = resourceId;
+      } else if (type === 'domain') {
+        const d = await this.getDomainMonitor(resourceId);
+        if (!d) return;
+        resourceName = d.domain;
+        projectId = d.projectId;
+        idFields.domainMonitorId = resourceId;
       }
 
       // If no project, skip alerts
@@ -387,6 +442,14 @@ export class DatabaseStorage implements IStorage {
         cpu: projectAlertConfig.cpuThreshold,
         memory: projectAlertConfig.memoryThreshold,
         storage: projectAlertConfig.storageThreshold,
+        db_storage: projectAlertConfig.dbStorageThreshold,
+        db_connections: projectAlertConfig.dbConnectionThreshold,
+        cluster_cpu: projectAlertConfig.clusterCpuThreshold,
+        cluster_memory: projectAlertConfig.clusterMemoryThreshold,
+        web_status: 1, // 1 means UP, so if current is 0 it's breached (if <)
+        web_response: projectAlertConfig.webResponseThreshold,
+        web_ssl: projectAlertConfig.webSslExpiryThreshold,
+        domain_expiry: projectAlertConfig.domainExpiryThreshold,
       };
 
       for (const m of currentMetrics) {
@@ -403,7 +466,9 @@ export class DatabaseStorage implements IStorage {
             .where(sql`${alerts.type} = ${m.type} AND ${alerts.sentAt} > NOW() - INTERVAL '1 hour' AND (
               (${alerts.serverId} IS NOT NULL AND ${alerts.serverId} = ${idFields.serverId || 0}) OR
               (${alerts.databaseId} IS NOT NULL AND ${alerts.databaseId} = ${idFields.databaseId || 0}) OR
-              (${alerts.clusterId} IS NOT NULL AND ${alerts.clusterId} = ${idFields.clusterId || 0})
+              (${alerts.clusterId} IS NOT NULL AND ${alerts.clusterId} = ${idFields.clusterId || 0}) OR
+              (${alerts.webMonitorId} IS NOT NULL AND ${alerts.webMonitorId} = ${idFields.webMonitorId || 0}) OR
+              (${alerts.domainMonitorId} IS NOT NULL AND ${alerts.domainMonitorId} = ${idFields.domainMonitorId || 0})
             )`)
             .limit(1);
 
@@ -427,15 +492,60 @@ export class DatabaseStorage implements IStorage {
               logoUrl: projectAlertConfig.logoUrl,
             };
 
+            // Use project-specific SMTP if available, else fallback to global
+            const emailSettings = {
+              host: projectAlertConfig.smtpHost || smtpSettings.host,
+              port: projectAlertConfig.smtpPort || smtpSettings.port,
+              user: projectAlertConfig.smtpUser || smtpSettings.user,
+              pass: projectAlertConfig.smtpPass || smtpSettings.pass,
+              fromEmail: projectAlertConfig.smtpSenderEmail || smtpSettings.fromEmail,
+              senderName: projectAlertConfig.smtpSenderName || projectAlertConfig.companyName || (smtpSettings as any).senderName || "InfraWatch Alert",
+            };
+
+            // Define alert categories
+            const typeToCategory: Record<string, string> = {
+              'cpu': 'Server',
+              'memory': 'Server',
+              'storage': 'Server',
+              'db_storage': 'Database',
+              'db_connections': 'Database',
+              'web_status': 'Web',
+              'web_response': 'Web',
+              'web_ssl': 'Web',
+              'cluster_cpu': 'Cluster',
+              'cluster_memory': 'Cluster',
+              'domain_expiry': 'Domain'
+            };
+
+            const category = typeToCategory[m.type];
+
+            // Use project-specific template if available
+            // Check for specific alert type first, then for category fallback
+            let [customTemplate] = await db.select().from(projectEmailTemplates)
+              .where(sql`${projectEmailTemplates.projectId} = ${projectId} AND ${projectEmailTemplates.alertType} = ${m.type}`)
+              .limit(1);
+
+            if (!customTemplate && category) {
+              [customTemplate] = await db.select().from(projectEmailTemplates)
+                .where(sql`${projectEmailTemplates.projectId} = ${projectId} AND ${projectEmailTemplates.alertType} = ${category}`)
+                .limit(1);
+            }
+
+            // Fetch project name
+            const [project] = await db.select().from(projects).where(eq(projects.id, projectId));
+            const projectName = project?.name || "Unknown Project";
+
             for (const recipient of recipients) {
               await EmailService.sendAlertEmail(
                 recipient,
                 resourceName,
+                projectName,
                 m.type,
                 m.value,
                 threshold,
-                smtpSettings,
-                branding
+                emailSettings as any,
+                branding,
+                customTemplate
               );
             }
             safeLog(`[${new Date().toISOString()}] Alert emails SENT to ${recipients.join(', ')}\n`);
@@ -544,6 +654,35 @@ export class DatabaseStorage implements IStorage {
     await db.insert(alerts).values(data);
   }
 
+  // === PROJECT EMAIL TEMPLATES ===
+  async getProjectEmailTemplates(projectId: number): Promise<ProjectEmailTemplate[]> {
+    return await db.select().from(projectEmailTemplates).where(eq(projectEmailTemplates.projectId, projectId));
+  }
+
+  async upsertProjectEmailTemplate(projectId: number, alertType: string, data: { subject: string, body: string }): Promise<ProjectEmailTemplate> {
+    const [existing] = await db.select().from(projectEmailTemplates)
+      .where(sql`${projectEmailTemplates.projectId} = ${projectId} AND ${projectEmailTemplates.alertType} = ${alertType}`)
+      .limit(1);
+
+    if (existing) {
+      const [updated] = await db.update(projectEmailTemplates)
+        .set({ ...data, updatedAt: new Date() })
+        .where(eq(projectEmailTemplates.id, existing.id))
+        .returning();
+      return updated;
+    }
+
+    const [created] = await db.insert(projectEmailTemplates)
+      .values({ projectId, alertType, ...data })
+      .returning();
+    return created;
+  }
+
+  async deleteProjectEmailTemplate(projectId: number, alertType: string): Promise<void> {
+    await db.delete(projectEmailTemplates)
+      .where(sql`${projectEmailTemplates.projectId} = ${projectId} AND ${projectEmailTemplates.alertType} = ${alertType}`);
+  }
+
   // === DATABASES ===
   async getDatabases(): Promise<(Database & { metrics: DatabaseMetric[], project?: Project })[]> {
     const allDbs = await db.select().from(databases).orderBy(desc(databases.lastSeen));
@@ -620,7 +759,7 @@ export class DatabaseStorage implements IStorage {
     if (!data.databaseId) return;
 
     await this.checkAndTriggerAlert(data.databaseId, 'database', [
-      { type: 'storage', value: data.storageUsed, operator: '>' },
+      { type: 'db_storage', value: data.storageUsed, operator: '>' },
     ]);
   }
 
@@ -669,8 +808,8 @@ export class DatabaseStorage implements IStorage {
     if (!data.clusterId) return;
 
     await this.checkAndTriggerAlert(data.clusterId, 'cluster', [
-      { type: 'cpu', value: data.cpuUsage, operator: '>' },
-      { type: 'memory', value: data.memoryUsage, operator: '>' },
+      { type: 'cluster_cpu', value: data.cpuUsage, operator: '>' },
+      { type: 'cluster_memory', value: data.memoryUsage, operator: '>' },
     ]);
   }
 
@@ -758,9 +897,57 @@ export class DatabaseStorage implements IStorage {
     // Trigger alerts if DOWN
     if (!data.isUp) {
       await this.checkAndTriggerAlert(data.monitorId, 'web', [
-        { type: 'uptime', value: 0, operator: '<=' }, // 0 means down
+        { type: 'web_status', value: 0, operator: '<=' }, // 0 means down, threshold is 1 (UP)
       ]);
     }
+
+    // Trigger response time alerts
+    if (data.responseTime) {
+      await this.checkAndTriggerAlert(data.monitorId, 'web', [
+        { type: 'web_response', value: data.responseTime, operator: '>' },
+      ]);
+    }
+  }
+
+  // === DOMAIN MONITORS ===
+  async getDomainMonitors(): Promise<(DomainMonitor & { project?: Project })[]> {
+    const allDomains = await db.select().from(domainMonitors).orderBy(desc(domainMonitors.createdAt));
+    return await Promise.all(allDomains.map(async (domain) => {
+      let project;
+      if (domain.projectId) {
+        [project] = await db.select().from(projects).where(eq(projects.id, domain.projectId));
+      }
+      return { ...domain, project };
+    }));
+  }
+
+  async getDomainMonitor(id: number): Promise<(DomainMonitor & { project?: Project }) | undefined> {
+    const [domain] = await db.select().from(domainMonitors).where(eq(domainMonitors.id, id));
+    if (!domain) return undefined;
+
+    let project;
+    if (domain.projectId) {
+      [project] = await db.select().from(projects).where(eq(projects.id, domain.projectId));
+    }
+
+    return { ...domain, project };
+  }
+
+  async createDomainMonitor(data: z.infer<typeof insertDomainMonitorSchema>): Promise<DomainMonitor> {
+    const [monitor] = await db.insert(domainMonitors).values(data).returning();
+    return monitor;
+  }
+
+  async updateDomainMonitor(id: number, data: DomainMonitorUpdate): Promise<DomainMonitor | undefined> {
+    const [updated] = await db.update(domainMonitors)
+      .set(data)
+      .where(eq(domainMonitors.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteDomainMonitor(id: number): Promise<void> {
+    await db.delete(domainMonitors).where(eq(domainMonitors.id, id));
   }
 }
 

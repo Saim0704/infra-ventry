@@ -34,3 +34,34 @@ export function useUpdateProjectAlertSettings(projectId: number) {
         },
     });
 }
+export function useProjectEmailTemplates(projectId: number) {
+    const url = buildUrl(api.projects.emailTemplates.list.path, { id: projectId });
+    return useQuery<any[]>({
+        queryKey: [api.projects.emailTemplates.list.path, projectId],
+        queryFn: async () => {
+            const res = await fetch(url, { credentials: "include" });
+            if (!res.ok) throw new Error("Failed to fetch project email templates");
+            return res.json();
+        },
+        enabled: !!projectId,
+    });
+}
+
+export function useUpdateProjectEmailTemplate(projectId: number) {
+    return useMutation({
+        mutationFn: async ({ alertType, data }: { alertType: string, data: any }) => {
+            const url = buildUrl(api.projects.emailTemplates.upsert.path, { id: projectId, alertType });
+            const res = await fetch(url, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(data),
+                credentials: "include",
+            });
+            if (!res.ok) throw new Error("Failed to update project email template");
+            return res.json();
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: [api.projects.emailTemplates.list.path, projectId] });
+        },
+    });
+}

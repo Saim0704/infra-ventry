@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { api } from "@shared/routes";
 import { WebMonitorService } from "./lib/web-monitor-service";
+import { DomainMonitorService } from "./services/domainMonitor";
 import { setupAuth, registerAuthRoutes, isAuthenticated } from "./auth";
 import { z } from "zod";
 import { insertUserSchema } from "@shared/schema";
@@ -187,6 +188,31 @@ export async function registerRoutes(
     res.json(status);
   });
 
+  // Project Email Templates
+  app.get(api.projects.emailTemplates.list.path, isAuthenticated, async (req, res) => {
+    const templates = await storage.getProjectEmailTemplates(Number(req.params.id));
+    res.json(templates);
+  });
+
+  app.patch(api.projects.emailTemplates.upsert.path, isAuthenticated, async (req, res) => {
+    try {
+      const id = Number(req.params.id);
+      const alertType = req.params.alertType;
+      const input = api.projects.emailTemplates.upsert.input.parse(req.body);
+      const template = await storage.upsertProjectEmailTemplate(id, alertType, input);
+      res.json(template);
+    } catch (err) {
+      res.status(400).json({ message: "Invalid template format" });
+    }
+  });
+
+  app.delete(api.projects.emailTemplates.delete.path, isAuthenticated, async (req, res) => {
+    const id = Number(req.params.id);
+    const alertType = req.params.alertType;
+    await storage.deleteProjectEmailTemplate(id, alertType);
+    res.status(204).send();
+  });
+
   // Servers
   app.get(api.servers.list.path, isAuthenticated, async (req, res) => {
     const servers = await storage.getServers();
@@ -295,6 +321,38 @@ export async function registerRoutes(
 
   app.delete(api.webMonitors.delete.path, isAuthenticated, async (req, res) => {
     await storage.deleteWebMonitor(Number(req.params.id));
+    res.status(204).send();
+  });
+
+  // === DOMAIN MONITORS ===
+  app.get(api.domainMonitors.list.path, isAuthenticated, async (req, res) => {
+    const monitors = await storage.getDomainMonitors();
+    res.json(monitors);
+  });
+
+  app.get(api.domainMonitors.get.path, isAuthenticated, async (req, res) => {
+    const monitor = await storage.getDomainMonitor(Number(req.params.id));
+    if (!monitor) return res.status(404).json({ message: "Domain monitor not found" });
+    res.json(monitor);
+  });
+
+  app.post(api.domainMonitors.create.path, isAuthenticated, async (req, res) => {
+    try {
+      const input = api.domainMonitors.create.input.parse(req.body);
+      const monitor = await storage.createDomainMonitor(input);
+      // Trigger a proactive check for the newly added domain asynchronously
+      DomainMonitorService.checkSingleDomain(monitor).catch(err => {
+        console.error("Proactive domain check failed:", err);
+      });
+      res.status(201).json(monitor);
+    } catch (err) {
+      console.error(err);
+      res.status(400).json({ message: "Invalid data format" });
+    }
+  });
+
+  app.delete(api.domainMonitors.delete.path, isAuthenticated, async (req, res) => {
+    await storage.deleteDomainMonitor(Number(req.params.id));
     res.status(204).send();
   });
 
@@ -462,7 +520,7 @@ export async function registerRoutes(
     try {
       const id = Number(req.params.id);
       const input = api.settings.projectAlerts.update.input.parse(req.body);
-      const settings = await storage.upsertProjectAlertSettings(id, input);
+      const settings = await storage.upsertProjectAlertSettings(id, input as any);
       res.json(settings);
     } catch (err: any) {
       if (err instanceof z.ZodError) {
@@ -513,6 +571,7 @@ export async function registerRoutes(
 
   // === BACKGROUND SERVICES ===
   WebMonitorService.start();
+  DomainMonitorService.start();
 
   // === SEED DATA ===
   await seedDatabase();

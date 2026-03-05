@@ -76,13 +76,53 @@ export const projectAlertSettings = pgTable("project_alert_settings", {
   companyName: text("company_name"),
   logoUrl: text("logo_url"),
 
-  // Thresholds (null means alert is disabled for this project)
+  // Server Thresholds
   cpuThreshold: real("cpu_threshold").default(80),
   memoryThreshold: real("memory_threshold").default(80),
   storageThreshold: real("storage_threshold").default(80),
 
+  // Database Thresholds
+  dbStorageThreshold: real("db_storage_threshold").default(80),
+  dbConnectionThreshold: real("db_connection_threshold").default(100),
+
+  // Cluster Thresholds
+  clusterCpuThreshold: real("cluster_cpu_threshold").default(80),
+  clusterMemoryThreshold: real("cluster_memory_threshold").default(80),
+
+  // Web Monitor Thresholds
+  webResponseThreshold: integer("web_response_threshold").default(3000),
+  webSslExpiryThreshold: integer("web_ssl_expiry_threshold").default(14),
+
+  // Status Page Visibility Toggles
+  showWebMonitors: boolean("show_web_monitors").default(true).notNull(),
+  showServers: boolean("show_servers").default(true).notNull(),
+  showDatabases: boolean("show_databases").default(true).notNull(),
+  showClusters: boolean("show_clusters").default(true).notNull(),
+  showDomainMonitors: boolean("show_domain_monitors").default(true).notNull(),
+  domainExpiryThreshold: integer("domain_expiry_threshold").default(30).notNull(),
+
+  // Project Specific SMTP
+  smtpHost: text("smtp_host"),
+  smtpPort: integer("smtp_port"),
+  smtpUser: text("smtp_user"),
+  smtpPass: text("smtp_pass"),
+  smtpSenderName: text("smtp_sender_name"),
+  smtpSenderEmail: text("smtp_sender_email"),
+
   updatedAt: timestamp("updated_at").defaultNow(),
 });
+
+// === EMAIL TEMPLATES ===
+export const projectEmailTemplates = pgTable("project_email_templates", {
+  id: serial("id").primaryKey(),
+  projectId: integer("project_id").references(() => projects.id).notNull(),
+  alertType: text("alert_type").notNull(), // 'server_down', 'cpu_high', 'memory_high', 'storage_high', 'db_storage_high', 'db_conn_high', 'web_down', 'web_ssl_expiring', 'domain_expiring'
+  subject: text("subject").notNull(),
+  body: text("body").notNull(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  index("project_alert_type_idx").on(table.projectId, table.alertType)
+]);
 
 
 export const serverMetrics = pgTable("server_metrics", {
@@ -103,16 +143,18 @@ export const smtpSettings = pgTable("smtp_settings", {
   user: text("user").notNull(),
   pass: text("pass").notNull(),
   fromEmail: text("from_email").notNull(),
+  senderName: text("sender_name").default("Infrastructure Monitor"),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
 export const alerts = pgTable("alerts", {
   id: serial("id").primaryKey(),
-  serverId: integer("server_id").references(() => servers.id),
-  databaseId: integer("database_id").references(() => databases.id),
-  clusterId: integer("cluster_id").references(() => clusters.id),
-  webMonitorId: integer("web_monitor_id").references(() => webMonitors.id),
-  type: text("type").notNull(), // 'cpu', 'memory', 'storage', 'uptime'
+  serverId: integer("server_id").references(() => servers.id, { onDelete: 'cascade' }),
+  databaseId: integer("database_id").references(() => databases.id, { onDelete: 'cascade' }),
+  clusterId: integer("cluster_id").references(() => clusters.id, { onDelete: 'cascade' }),
+  webMonitorId: integer("web_monitor_id").references(() => webMonitors.id, { onDelete: 'cascade' }),
+  domainMonitorId: integer("domain_monitor_id").references(() => domainMonitors.id, { onDelete: 'cascade' }),
+  type: text("type").notNull(),
   value: real("value").notNull(),
   threshold: real("threshold").notNull(),
   sentAt: timestamp("sent_at").defaultNow(),
@@ -188,17 +230,31 @@ export const webMonitorMetrics = pgTable("web_monitor_metrics", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// === DOMAIN MONITOR ===
+export const domainMonitors = pgTable("domain_monitors", {
+  id: serial("id").primaryKey(),
+  domain: text("domain").notNull(),
+  projectId: integer("project_id").references(() => projects.id),
+  expiryDate: timestamp("expiry_date"),
+  lastCheck: timestamp("last_check"),
+  nextCheck: timestamp("next_check"),
+  lastAlertSentAt: timestamp("last_alert_sent_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // === RELATIONS ===
 export const projectsRelations = relations(projects, ({ many, one }) => ({
   servers: many(servers),
   databases: many(databases),
   clusters: many(clusters),
   webMonitors: many(webMonitors),
+  domainMonitors: many(domainMonitors),
   tokens: many(tokens),
   alertSettings: one(projectAlertSettings, {
     fields: [projects.id],
     references: [projectAlertSettings.projectId],
   }),
+  emailTemplates: many(projectEmailTemplates),
 }));
 
 export const serversRelations = relations(servers, ({ one, many }) => ({
@@ -233,6 +289,10 @@ export const alertsRelations = relations(alerts, ({ one }) => ({
   webMonitor: one(webMonitors, {
     fields: [alerts.webMonitorId],
     references: [webMonitors.id],
+  }),
+  domainMonitor: one(domainMonitors, {
+    fields: [alerts.domainMonitorId],
+    references: [domainMonitors.id],
   }),
 }));
 
@@ -280,6 +340,13 @@ export const projectAlertSettingsRelations = relations(projectAlertSettings, ({ 
   }),
 }));
 
+export const projectEmailTemplatesRelations = relations(projectEmailTemplates, ({ one }) => ({
+  project: one(projects, {
+    fields: [projectEmailTemplates.projectId],
+    references: [projects.id],
+  }),
+}));
+
 export const webMonitorsRelations = relations(webMonitors, ({ one, many }) => ({
   metrics: many(webMonitorMetrics),
   project: one(projects, {
@@ -292,6 +359,13 @@ export const webMonitorMetricsRelations = relations(webMonitorMetrics, ({ one })
   monitor: one(webMonitors, {
     fields: [webMonitorMetrics.monitorId],
     references: [webMonitors.id],
+  }),
+}));
+
+export const domainMonitorsRelations = relations(domainMonitors, ({ one }) => ({
+  project: one(projects, {
+    fields: [domainMonitors.projectId],
+    references: [projects.id],
   }),
 }));
 
@@ -320,6 +394,10 @@ export const insertClusterMetricSchema = createInsertSchema(clusterMetrics).omit
 
 export const insertWebMonitorSchema = createInsertSchema(webMonitors).omit({ id: true, createdAt: true, lastCheck: true, nextCheck: true, lastStatus: true, sslStatus: true, sslExpiryDate: true });
 export const insertWebMonitorMetricSchema = createInsertSchema(webMonitorMetrics).omit({ id: true, createdAt: true });
+
+export const insertProjectEmailTemplateSchema = createInsertSchema(projectEmailTemplates).omit({ id: true, updatedAt: true });
+
+export const insertDomainMonitorSchema = createInsertSchema(domainMonitors).omit({ id: true, createdAt: true, lastCheck: true, nextCheck: true, expiryDate: true, lastAlertSentAt: true });
 
 // Form Schema for Manual Server Entry
 export const serverWithMetricsSchema = z.object({
@@ -362,6 +440,11 @@ export type WebMonitor = typeof webMonitors.$inferSelect;
 export type WebMonitorMetric = typeof webMonitorMetrics.$inferSelect;
 export type InsertWebMonitor = z.infer<typeof insertWebMonitorSchema>;
 export type InsertWebMonitorMetric = z.infer<typeof insertWebMonitorMetricSchema>;
+export type DomainMonitor = typeof domainMonitors.$inferSelect;
+export type InsertDomainMonitor = z.infer<typeof insertDomainMonitorSchema>;
+export type ProjectEmailTemplate = typeof projectEmailTemplates.$inferSelect;
+export type InsertProjectEmailTemplate = z.infer<typeof insertProjectEmailTemplateSchema>;
 
 // For internal service updates (full object but optional fields)
 export type WebMonitorUpdate = Partial<WebMonitor>;
+export type DomainMonitorUpdate = Partial<DomainMonitor>;

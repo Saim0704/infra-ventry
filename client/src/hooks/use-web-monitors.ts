@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, buildUrl } from "@shared/routes";
 import { z } from "zod";
 
@@ -30,5 +30,20 @@ export function useWebMonitor(id: number | null) {
         },
         enabled: !!id,
         refetchInterval: 5000,
+    });
+}
+
+export function useDeleteWebMonitor() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: async (id: number) => {
+            const res = await fetch(api.webMonitors.delete.path.replace(":id", String(id)), {
+                method: "DELETE",
+            });
+            if (!res.ok) throw new Error("Failed to delete web monitor");
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: [api.webMonitors.list.path] });
+        },
     });
 }

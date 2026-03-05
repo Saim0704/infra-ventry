@@ -78,11 +78,11 @@ export default function ProjectsPage() {
     };
 
     return (
-        <Shell title="Projects" description="Organize and group your infrastructure by project or department.">
+        <Shell>
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-10 mt-2">
                 <div>
                     <h1 className="text-4xl font-display font-black tracking-tight bg-gradient-to-br from-foreground to-foreground/50 bg-clip-text text-transparent">
-                        Manage Projects
+                        Project Inventory
                     </h1>
                     <p className="text-muted-foreground mt-2 text-sm font-medium tracking-wide">Orchestrate and group your resource landscape by organization.</p>
                 </div>
@@ -161,6 +161,11 @@ export default function ProjectsPage() {
                                         </TableCell>
                                         <TableCell className="py-4 text-right pr-8">
                                             <div className="flex justify-end gap-1 transition-all duration-300">
+                                                <Link href={`/projects/${project.id}`}>
+                                                    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-primary/20 hover:text-primary transition-colors">
+                                                        <Eye className="h-4 w-4" />
+                                                    </Button>
+                                                </Link>
                                                 <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-accent/20 hover:text-accent transition-colors" onClick={() => handleEdit(project)}>
                                                     <Edit2 className="h-4 w-4" />
                                                 </Button>

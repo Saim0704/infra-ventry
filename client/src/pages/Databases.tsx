@@ -1,5 +1,5 @@
 import { useDatabases, useDatabase } from "@/hooks/use-databases";
-import { useProjects } from "@/hooks/use-projects";
+import { useProjects, useUpdateProject, useDeleteProject } from "@/hooks/use-projects";
 import { Shell } from "@/components/layout/Shell";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Card, CardContent } from "@/components/ui/card";
@@ -13,6 +13,10 @@ import { Database, HardDrive, Network, Search, Plus, Layout, ChevronRight, Chevr
 import { useState, Fragment } from "react";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
 import { format, formatDistanceToNow } from "date-fns";
+import { DatabaseDetailView } from "@/components/DatabaseDetailView";
+import { DatabaseEditDialog } from "@/components/DatabaseEditDialog";
+import { ServerDetailView } from "@/components/ServerDetailView";
+import { ServerEditDialog } from "@/components/ServerEditDialog";
 import { useToast } from "@/hooks/use-toast";
 import { api } from "@shared/routes";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -46,16 +50,23 @@ export default function DatabasesPage() {
   const { data: databases, isLoading } = useDatabases();
   const { data: projects } = useProjects();
   const [selectedDbId, setSelectedDbId] = useState<number | null>(null);
+  const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [editingDb, setEditingDb] = useState<any | null>(null);
   const [isCreatingDb, setIsCreatingDb] = useState(false);
   const [deletingDbId, setDeletingDbId] = useState<number | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
-  const [collapsedProjects, setCollapsedProjects] = useState<Record<string, boolean>>({});
   const { toast } = useToast();
+  const [isProjectFormOpen, setIsProjectFormOpen] = useState(false);
+  const [editingProject, setEditingProject] = useState<any>(null);
+  const [newProject, setNewProject] = useState({ name: "", description: "" });
+  const [expandedProjects, setExpandedProjects] = useState<Record<string, boolean>>({});
+
+  const updateProject = useUpdateProject();
+  const deleteProject = useDeleteProject();
   const queryClient = useQueryClient();
 
   const toggleProject = (name: string) => {
-    setCollapsedProjects(prev => ({ ...prev, [name]: !prev[name] }));
+    setExpandedProjects(prev => ({ ...prev, [name]: !prev[name] }));
   };
 
   const deleteMutation = useMutation({
@@ -81,14 +92,20 @@ export default function DatabasesPage() {
   );
 
   const groupedDatabases = filteredDatabases?.reduce((acc, db) => {
-    const projectName = db.project?.name || "Uncategorized";
-    if (!acc[projectName]) acc[projectName] = [];
-    acc[projectName].push(db);
+    const project = db.project;
+    const projectKey = project ? `project-${project.id}` : "uncategorized";
+    if (!acc[projectKey]) {
+      acc[projectKey] = {
+        project: project || { name: "Uncategorized" },
+        items: []
+      };
+    }
+    acc[projectKey].items.push(db);
     return acc;
-  }, {} as Record<string, any[]>);
+  }, {} as Record<string, { project: any, items: any[] }>);
 
   return (
-    <Shell title="Databases" description="Monitor database instances, storage, and active connections.">
+    <Shell>
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-10 mt-2">
         <div>
           <h1 className="text-4xl font-display font-black tracking-tight bg-gradient-to-br from-foreground to-foreground/50 bg-clip-text text-transparent">
@@ -130,51 +147,91 @@ export default function DatabasesPage() {
           </TableHeader>
           <TableBody>
             {isLoading ? (
-              Array.from({ length: 3 }).map((_, i) => (
+              Array.from({ length: 5 }).map((_, i) => (
                 <TableRow key={i}>
-                  <TableCell className="pl-6"><Skeleton className="h-5 w-32" /></TableCell>
+                  <TableCell className="pl-8"><Skeleton className="h-5 w-32" /></TableCell>
+                  <TableCell><Skeleton className="h-5 w-48" /></TableCell>
                   <TableCell><Skeleton className="h-5 w-24" /></TableCell>
-                  <TableCell><Skeleton className="h-5 w-32" /></TableCell>
-                  <TableCell><Skeleton className="h-5 w-24" /></TableCell>
-                  <TableCell><Skeleton className="h-5 w-24" /></TableCell>
-                  <TableCell><Skeleton className="h-5 w-24" /></TableCell>
-                  <TableCell className="pr-6 text-right"><Skeleton className="h-8 w-16 ml-auto" /></TableCell>
+                  <TableCell><Skeleton className="h-5 w-16" /></TableCell>
+                  <TableCell><Skeleton className="h-5 w-20" /></TableCell>
+                  <TableCell><Skeleton className="h-5 w-16" /></TableCell>
+                  <TableCell className="pr-8 text-right"><Skeleton className="h-8 w-16 ml-auto" /></TableCell>
                 </TableRow>
               ))
-            ) : filteredDatabases?.length === 0 ? (
+            ) : Object.keys(groupedDatabases || {}).length === 0 ? (
               <TableRow>
                 <TableCell colSpan={7} className="h-32 text-center text-muted-foreground font-medium">
-                  {searchTerm ? "No databases match your search criteria." : "No databases connected. Use 'Generate Key' to connect an agent."}
+                  {searchTerm ? "No databases match your search criteria." : "No databases monitored yet. Ready to start?"}
                 </TableCell>
               </TableRow>
             ) : (
-              Object.entries(groupedDatabases || {}).map(([projectName, projectDbs]) => {
-                const isCollapsed = collapsedProjects[projectName];
+              Object.entries(groupedDatabases || {}).map(([projectKey, group]) => {
+                const { project, items: projectDbs } = group;
+                const projectName = project.name;
+                const isExpanded = expandedProjects[projectKey];
                 return (
-                  <Fragment key={projectName}>
-                    <TableRow className="bg-muted/10 hover:bg-muted/20 cursor-pointer transition-colors" onClick={() => toggleProject(projectName)}>
+                  <Fragment key={projectKey}>
+                    <TableRow className="bg-muted/10 hover:bg-muted/20 group/header transition-colors">
                       <TableCell colSpan={7} className="py-3 px-6">
-                        <div className="flex items-center gap-2">
-                          {isCollapsed ? <ChevronRight className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
-                          <Layout className="h-4 w-4 text-primary/60" />
-                          <span className="text-sm font-bold tracking-tight text-foreground/70 uppercase">{projectName}</span>
-                          <span className="text-[10px] font-medium bg-primary/10 text-primary px-2 py-0.5 rounded-full ml-2">
-                            {projectDbs.length} {projectDbs.length === 1 ? 'Database' : 'Databases'}
-                          </span>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2 cursor-pointer flex-1" onClick={() => toggleProject(projectKey)}>
+                            {isExpanded ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+                            <Layout className="h-4 w-4 text-emerald-500/60" />
+                            <span className="text-sm font-bold tracking-tight text-foreground/70 uppercase">{projectName}</span>
+                            <span className="text-[10px] font-medium bg-emerald-500/10 text-emerald-500 px-2 py-0.5 rounded-full ml-2">
+                              {projectDbs.length} {projectDbs.length === 1 ? 'Database' : 'Databases'}
+                            </span>
+                          </div>
+                          {project.id && (
+                            <div className="flex items-center gap-1 opacity-0 group-hover/header:opacity-100 transition-opacity">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 rounded-lg hover:bg-primary/20 hover:text-primary transition-colors"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setEditingProject(project);
+                                  setNewProject({ name: project.name, description: project.description || "" });
+                                  setIsProjectFormOpen(true);
+                                }}
+                              >
+                                <Edit2 className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 rounded-lg hover:bg-destructive/20 hover:text-destructive transition-colors"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (confirm("Are you sure you want to delete this project? Resources will be unassigned but not deleted.")) {
+                                    deleteProject.mutate(project.id, {
+                                      onSuccess: () => {
+                                        toast({ title: "Project deleted successfully" });
+                                        queryClient.invalidateQueries({ queryKey: [api.projects.list.path] });
+                                        queryClient.invalidateQueries({ queryKey: [api.databases.list.path] });
+                                      }
+                                    });
+                                  }
+                                }}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>
-                    {!isCollapsed && projectDbs.map((db) => {
+                    {isExpanded && projectDbs.map((db) => {
                       const lastMetric = db.metrics?.[0];
                       return (
                         <TableRow key={db.id} className="group hover:bg-muted/20 border-b border-border/40 transition-colors">
                           <TableCell className="pl-8 py-4">
-                            <div className="flex items-center gap-3">
-                              <div className="h-8 w-8 rounded-lg bg-accent/10 flex items-center justify-center text-accent group-hover:scale-110 transition-transform duration-300">
+                            <div className="flex items-center gap-3 cursor-pointer group/name" onClick={() => { setSelectedDbId(db.id); setIsDetailOpen(true); }}>
+                              <div className="h-8 w-8 rounded-lg bg-accent/10 flex items-center justify-center text-accent group-hover/name:scale-110 transition-transform duration-300">
                                 <Database className="h-4 w-4" />
                               </div>
                               <div className="flex flex-col">
-                                <span className="font-bold text-sm tracking-tight">{db.name}</span>
+                                <span className="font-bold text-sm tracking-tight group-hover/name:text-accent transition-colors">{db.name}</span>
                               </div>
                             </div>
                           </TableCell>
@@ -211,22 +268,9 @@ export default function DatabasesPage() {
                           </TableCell>
                           <TableCell className="py-4 text-right pr-6">
                             <div className="flex justify-end gap-1 transition-all duration-300">
-                              <Dialog onOpenChange={(open) => setSelectedDbId(open ? db.id : null)}>
-                                <DialogTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-primary/20 hover:text-primary transition-colors">
-                                    <Eye className="h-4 w-4" />
-                                  </Button>
-                                </DialogTrigger>
-                                <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto bg-background/95 backdrop-blur-md border-border/50 shadow-2xl">
-                                  <DialogHeader>
-                                    <DialogTitle className="text-2xl font-display flex items-center gap-2">
-                                      <Database className="h-6 w-6 text-accent" />
-                                      {db.name} Details
-                                    </DialogTitle>
-                                  </DialogHeader>
-                                  <DatabaseDetailView id={selectedDbId} />
-                                </DialogContent>
-                              </Dialog>
+                              <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-primary/20 hover:text-primary transition-colors" onClick={() => { setSelectedDbId(db.id); setIsDetailOpen(true); }}>
+                                <Eye className="h-4 w-4" />
+                              </Button>
 
                               <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-accent/20 hover:text-accent transition-colors" onClick={() => setEditingDb(db)}>
                                 <Edit2 className="h-4 w-4" />
@@ -248,15 +292,21 @@ export default function DatabasesPage() {
         </Table>
       </div>
 
-      <Dialog open={!!editingDb} onOpenChange={(open) => !open && setEditingDb(null)}>
-        <DialogContent className="sm:max-w-[425px]">
+      <DatabaseEditDialog
+        open={!!editingDb}
+        onOpenChange={(open) => !open && setEditingDb(null)}
+        db={editingDb}
+      />
+
+      <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto bg-background/95 backdrop-blur-md border-border/50 shadow-2xl">
           <DialogHeader>
-            <DialogTitle>Edit Database</DialogTitle>
-            <DialogDescription>
-              Update database details. Click save when you're done.
-            </DialogDescription>
+            <DialogTitle className="text-2xl font-display flex items-center gap-2">
+              <Database className="h-6 w-6 text-accent" />
+              Database Details
+            </DialogTitle>
           </DialogHeader>
-          {editingDb && <EditDatabaseForm db={editingDb} projects={projects || []} onClose={() => setEditingDb(null)} />}
+          {selectedDbId && <DatabaseDetailView id={selectedDbId} />}
         </DialogContent>
       </Dialog>
 
@@ -290,6 +340,70 @@ export default function DatabasesPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      {/* Project Management Dialogs */}
+      <Dialog open={isProjectFormOpen} onOpenChange={(open) => { setIsProjectFormOpen(open); if (!open) setEditingProject(null); }}>
+        <DialogContent className="sm:max-w-[425px] bg-background/95 backdrop-blur-md border-border/50 shadow-2xl">
+          <DialogHeader>
+            <DialogTitle>{editingProject ? "Edit Project" : "Create New Project"}</DialogTitle>
+            <DialogDescription>Group your resources by organization or department.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label>Project Name</Label>
+              <Input
+                placeholder="e.g. Marketing, FinOps"
+                value={newProject.name}
+                onChange={(e) => setNewProject({ ...newProject, name: e.target.value })}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label>Description (Optional)</Label>
+              <Input
+                placeholder="Brief purpose of this project"
+                value={newProject.description}
+                onChange={(e) => setNewProject({ ...newProject, description: e.target.value })}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setIsProjectFormOpen(false);
+                setEditingProject(null);
+                setNewProject({ name: "", description: "" });
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={async () => {
+                if (!newProject.name) return;
+                try {
+                  if (editingProject) {
+                    await updateProject.mutateAsync({ id: editingProject.id, data: newProject });
+                    toast({ title: "Project updated successfully" });
+                  } else {
+                    // Logic for create if needed, but usually handled elsewhere or here
+                  }
+                  queryClient.invalidateQueries({ queryKey: [api.projects.list.path] });
+                  queryClient.invalidateQueries({ queryKey: [api.databases.list.path] });
+                  setIsProjectFormOpen(false);
+                  setEditingProject(null);
+                  setNewProject({ name: "", description: "" });
+                } catch (err) {
+                  toast({ title: "Action failed", variant: "destructive" });
+                }
+              }}
+              disabled={updateProject.isPending || !newProject.name}
+              className="font-bold relative overflow-hidden group"
+            >
+              <span className="relative z-10">{editingProject ? "Save Changes" : "Create Project"}</span>
+              <div className="absolute inset-0 bg-white/10 translate-y-full group-hover:translate-y-0 transition-transform duration-300" />
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Shell>
   );
 }
@@ -483,58 +597,3 @@ function CreateDatabaseForm({ projects, onClose }: { projects: any[], onClose: (
   );
 }
 
-function DatabaseDetailView({ id }: { id: number | null }) {
-  const { data: db, isLoading } = useDatabase(id);
-
-  if (isLoading) return <div className="h-64 flex items-center justify-center"><Skeleton className="h-full w-full" /></div>;
-  if (!db) return null;
-
-  const chartData = db.metrics.slice(-20).map(m => ({
-    time: format(new Date(m.createdAt || new Date()), "HH:mm"),
-    connections: m.activeConnections,
-    storage: m.storageUsed
-  }));
-
-  return (
-    <div className="space-y-8 py-4">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Card className="bg-secondary/10 border-border/50">
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-2 text-muted-foreground mb-2">
-              <HardDrive className="h-4 w-4" />
-              <span className="text-sm font-medium">Storage Used</span>
-            </div>
-            <div className="text-3xl font-bold font-display">{db.metrics[0]?.storageUsed?.toFixed(2) ?? 0} GB</div>
-          </CardContent>
-        </Card>
-        <Card className="bg-secondary/10 border-border/50">
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-2 text-muted-foreground mb-2">
-              <Network className="h-4 w-4" />
-              <span className="text-sm font-medium">Active Connections</span>
-            </div>
-            <div className="text-3xl font-bold font-display">{db.metrics[0]?.activeConnections ?? 0}</div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="space-y-4">
-        <h3 className="text-lg font-semibold">Connection History</h3>
-        <div className="h-[300px] w-full bg-card border border-border rounded-xl p-4 shadow-inner">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={chartData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
-              <XAxis dataKey="time" stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
-              <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
-              <Tooltip
-                contentStyle={{ backgroundColor: 'hsl(var(--popover))', borderColor: 'hsl(var(--border))', borderRadius: '8px' }}
-                cursor={{ fill: 'hsl(var(--secondary))' }}
-              />
-              <Bar dataKey="connections" name="Connections" fill="hsl(var(--accent))" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-    </div>
-  );
-}

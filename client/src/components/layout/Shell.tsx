@@ -5,7 +5,7 @@ import { Loader2 } from "lucide-react";
 
 interface ShellProps {
   children: ReactNode;
-  title: string;
+  title?: string;
   description?: string;
 }
 
@@ -29,12 +29,14 @@ export function Shell({ children, title, description }: ShellProps) {
       <Sidebar />
       <main className="flex-1 ml-64 p-8 overflow-y-auto animate-in fade-in duration-500 slide-in-from-bottom-4">
         <div className="max-w-7xl mx-auto space-y-8">
-          <div className="flex flex-col gap-1">
-            <h1 className="text-3xl font-display font-bold text-foreground tracking-tight">{title}</h1>
-            {description && (
-              <p className="text-muted-foreground text-lg">{description}</p>
-            )}
-          </div>
+          {(title || description) && (
+            <div className="flex flex-col gap-1">
+              {title && <h1 className="text-3xl font-display font-bold text-foreground tracking-tight">{title}</h1>}
+              {description && (
+                <p className="text-muted-foreground text-lg">{description}</p>
+              )}
+            </div>
+          )}
           <div className="min-h-[calc(100vh-12rem)]">
             {children}
           </div>

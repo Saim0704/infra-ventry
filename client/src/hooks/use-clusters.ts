@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, buildUrl } from "@shared/routes";
 import { z } from "zod";
 
@@ -30,5 +30,20 @@ export function useCluster(id: number | null) {
     },
     enabled: !!id,
     refetchInterval: 5000,
+  });
+}
+
+export function useDeleteCluster() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: number) => {
+      const res = await fetch(`/api/clusters/${id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error("Failed to delete cluster");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [api.clusters.list.path] });
+    },
   });
 }

@@ -1,7 +1,7 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { Copy, Database, Cloud, Server, ChevronRight, Info, Clock, Terminal } from "lucide-react";
+import { Copy, Database, Cloud, Server, ChevronRight, Info, Clock, Terminal, Activity, Globe } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { motion, AnimatePresence } from "framer-motion";
 import { useState } from "react";
@@ -54,11 +54,13 @@ interface RegistrationModalProps {
     onOpenChange: (open: boolean) => void;
     token: string | null;
     projectName: string;
+    initialTab?: string;
 }
 
-export function RegistrationModal({ open, onOpenChange, token, projectName }: RegistrationModalProps) {
+export function RegistrationModal({ open, onOpenChange, token, projectName, initialTab = "vm" }: RegistrationModalProps) {
     const { toast } = useToast();
     const [cronTime, setCronTime] = useState({ hour: "02", minute: "00" });
+    const [serverMethod, setServerMethod] = useState<"cron" | "agent">("cron");
 
     const copyToClipboard = (text: string, label: string) => {
         navigator.clipboard.writeText(text);
@@ -134,8 +136,8 @@ export function RegistrationModal({ open, onOpenChange, token, projectName }: Re
                                 </div>
                             </motion.div>
 
-                            <Tabs defaultValue="vm" className="w-full">
-                                <TabsList className="grid w-full grid-cols-4 bg-muted/30 p-1.5 rounded-[1.5rem] border border-border/40 mb-8 h-14">
+                            <Tabs defaultValue={initialTab} className="w-full">
+                                <TabsList className="grid w-full grid-cols-3 bg-muted/30 p-1.5 rounded-[1.5rem] border border-border/40 mb-8 h-14">
                                     <TabsTrigger value="vm" className="rounded-[1.1rem] font-bold transition-all data-[state=active]:bg-background data-[state=active]:shadow-xl py-3 text-sm">
                                         <Server className="w-4 h-4 mr-2" /> Server
                                     </TabsTrigger>
@@ -145,18 +147,105 @@ export function RegistrationModal({ open, onOpenChange, token, projectName }: Re
                                     <TabsTrigger value="k8s" className="rounded-[1.1rem] font-bold transition-all data-[state=active]:bg-background data-[state=active]:shadow-xl py-3 text-sm">
                                         <Cloud className="w-4 h-4 mr-2" /> K8s
                                     </TabsTrigger>
-                                    <TabsTrigger value="cron" className="rounded-[1.1rem] font-bold transition-all data-[state=active]:bg-background data-[state=active]:shadow-xl py-3 text-sm">
-                                        <Clock className="w-4 h-4 mr-2" /> Cron
-                                    </TabsTrigger>
                                 </TabsList>
 
+                                {/* Server Tab — with method selector */}
                                 <TabsContent value="vm" className="mt-0 focus-visible:outline-none">
-                                    <TabContentContainer
-                                        title="Linux Agent Installation"
-                                        description="Deploy our lightweight agent on any Cloud or On-Prem server."
-                                        command={vmCommand}
-                                        onCopy={(cmd: string) => copyToClipboard(cmd, "Command")}
-                                    />
+                                    <motion.div
+                                        initial={{ opacity: 0, x: 20 }}
+                                        animate={{ opacity: 1, x: 0 }}
+                                        exit={{ opacity: 0, x: -20 }}
+                                        transition={{ type: "spring", damping: 25, stiffness: 200 }}
+                                        className="space-y-5"
+                                    >
+                                        <div className="space-y-1.5 px-1">
+                                            <h3 className="text-base font-black tracking-tight leading-none">Linux Agent Installation</h3>
+                                            <p className="text-xs text-muted-foreground font-medium">Deploy our lightweight agent on any Cloud or On-Prem server.</p>
+                                        </div>
+
+                                        {/* Method selector */}
+                                        <div className="flex gap-3">
+                                            {/* Cron Job */}
+                                            <button
+                                                onClick={() => setServerMethod("cron")}
+                                                className={`flex-1 flex items-center gap-3 p-4 rounded-2xl border transition-all duration-200 text-left ${serverMethod === "cron"
+                                                    ? "border-primary bg-primary/5 shadow-md shadow-primary/10"
+                                                    : "border-border/40 bg-muted/20 hover:border-border/70 hover:bg-muted/40"
+                                                    }`}
+                                            >
+                                                <div className={`flex h-9 w-9 items-center justify-center rounded-xl shrink-0 ${serverMethod === "cron" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>
+                                                    <Clock className="w-4 h-4" />
+                                                </div>
+                                                <div>
+                                                    <p className="text-sm font-bold leading-none mb-1">Cron Job</p>
+                                                    <p className="text-xs text-muted-foreground">Scheduled, automatic runs</p>
+                                                </div>
+                                                {serverMethod === "cron" && (
+                                                    <div className="ml-auto h-2 w-2 rounded-full bg-primary shrink-0" />
+                                                )}
+                                            </button>
+
+                                            {/* Agent — coming soon */}
+                                            <button
+                                                disabled
+                                                className="flex-1 flex items-center gap-3 p-4 rounded-2xl border border-border/30 bg-muted/10 opacity-50 cursor-not-allowed text-left"
+                                            >
+                                                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-muted text-muted-foreground shrink-0">
+                                                    <Terminal className="w-4 h-4" />
+                                                </div>
+                                                <div>
+                                                    <div className="flex items-center gap-2 mb-1">
+                                                        <p className="text-sm font-bold leading-none">Agent</p>
+                                                        <span className="text-[9px] font-black uppercase tracking-widest bg-muted text-muted-foreground px-1.5 py-0.5 rounded-full">Soon</span>
+                                                    </div>
+                                                    <p className="text-xs text-muted-foreground">Persistent, always-on agent</p>
+                                                </div>
+                                            </button>
+                                        </div>
+
+                                        {/* Cron method content */}
+                                        {serverMethod === "cron" && (
+                                            <motion.div
+                                                key="cron-content"
+                                                initial={{ opacity: 0, y: 8 }}
+                                                animate={{ opacity: 1, y: 0 }}
+                                                transition={{ duration: 0.25 }}
+                                                className="space-y-4"
+                                            >
+                                                <div className="flex items-end gap-4 p-5 bg-muted/30 rounded-2xl border border-border/40">
+                                                    <div className="space-y-2">
+                                                        <Label htmlFor="hour" className="text-xs font-bold uppercase text-muted-foreground">Hour (0-23)</Label>
+                                                        <Input
+                                                            id="hour"
+                                                            type="number"
+                                                            min="0"
+                                                            max="23"
+                                                            value={cronTime.hour}
+                                                            onChange={(e) => setCronTime({ ...cronTime, hour: e.target.value })}
+                                                            className="w-24 bg-background border-border/60"
+                                                        />
+                                                    </div>
+                                                    <div className="text-2xl font-black text-muted-foreground pb-2">:</div>
+                                                    <div className="space-y-2">
+                                                        <Label htmlFor="minute" className="text-xs font-bold uppercase text-muted-foreground">Minute (0-59)</Label>
+                                                        <Input
+                                                            id="minute"
+                                                            type="number"
+                                                            min="0"
+                                                            max="59"
+                                                            value={cronTime.minute}
+                                                            onChange={(e) => setCronTime({ ...cronTime, minute: e.target.value })}
+                                                            className="w-24 bg-background border-border/60"
+                                                        />
+                                                    </div>
+                                                    <div className="flex-1 text-xs text-muted-foreground pb-3 text-right font-mono">
+                                                        Runs daily at <span className="font-bold text-foreground">{cronTime.hour.padStart(2, '0')}:{cronTime.minute.padStart(2, '0')}</span>
+                                                    </div>
+                                                </div>
+                                                <TerminalBlock command={cronCommand} onCopy={(cmd) => copyToClipboard(cmd, "Cron Command")} />
+                                            </motion.div>
+                                        )}
+                                    </motion.div>
                                 </TabsContent>
 
                                 <TabsContent value="db" className="mt-0 focus-visible:outline-none">
@@ -175,54 +264,6 @@ export function RegistrationModal({ open, onOpenChange, token, projectName }: Re
                                         command={k8sCommand}
                                         onCopy={(cmd: string) => copyToClipboard(cmd, "Command")}
                                     />
-                                </TabsContent>
-
-                                <TabsContent value="cron" className="mt-0 focus-visible:outline-none">
-                                    <motion.div
-                                        initial={{ opacity: 0, x: 20 }}
-                                        animate={{ opacity: 1, x: 0 }}
-                                        exit={{ opacity: 0, x: -20 }}
-                                        transition={{ type: "spring", damping: 25, stiffness: 200 }}
-                                        className="space-y-5"
-                                    >
-                                        <div className="space-y-1.5 px-1">
-                                            <h3 className="text-base font-black tracking-tight leading-none">Scheduled Agent Updates</h3>
-                                            <p className="text-xs text-muted-foreground font-medium">Configure a cron job to keep your agent updated automatically.</p>
-                                        </div>
-
-                                        <div className="flex items-end gap-4 p-5 bg-muted/30 rounded-2xl border border-border/40">
-                                            <div className="space-y-2">
-                                                <Label htmlFor="hour" className="text-xs font-bold uppercase text-muted-foreground">Hour (0-23)</Label>
-                                                <Input
-                                                    id="hour"
-                                                    type="number"
-                                                    min="0"
-                                                    max="23"
-                                                    value={cronTime.hour}
-                                                    onChange={(e) => setCronTime({ ...cronTime, hour: e.target.value })}
-                                                    className="w-24 bg-background border-border/60"
-                                                />
-                                            </div>
-                                            <div className="text-2xl font-black text-muted-foreground pb-2">:</div>
-                                            <div className="space-y-2">
-                                                <Label htmlFor="minute" className="text-xs font-bold uppercase text-muted-foreground">Minute (0-59)</Label>
-                                                <Input
-                                                    id="minute"
-                                                    type="number"
-                                                    min="0"
-                                                    max="59"
-                                                    value={cronTime.minute}
-                                                    onChange={(e) => setCronTime({ ...cronTime, minute: e.target.value })}
-                                                    className="w-24 bg-background border-border/60"
-                                                />
-                                            </div>
-                                            <div className="flex-1 text-xs text-muted-foreground pb-3 text-right font-mono">
-                                                Runs daily at <span className="font-bold text-foreground">{cronTime.hour.padStart(2, '0')}:{cronTime.minute.padStart(2, '0')}</span>
-                                            </div>
-                                        </div>
-
-                                        <TerminalBlock command={cronCommand} onCopy={(cmd) => copyToClipboard(cmd, "Cron Command")} />
-                                    </motion.div>
                                 </TabsContent>
                             </Tabs>
 

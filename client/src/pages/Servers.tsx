@@ -1,5 +1,5 @@
 import { useServers, useServer, useCreateServer, useUpdateServer, useDeleteServer } from "@/hooks/use-servers";
-import { useProjects, useCreateProject } from "@/hooks/use-projects";
+import { useProjects, useCreateProject, useUpdateProject, useDeleteProject } from "@/hooks/use-projects";
 import { Shell } from "@/components/layout/Shell";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/StatusBadge";
@@ -23,6 +23,8 @@ import { queryClient } from "@/lib/queryClient";
 import { api } from "@shared/routes";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { DialogDescription } from "@/components/ui/dialog";
+import { ServerDetailView } from "@/components/ServerDetailView";
+import { ServerEditDialog } from "@/components/ServerEditDialog";
 import { z } from "zod";
 
 type ServerWithMetrics = z.infer<typeof serverWithMetricsSchema>;
@@ -43,11 +45,15 @@ export default function ServersPage() {
   const { data: projects } = useProjects();
   const createProject = useCreateProject();
   const [isProjectFormOpen, setIsProjectFormOpen] = useState(false);
+  const [editingProject, setEditingProject] = useState<any>(null);
   const [newProject, setNewProject] = useState({ name: "", description: "" });
-  const [collapsedProjects, setCollapsedProjects] = useState<Record<string, boolean>>({});
+  const [expandedProjects, setExpandedProjects] = useState<Record<string, boolean>>({});
+
+  const updateProject = useUpdateProject();
+  const deleteProject = useDeleteProject();
 
   const toggleProject = (name: string) => {
-    setCollapsedProjects(prev => ({ ...prev, [name]: !prev[name] }));
+    setExpandedProjects(prev => ({ ...prev, [name]: !prev[name] }));
   };
 
   const form = useForm<ServerWithMetrics>({
@@ -90,11 +96,17 @@ export default function ServersPage() {
   );
 
   const groupedServers = filteredServers?.reduce((acc, server) => {
-    const projectName = (server as any).project?.name || "Uncategorized";
-    if (!acc[projectName]) acc[projectName] = [];
-    acc[projectName].push(server);
+    const project = (server as any).project;
+    const projectKey = project ? `project-${project.id}` : "uncategorized";
+    if (!acc[projectKey]) {
+      acc[projectKey] = {
+        project: project || { name: "Uncategorized" },
+        items: []
+      };
+    }
+    acc[projectKey].items.push(server);
     return acc;
-  }, {} as Record<string, any[]>);
+  }, {} as Record<string, { project: any, items: any[] }>);
 
   const onSubmit = async (data: ServerWithMetrics) => {
     try {
@@ -121,32 +133,6 @@ export default function ServersPage() {
 
   const handleEdit = (server: any) => {
     setEditingServer(server);
-    // In our list view, metrics is an array of 1 item (the latest)
-    const lastMetric = server.metrics?.[0] || server.metrics?.[server.metrics.length - 1];
-
-    // Convert percentage back to absolute values for the form
-    const ramUsed = lastMetric ? (lastMetric.memoryUsage / 100) * server.totalRam : 0;
-    const storageUsed = lastMetric ? (lastMetric.diskUsage / 100) * server.totalDisk : 0;
-
-    form.reset({
-      hostname: server.hostname,
-      name: server.name || "",
-      ipAddress: server.ipAddress || "",
-      os: server.os || "",
-      osVersion: server.osVersion || "",
-      cpuCores: server.cpuCores,
-      totalRam: server.totalRam,
-      totalDisk: server.totalDisk,
-      sshUser: server.sshUser || "root",
-      sshKey: server.sshKey || "",
-      projectId: server.projectId || null,
-      cpuUsage: lastMetric?.cpuUsage || 0,
-      ramUsed: Number(ramUsed.toFixed(2)),
-      storageUsed: Number(storageUsed.toFixed(2)),
-      memoryUsage: lastMetric?.memoryUsage || 0,
-      diskUsage: lastMetric?.diskUsage || 0,
-    });
-    setIsFormOpen(true);
   };
 
   const handleDelete = async (id: number) => {
@@ -162,11 +148,11 @@ export default function ServersPage() {
   };
 
   return (
-    <Shell title="Servers" description="Manage and monitor your virtual machines and bare metal servers.">
+    <Shell>
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-10 mt-2">
         <div>
           <h1 className="text-4xl font-display font-black tracking-tight bg-gradient-to-br from-foreground to-foreground/50 bg-clip-text text-transparent">
-            Manage Inventory
+            Server Inventory
           </h1>
           <p className="text-muted-foreground mt-2 text-sm font-medium tracking-wide">Orchestrate and monitor your server landscape in real-time.</p>
         </div>
@@ -234,40 +220,80 @@ export default function ServersPage() {
                   <TableCell className="pr-6 text-right"><Skeleton className="h-8 w-16 ml-auto" /></TableCell>
                 </TableRow>
               ))
-            ) : filteredServers?.length === 0 ? (
+            ) : Object.keys(groupedServers || {}).length === 0 ? (
               <TableRow>
                 <TableCell colSpan={8} className="h-32 text-center text-muted-foreground font-medium">
                   {searchTerm ? "No servers match your search criteria." : "No servers mapped yet. Ready to expand?"}
                 </TableCell>
               </TableRow>
             ) : (
-              Object.entries(groupedServers || {}).map(([projectName, projectServers]) => {
-                const isCollapsed = collapsedProjects[projectName];
+              Object.entries(groupedServers || {}).map(([projectKey, group]) => {
+                const { project, items: projectServers } = group;
+                const projectName = project.name;
+                const isExpanded = expandedProjects[projectKey];
                 return (
-                  <Fragment key={projectName}>
-                    <TableRow className="bg-muted/10 hover:bg-muted/20 cursor-pointer transition-colors" onClick={() => toggleProject(projectName)}>
+                  <Fragment key={projectKey}>
+                    <TableRow className="bg-muted/10 hover:bg-muted/20 group/header transition-colors">
                       <TableCell colSpan={8} className="py-3 px-6">
-                        <div className="flex items-center gap-2">
-                          {isCollapsed ? <ChevronRight className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
-                          <Layout className="h-4 w-4 text-primary/60" />
-                          <span className="text-sm font-bold tracking-tight text-foreground/70 uppercase">{projectName}</span>
-                          <span className="text-[10px] font-medium bg-primary/10 text-primary px-2 py-0.5 rounded-full ml-2">
-                            {projectServers.length} {projectServers.length === 1 ? 'Server' : 'Servers'}
-                          </span>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2 cursor-pointer flex-1" onClick={() => toggleProject(projectKey)}>
+                            {isExpanded ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+                            <Layout className="h-4 w-4 text-primary/60" />
+                            <span className="text-sm font-bold tracking-tight text-foreground/70 uppercase">{projectName}</span>
+                            <span className="text-[10px] font-medium bg-primary/10 text-primary px-2 py-0.5 rounded-full ml-2">
+                              {projectServers.length} {projectServers.length === 1 ? 'Server' : 'Servers'}
+                            </span>
+                          </div>
+                          {project.id && (
+                            <div className="flex items-center gap-1 opacity-0 group-hover/header:opacity-100 transition-opacity">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 rounded-lg hover:bg-primary/20 hover:text-primary transition-colors"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setEditingProject(project);
+                                  setNewProject({ name: project.name, description: project.description || "" });
+                                  setIsProjectFormOpen(true);
+                                }}
+                              >
+                                <Edit2 className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 rounded-lg hover:bg-destructive/20 hover:text-destructive transition-colors"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (confirm("Are you sure you want to delete this project? Resources will be unassigned but not deleted.")) {
+                                    deleteProject.mutate(project.id, {
+                                      onSuccess: () => {
+                                        toast({ title: "Project deleted successfully" });
+                                        queryClient.invalidateQueries({ queryKey: [api.projects.list.path] });
+                                        queryClient.invalidateQueries({ queryKey: [api.servers.list.path] });
+                                      }
+                                    });
+                                  }
+                                }}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>
-                    {!isCollapsed && projectServers.map((server) => {
+                    {isExpanded && projectServers.map((server) => {
                       const lastMetric = server.metrics?.[0];
                       return (
                         <TableRow key={server.id} className="group hover:bg-muted/20 border-b border-border/40 transition-colors">
                           <TableCell className="pl-8 py-4">
-                            <div className="flex items-center gap-3">
-                              <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary group-hover:scale-110 transition-transform duration-300">
+                            <div className="flex items-center gap-3 cursor-pointer group/name" onClick={() => { setSelectedServerId(server.id); setIsDetailOpen(true); }}>
+                              <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary group-hover/name:scale-110 transition-transform duration-300">
                                 <Server className="h-4 w-4" />
                               </div>
                               <div className="flex flex-col">
-                                <span className="font-bold text-sm tracking-tight">{server.name || server.hostname}</span>
+                                <span className="font-bold text-sm tracking-tight group-hover/name:text-primary transition-colors">{server.name || server.hostname}</span>
                                 {server.name && server.name !== server.hostname && (
                                   <span className="text-[10px] text-muted-foreground font-mono">{server.hostname}</span>
                                 )}
@@ -352,8 +378,20 @@ export default function ServersPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Add/Edit Dialog */}
-      <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
+      <ServerEditDialog
+        open={!!editingServer}
+        onOpenChange={(open) => {
+          if (!open) {
+            setEditingServer(null);
+            setIsFormOpen(false);
+          }
+        }}
+        server={editingServer}
+      />
+
+      {/* Add Dialog - for new servers we can still use the local form or create a ServerCreateDialog. 
+          For now I'll just use the old form for Add if it's not editing. */}
+      <Dialog open={isFormOpen && !editingServer} onOpenChange={setIsFormOpen}>
         <DialogContent className="sm:max-w-[650px] bg-background/95 backdrop-blur-md border-border/50 shadow-2xl">
           <DialogHeader>
             <DialogTitle>{editingServer ? "Edit Server" : "Add New Server"}</DialogTitle>
@@ -579,10 +617,10 @@ export default function ServersPage() {
       </Dialog>
 
       {/* Project Creation Dialog */}
-      <Dialog open={isProjectFormOpen} onOpenChange={setIsProjectFormOpen}>
+      <Dialog open={isProjectFormOpen} onOpenChange={(open) => { setIsProjectFormOpen(open); if (!open) setEditingProject(null); }}>
         <DialogContent className="sm:max-w-[425px] bg-background/95 backdrop-blur-md border-border/50 shadow-2xl">
           <DialogHeader>
-            <DialogTitle>Create New Project</DialogTitle>
+            <DialogTitle>{editingProject ? "Edit Project" : "Create New Project"}</DialogTitle>
             <DialogDescription>Group your servers by organization or department.</DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
@@ -608,6 +646,7 @@ export default function ServersPage() {
               variant="outline"
               onClick={() => {
                 setIsProjectFormOpen(false);
+                setEditingProject(null);
                 setNewProject({ name: "", description: "" });
               }}
             >
@@ -617,18 +656,27 @@ export default function ServersPage() {
               onClick={async () => {
                 if (!newProject.name) return;
                 try {
-                  await createProject.mutateAsync(newProject);
-                  toast({ title: "Project created successfully" });
+                  if (editingProject) {
+                    await updateProject.mutateAsync({ id: editingProject.id, data: newProject });
+                    toast({ title: "Project updated successfully" });
+                  } else {
+                    await createProject.mutateAsync(newProject);
+                    toast({ title: "Project created successfully" });
+                  }
                   queryClient.invalidateQueries({ queryKey: [api.projects.list.path] });
+                  queryClient.invalidateQueries({ queryKey: [api.servers.list.path] });
                   setIsProjectFormOpen(false);
+                  setEditingProject(null);
                   setNewProject({ name: "", description: "" });
                 } catch (err) {
-                  toast({ title: "Failed to create project", variant: "destructive" });
+                  toast({ title: "Action failed", variant: "destructive" });
                 }
               }}
-              disabled={createProject.isPending}
+              disabled={createProject.isPending || updateProject.isPending || !newProject.name}
+              className="font-bold relative overflow-hidden group"
             >
-              Create Project
+              <span className="relative z-10">{editingProject ? "Save Changes" : "Create Project"}</span>
+              <div className="absolute inset-0 bg-white/10 translate-y-full group-hover:translate-y-0 transition-transform duration-300" />
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -637,163 +685,3 @@ export default function ServersPage() {
   );
 }
 
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-
-function ServerDetailView({ id }: { id: number | null }) {
-  const { data: server, isLoading } = useServer(id);
-
-  if (isLoading) return <div className="h-64 flex items-center justify-center"><Skeleton className="h-full w-full" /></div>;
-  if (!server) return null;
-
-  // The detail view returns all metrics, we want the latest for current status
-  const lastMetric = server.metrics?.[server.metrics.length - 1];
-  const hasProcesses = lastMetric?.topProcesses && Array.isArray(lastMetric.topProcesses) && lastMetric.topProcesses.length > 0;
-
-  return (
-    <div className="py-2 h-[60vh] flex flex-col">
-      <Tabs defaultValue="overview" className="w-full flex-1 flex flex-col">
-        <div className="flex items-center justify-between mb-4">
-          <TabsList>
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="processes">Processes</TabsTrigger>
-          </TabsList>
-        </div>
-
-        <TabsContent value="overview" className="flex-1 overflow-y-auto pr-2">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            {/* Basic Info & OS */}
-            <div className="space-y-6">
-              <section>
-                <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-4 flex items-center gap-2">
-                  <Server className="h-4 w-4" /> System Identity
-                </h3>
-                <div className="bg-secondary/20 rounded-xl p-5 border border-border/50 space-y-4">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-muted-foreground">Display Name</span>
-                    <span className="font-bold text-primary">{server.name || "None"}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-muted-foreground">Hostname</span>
-                    <span className="font-mono font-medium">{server.hostname}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-muted-foreground">IP Address</span>
-                    <span className="font-mono text-primary font-medium">{server.ipAddress || "-"}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-muted-foreground">Project</span>
-                    <div className="flex items-center gap-1.5 font-bold text-primary">
-                      <Folder className="h-3.5 w-3.5" />
-                      <span>{(server as any).project?.name || "None"}</span>
-                    </div>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-muted-foreground">Operating System</span>
-                    <span className="font-medium text-foreground">{server.os || "Unknown"}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-muted-foreground">OS Version</span>
-                    <span className="text-foreground">{server.osVersion || "N/A"}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-muted-foreground">SSH User</span>
-                    <span className="font-mono font-bold text-primary">{server.sshUser || "root"}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-muted-foreground">SSH Key/Identity</span>
-                    <span className="font-mono text-xs truncate max-w-[120px]">{server.sshKey || "None"}</span>
-                  </div>
-                </div>
-              </section>
-
-              <section>
-                <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-4 flex items-center gap-2">
-                  <Activity className="h-4 w-4" /> Connectivity
-                </h3>
-                <div className="bg-secondary/20 rounded-xl p-5 border border-border/50">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-muted-foreground">Last Communication</span>
-                    <span className="text-sm font-medium">
-                      {server.lastSeen ? format(new Date(server.lastSeen), "MMM d, yyyy HH:mm:ss") : "Never"}
-                    </span>
-                  </div>
-                </div>
-              </section>
-            </div>
-
-            {/* Hardware & Resources */}
-            <div className="space-y-6">
-              <section>
-                <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-4 flex items-center gap-2">
-                  <CircuitBoard className="h-4 w-4" /> Hardware Profile
-                </h3>
-                <div className="bg-secondary/20 rounded-xl p-5 border border-border/50 grid grid-cols-3 gap-4 text-center">
-                  <div>
-                    <p className="text-[10px] text-muted-foreground uppercase mb-1">Processors</p>
-                    <p className="text-xl font-bold">{server.cpuCores}</p>
-                    <p className="text-[10px] text-muted-foreground">vCPUs</p>
-                  </div>
-                  <div className="border-x border-border/50">
-                    <p className="text-[10px] text-muted-foreground uppercase mb-1">Memory</p>
-                    <p className="text-xl font-bold">{server.totalRam} GB</p>
-                    <p className="text-[10px] text-muted-foreground">RAM</p>
-                  </div>
-                  <div>
-                    <p className="text-[10px] text-muted-foreground uppercase mb-1">Storage</p>
-                    <p className="text-xl font-bold">{server.totalDisk} GB</p>
-                    <p className="text-[10px] text-muted-foreground">Disk</p>
-                  </div>
-                </div>
-              </section>
-
-              <section>
-                <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-4 flex items-center gap-2">
-                  <Cpu className="h-4 w-4" /> Current Utilization
-                </h3>
-                <div className="space-y-5 bg-secondary/10 rounded-xl p-5 border border-border/50">
-                  <UsageBar value={lastMetric?.cpuUsage || 0} label="CPU Load" />
-                  <UsageBar value={lastMetric?.memoryUsage || 0} label="RAM Consumption" />
-                  <UsageBar value={lastMetric?.diskUsage || 0} label="Disk Occupancy" />
-                </div>
-              </section>
-            </div>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="processes" className="flex-1 overflow-y-auto pr-2 mt-0">
-          {hasProcesses ? (
-            <section className="h-full flex flex-col">
-              <div className="bg-secondary/20 rounded-xl border border-border/50 overflow-hidden">
-                <Table>
-                  <TableHeader className="bg-muted/40 sticky top-0 z-10">
-                    <TableRow className="border-border/50 hover:bg-transparent">
-                      <TableHead className="h-10 text-[10px] uppercase font-bold text-muted-foreground pl-6">PID</TableHead>
-                      <TableHead className="h-10 text-[10px] uppercase font-bold text-muted-foreground w-full">Process Name</TableHead>
-                      <TableHead className="h-10 text-[10px] uppercase font-bold text-muted-foreground text-right">CPU %</TableHead>
-                      <TableHead className="h-10 text-[10px] uppercase font-bold text-muted-foreground text-right pr-6">Mem %</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {(lastMetric!.topProcesses as any[]).map((proc: any, idx: number) => (
-                      <TableRow key={idx} className="border-border/40 hover:bg-muted/20">
-                        <TableCell className="py-2.5 font-mono text-xs pl-6">{proc.pid}</TableCell>
-                        <TableCell className="py-2.5 font-medium text-sm">{proc.name}</TableCell>
-                        <TableCell className="py-2.5 text-right font-mono text-xs">{proc.cpu}%</TableCell>
-                        <TableCell className="py-2.5 text-right font-mono text-xs pr-6">{proc.memory}%</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            </section>
-          ) : (
-            <div className="h-full flex flex-col items-center justify-center text-muted-foreground p-8 border border-dashed rounded-xl border-border/50">
-              <Activity className="h-8 w-8 mb-2 opacity-50" />
-              <p>No process data available currently.</p>
-            </div>
-          )}
-        </TabsContent>
-      </Tabs>
-    </div>
-  );
-}

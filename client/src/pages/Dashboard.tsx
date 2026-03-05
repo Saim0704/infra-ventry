@@ -1,7 +1,7 @@
 import { useDashboardStats } from "@/hooks/use-dashboard";
 import { Shell } from "@/components/layout/Shell";
 import { MetricCard } from "@/components/ui/MetricCard";
-import { Server, Database, Cloud, AlertTriangle, Activity, Plus, Github, ArrowRight, Globe } from "lucide-react";
+import { Server, Database, Cloud, AlertTriangle, Activity, Plus, Github, ArrowRight, Globe, Zap } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Link } from "wouter";
@@ -45,7 +45,7 @@ export default function Dashboard() {
                 <MetricCard
                   title="Web Monitors"
                   value={stats?.totalWebMonitors || 0}
-                  icon={Globe}
+                  icon={Activity}
                   className="border-emerald-500/20"
                   description="Uptime monitoring"
                 />
@@ -72,7 +72,7 @@ export default function Dashboard() {
             <div className="flex items-center justify-between">
               <CardTitle className="flex items-center gap-3 text-xl font-bold">
                 <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary group-hover:scale-110 transition-transform">
-                  <Activity className="h-5 w-5" />
+                  <Zap className="h-5 w-5" />
                 </div>
                 System Status
               </CardTitle>
@@ -84,7 +84,7 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="h-[320px] flex flex-col items-center justify-center text-muted-foreground bg-secondary/10 rounded-2xl border border-dashed border-border/50 group-hover:bg-secondary/20 transition-colors">
-              <Activity className="h-12 w-12 mb-4 opacity-20" />
+              <Zap className="h-12 w-12 mb-4 opacity-20" />
               <p className="font-medium">Global infrastructure telemetry chart</p>
               <p className="text-xs opacity-50">Visualizing real-time resource utilization across all regions</p>
             </div>

@@ -91,6 +91,11 @@ export class WebMonitorService {
                 } else {
                     sslStatus = 'valid';
                 }
+
+                // Trigger SSL expiry alert
+                await storage.checkAndTriggerAlert(monitor.id, 'web', [
+                    { type: 'web_ssl', value: daysToExpiry, operator: '<=' },
+                ]);
             } catch (err) {
                 sslStatus = 'invalid';
             }

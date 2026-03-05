@@ -1,4 +1,4 @@
-import { useWebMonitors, useWebMonitor, useDeleteWebMonitor } from "@/hooks/use-web-monitors";
+import { useDomainMonitors, useDeleteDomainMonitor, useCreateDomainMonitor } from "@/hooks/use-domain-monitors";
 import { useProjects, useUpdateProject, useDeleteProject } from "@/hooks/use-projects";
 import { Shell } from "@/components/layout/Shell";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -6,22 +6,15 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { Activity, Clock, Shield, Search, Plus, Trash2, Edit2, Eye, Layout, ChevronRight, ChevronDown, Folder, ExternalLink, AlertTriangle, Server, Globe } from "lucide-react";
+import { Globe, Clock, Shield, Search, Plus, Trash2, Edit2, ChevronRight, ChevronDown, Folder, AlertTriangle } from "lucide-react";
 import { useState, Fragment } from "react";
-import { MonitorDetailView } from "@/components/MonitorDetailView";
-import { WebMonitorEditDialog } from "@/components/WebMonitorEditDialog";
-import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
 import { format, formatDistanceToNow } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { api } from "@shared/routes";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useForm } from "react-hook-form";
-import { z } from "zod";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { insertWebMonitorSchema } from "@shared/schema";
 import {
     AlertDialog,
     AlertDialogAction,
@@ -34,14 +27,9 @@ import {
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 
-type WebMonitorFormValues = z.infer<typeof insertWebMonitorSchema>;
-
-export default function WebMonitoringPage() {
-    const { data: monitors, isLoading } = useWebMonitors();
+export default function DomainMonitoringPage() {
+    const { data: monitors, isLoading } = useDomainMonitors();
     const { data: projects } = useProjects();
-    const [selectedMonitorId, setSelectedMonitorId] = useState<number | null>(null);
-    const [isDetailOpen, setIsDetailOpen] = useState(false);
-    const [editingMonitor, setEditingMonitor] = useState<any | null>(null);
     const [isCreatingMonitor, setIsCreatingMonitor] = useState(false);
     const [deletingMonitorId, setDeletingMonitorId] = useState<number | null>(null);
     const [searchTerm, setSearchTerm] = useState("");
@@ -52,7 +40,7 @@ export default function WebMonitoringPage() {
 
     const updateProject = useUpdateProject();
     const deleteProject = useDeleteProject();
-    const deleteWebMonitor = useDeleteWebMonitor();
+    const deleteDomainMonitor = useDeleteDomainMonitor();
     const { toast } = useToast();
     const queryClient = useQueryClient();
 
@@ -60,29 +48,11 @@ export default function WebMonitoringPage() {
         setExpandedProjects(prev => ({ ...prev, [name]: !prev[name] }));
     };
 
-    const deleteMutation = useMutation({
-        mutationFn: async (id: number) => {
-            const res = await fetch(api.webMonitors.delete.path.replace(":id", String(id)), {
-                method: "DELETE",
-            });
-            if (!res.ok) throw new Error("Failed to delete monitor");
-        },
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: [api.webMonitors.list.path] });
-            toast({ title: "Monitor deleted", description: "The web monitor has been removed." });
-            setDeletingMonitorId(null);
-        },
-        onError: () => {
-            toast({ title: "Error", description: "Failed to delete monitor", variant: "destructive" });
-        },
-    });
-
     const filteredMonitors = monitors?.filter(m =>
-        (m.name && m.name.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (m.url && m.url.toLowerCase().includes(searchTerm.toLowerCase()))
+        (m.domain && m.domain.toLowerCase().includes(searchTerm.toLowerCase()))
     );
 
-    const groupedMonitors = filteredMonitors?.reduce((acc, m) => {
+    const groupedMonitors = filteredMonitors?.reduce((acc, m: any) => {
         const project = m.project;
         const projectKey = project ? `project-${project.id}` : "uncategorized";
         if (!acc[projectKey]) {
@@ -95,38 +65,30 @@ export default function WebMonitoringPage() {
         return acc;
     }, {} as Record<string, { project: any, items: any[] }>);
 
-    const getStatusColor = (status: string | null) => {
-        switch (status) {
-            case 'up': return 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20';
-            case 'down': return 'text-destructive bg-destructive/10 border-destructive/20';
-            default: return 'text-muted-foreground bg-muted/10 border-muted/20';
-        }
-    };
-
     return (
         <Shell>
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-10 mt-2">
                 <div>
-                    <h1 className="text-4xl font-display font-black tracking-tight bg-gradient-to-br from-foreground to-foreground/50 bg-clip-text text-transparent italic">
-                        Web Monitors
+                    <h1 className="text-4xl font-display font-black tracking-tight bg-gradient-to-br from-indigo-400 to-indigo-600 bg-clip-text text-transparent italic">
+                        Domain Monitors
                     </h1>
-                    <p className="text-muted-foreground mt-2 text-sm font-medium tracking-wide">Uptime monitoring for your web services.</p>
+                    <p className="text-muted-foreground mt-2 text-sm font-medium tracking-wide">Expiration tracking for your domain names.</p>
                 </div>
                 <div className="flex items-center gap-4">
                     <div className="relative w-64">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                         <Input
-                            placeholder="Search monitors..."
-                            className="pl-9 h-11 bg-card/50 border-border/40 rounded-xl focus-visible:ring-primary/20 transition-all font-medium"
+                            placeholder="Search domains..."
+                            className="pl-9 h-11 bg-card/50 border-border/40 rounded-xl focus-visible:ring-indigo-500/20 transition-all font-medium"
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                         />
                     </div>
                     <Button
-                        className="h-11 px-6 bg-primary shadow-xl shadow-primary/20 hover:shadow-primary/40 transition-all duration-300 rounded-xl font-bold tracking-tight"
+                        className="h-11 px-6 bg-indigo-500 hover:bg-indigo-600 shadow-xl shadow-indigo-500/20 hover:shadow-indigo-500/40 transition-all duration-300 rounded-xl font-bold tracking-tight text-white"
                         onClick={() => setIsCreatingMonitor(true)}
                     >
-                        <Plus className="mr-2 h-4 w-4 stroke-[3px]" /> Add Monitor
+                        <Plus className="mr-2 h-4 w-4 stroke-[3px]" /> Add Domain
                     </Button>
                 </div>
             </div>
@@ -135,10 +97,10 @@ export default function WebMonitoringPage() {
                 <Table>
                     <TableHeader className="bg-muted/40 border-b border-border/40">
                         <TableRow className="hover:bg-transparent border-none">
-                            <TableHead className="py-6 text-[10px] uppercase tracking-[0.2em] font-black text-muted-foreground/60 pl-8">Monitor</TableHead>
+                            <TableHead className="py-6 text-[10px] uppercase tracking-[0.2em] font-black text-muted-foreground/60 pl-8">Domain</TableHead>
                             <TableHead className="py-6 text-[10px] uppercase tracking-[0.2em] font-black text-muted-foreground/60">Status</TableHead>
-                            <TableHead className="py-6 text-[10px] uppercase tracking-[0.2em] font-black text-muted-foreground/60">Response</TableHead>
-                            <TableHead className="py-6 text-[10px] uppercase tracking-[0.2em] font-black text-muted-foreground/60">SSL</TableHead>
+                            <TableHead className="py-6 text-[10px] uppercase tracking-[0.2em] font-black text-muted-foreground/60">Days Left</TableHead>
+                            <TableHead className="py-6 text-[10px] uppercase tracking-[0.2em] font-black text-muted-foreground/60">Expiry Date</TableHead>
                             <TableHead className="py-6 text-[10px] uppercase tracking-[0.2em] font-black text-muted-foreground/60">Last Check</TableHead>
                             <TableHead className="py-6 text-[10px] uppercase tracking-[0.2em] font-black text-muted-foreground/60 text-right pr-8">Actions</TableHead>
                         </TableRow>
@@ -148,19 +110,17 @@ export default function WebMonitoringPage() {
                             Array.from({ length: 5 }).map((_, i) => (
                                 <TableRow key={i}>
                                     <TableCell className="pl-8 py-4"><Skeleton className="h-5 w-32" /></TableCell>
-                                    <TableCell className="py-4"><Skeleton className="h-5 w-48" /></TableCell>
                                     <TableCell className="py-4"><Skeleton className="h-5 w-24" /></TableCell>
                                     <TableCell className="py-4"><Skeleton className="h-5 w-24" /></TableCell>
                                     <TableCell className="py-4"><Skeleton className="h-5 w-24" /></TableCell>
-                                    <TableCell className="py-4"><Skeleton className="h-5 w-24" /></TableCell>
-                                    <TableCell className="py-4"><Skeleton className="h-5 w-24" /></TableCell>
-                                    <TableCell className="pr-8 text-right"><Skeleton className="h-8 w-16 ml-auto" /></TableCell>
+                                    <TableCell className="py-4"><Skeleton className="h-5 w-32" /></TableCell>
+                                    <TableCell className="pr-8 text-right"><Skeleton className="h-8 w-8 ml-auto" /></TableCell>
                                 </TableRow>
                             ))
                         ) : Object.keys(groupedMonitors || {}).length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={8} className="h-32 text-center text-muted-foreground font-medium">
-                                    {searchTerm ? "No monitors match your search criteria." : "No web monitors active. Use 'Register Resource' to start monitoring."}
+                                <TableCell colSpan={6} className="h-32 text-center text-muted-foreground font-medium">
+                                    {searchTerm ? "No domains match your search criteria." : "No domain monitors active. Add a domain to start tracking expiration."}
                                 </TableCell>
                             </TableRow>
                         ) : (
@@ -171,14 +131,14 @@ export default function WebMonitoringPage() {
                                 return (
                                     <Fragment key={projectKey}>
                                         <TableRow className="bg-muted/10 hover:bg-muted/20 group/header transition-colors">
-                                            <TableCell colSpan={8} className="py-3 px-6">
+                                            <TableCell colSpan={6} className="py-3 px-6">
                                                 <div className="flex items-center justify-between">
                                                     <div className="flex items-center gap-2 cursor-pointer flex-1" onClick={() => toggleProject(projectKey)}>
                                                         {isExpanded ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
-                                                        <Activity className="h-4 w-4 text-purple-500/60" />
+                                                        <Globe className="h-4 w-4 text-indigo-500/60" />
                                                         <span className="text-sm font-bold tracking-tight text-foreground/70 uppercase">{projectName}</span>
-                                                        <span className="text-[10px] font-medium bg-purple-500/10 text-purple-500 px-2 py-0.5 rounded-full ml-2">
-                                                            {projectMonitors.length} {projectMonitors.length === 1 ? 'Monitor' : 'Monitors'}
+                                                        <span className="text-[10px] font-medium bg-indigo-500/10 text-indigo-500 px-2 py-0.5 rounded-full ml-2">
+                                                            {projectMonitors.length} {projectMonitors.length === 1 ? 'Domain' : 'Domains'}
                                                         </span>
                                                     </div>
                                                     {project.id && (
@@ -207,7 +167,7 @@ export default function WebMonitoringPage() {
                                                                             onSuccess: () => {
                                                                                 toast({ title: "Project deleted successfully" });
                                                                                 queryClient.invalidateQueries({ queryKey: [api.projects.list.path] });
-                                                                                queryClient.invalidateQueries({ queryKey: [api.webMonitors.list.path] });
+                                                                                queryClient.invalidateQueries({ queryKey: [api.domainMonitors.list.path] });
                                                                             }
                                                                         });
                                                                     }
@@ -220,55 +180,46 @@ export default function WebMonitoringPage() {
                                                 </div>
                                             </TableCell>
                                         </TableRow>
-                                        {isExpanded && projectMonitors.map((m) => {
-                                            const lastMetric = m.metrics?.[0];
+                                        {isExpanded && projectMonitors.map((m: any) => {
+                                            const now = new Date();
+                                            const expiry = m.expiryDate ? new Date(m.expiryDate) : null;
+                                            const daysLeft = expiry ? Math.ceil((expiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)) : null;
+
                                             return (
                                                 <TableRow key={m.id} className="group hover:bg-muted/20 border-b border-border/40 transition-colors">
                                                     <TableCell className="pl-8 py-4">
-                                                        <div className="flex items-center gap-3 cursor-pointer group/name" onClick={() => { setSelectedMonitorId(m.id); setIsDetailOpen(true); }}>
-                                                            <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary group-hover/name:scale-110 transition-transform duration-300">
-                                                                <Activity className="h-4 w-4" />
+                                                        <div className="flex items-center gap-3 group/name">
+                                                            <div className="h-8 w-8 rounded-lg bg-indigo-500/10 flex items-center justify-center text-indigo-500 group-hover/name:scale-110 transition-transform duration-300">
+                                                                <Globe className="h-4 w-4" />
                                                             </div>
-                                                            <div className="flex flex-col">
-                                                                <span className="font-bold text-sm tracking-tight group-hover/name:text-primary transition-colors">{m.name}</span>
-                                                                <span className="text-[10px] text-muted-foreground truncate max-w-[200px]">{m.url}</span>
-                                                            </div>
+                                                            <span className="font-bold text-sm tracking-tight group-hover/name:text-indigo-500 transition-colors">{m.domain}</span>
                                                         </div>
                                                     </TableCell>
                                                     <TableCell className="py-4">
-                                                        <div className={cn("inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border uppercase tracking-wider", getStatusColor(m.lastStatus))}>
-                                                            {m.lastStatus || 'pending'}
+                                                        <div className={cn(
+                                                            "inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border uppercase tracking-wider",
+                                                            m.status === 'active' ? "text-emerald-500 bg-emerald-500/10 border-emerald-500/20" :
+                                                                m.status === 'error' ? "text-destructive bg-destructive/10 border-destructive/20" :
+                                                                    "text-amber-500 bg-amber-500/10 border-amber-500/20"
+                                                        )}>
+                                                            {m.status || 'pending'}
                                                         </div>
                                                     </TableCell>
-                                                    <TableCell className="py-4">
-                                                        <div className="flex items-center gap-2">
-                                                            <Clock className="h-3 w-3 text-muted-foreground" />
-                                                            <span className="text-xs font-medium">{lastMetric?.responseTime ?? 0}ms</span>
-                                                        </div>
-                                                    </TableCell>
-                                                    <TableCell className="py-4">
-                                                        <div className="flex items-center gap-2">
-                                                            <Shield className={cn("h-3 w-3", m.sslStatus === 'valid' ? 'text-emerald-500' : 'text-amber-500')} />
-                                                            <span className="text-xs font-medium">
-                                                                {m.sslExpiryDate ? formatDistanceToNow(new Date(m.sslExpiryDate), { addSuffix: true }) : 'N/A'}
+                                                    <TableCell className="py-4 font-bold text-sm">
+                                                        {daysLeft !== null ? (
+                                                            <span className={cn(daysLeft <= 30 ? "text-destructive" : daysLeft <= 60 ? "text-amber-500" : "text-emerald-500")}>
+                                                                {daysLeft} days
                                                             </span>
-                                                        </div>
+                                                        ) : "Checking..."}
                                                     </TableCell>
-                                                    <TableCell className="py-4">
-                                                        <span className="text-xs font-bold text-foreground/80">
-                                                            {m.lastCheck ? formatDistanceToNow(new Date(m.lastCheck), { addSuffix: true }) : "Never"}
-                                                        </span>
+                                                    <TableCell className="py-4 text-xs font-medium text-muted-foreground">
+                                                        {expiry ? format(expiry, "MMM dd, yyyy") : "Pending"}
+                                                    </TableCell>
+                                                    <TableCell className="py-4 text-xs font-medium text-muted-foreground">
+                                                        {m.lastCheck ? formatDistanceToNow(new Date(m.lastCheck), { addSuffix: true }) : "Never"}
                                                     </TableCell>
                                                     <TableCell className="py-4 text-right pr-6">
                                                         <div className="flex justify-end gap-1">
-                                                            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-primary/20 hover:text-primary transition-colors" onClick={() => { setSelectedMonitorId(m.id); setIsDetailOpen(true); }}>
-                                                                <Eye className="h-4 w-4" />
-                                                            </Button>
-
-                                                            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-accent/20 hover:text-accent transition-colors" onClick={() => setEditingMonitor(m)}>
-                                                                <Edit2 className="h-4 w-4" />
-                                                            </Button>
-
                                                             <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-destructive/20 hover:text-destructive transition-colors" onClick={() => setDeletingMonitorId(m.id)}>
                                                                 <Trash2 className="h-4 w-4" />
                                                             </Button>
@@ -285,52 +236,37 @@ export default function WebMonitoringPage() {
                 </Table>
             </div>
 
-            <WebMonitorEditDialog
-                open={!!editingMonitor}
-                onOpenChange={(open) => !open && setEditingMonitor(null)}
-                monitor={editingMonitor}
-            />
-
-            <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
-                <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto bg-background/95 backdrop-blur-md border-border/50 shadow-2xl rounded-3xl">
-                    <DialogHeader>
-                        <DialogTitle className="text-2xl font-display flex items-center gap-2">
-                            <Activity className="h-6 w-6 text-primary" />
-                            Monitor Uptime
-                        </DialogTitle>
-                    </DialogHeader>
-                    {selectedMonitorId && <MonitorDetailView id={selectedMonitorId} />}
-                </DialogContent>
-            </Dialog>
-
             <Dialog open={isCreatingMonitor} onOpenChange={setIsCreatingMonitor}>
-                <DialogContent className="sm:max-w-[500px] rounded-3xl border-border/50 shadow-2xl">
+                <DialogContent className="sm:max-w-[500px] rounded-3xl border-border/50 shadow-2xl bg-background/95 backdrop-blur-md">
                     <DialogHeader>
-                        <DialogTitle className="text-2xl font-display italic font-black">Add Monitor</DialogTitle>
-                        <DialogDescription>Setup a new periodic health check for a URL.</DialogDescription>
+                        <DialogTitle className="text-2xl font-display italic font-black text-indigo-500">Add Domain</DialogTitle>
+                        <DialogDescription>Setup tracking for a new domain name expiration.</DialogDescription>
                     </DialogHeader>
-                    <WebMonitorForm projects={projects || []} onClose={() => setIsCreatingMonitor(false)} />
+                    <DomainMonitorForm projects={projects || []} onClose={() => setIsCreatingMonitor(false)} />
                 </DialogContent>
             </Dialog>
 
             <AlertDialog open={!!deletingMonitorId} onOpenChange={(open) => !open && setDeletingMonitorId(null)}>
-                <AlertDialogContent className="rounded-2xl">
+                <AlertDialogContent className="rounded-2xl bg-background/95 backdrop-blur-md border border-border/50">
                     <AlertDialogHeader>
                         <AlertDialogTitle className="flex items-center gap-2 text-destructive">
-                            <AlertTriangle className="h-5 w-5" /> Delete Monitor
+                            <AlertTriangle className="h-5 w-5" /> Delete Domain Monitor
                         </AlertDialogTitle>
                         <AlertDialogDescription>
-                            Stop monitoring this URL? This will permanently delete all uptime metrics.
+                            Stop tracking this domain name? This will permanently delete the domain history.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                         <AlertDialogCancel className="rounded-xl">Cancel</AlertDialogCancel>
-                        <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90 rounded-xl" onClick={() => deletingMonitorId && deleteMutation.mutate(deletingMonitorId)}>
+                        <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90 rounded-xl" onClick={() => deletingMonitorId && deleteDomainMonitor.mutate(deletingMonitorId, {
+                            onSuccess: () => setDeletingMonitorId(null)
+                        })}>
                             Delete
                         </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
+
             {/* Project Management Dialogs */}
             <Dialog open={isProjectFormOpen} onOpenChange={(open) => { setIsProjectFormOpen(open); if (!open) setEditingProject(null); }}>
                 <DialogContent className="sm:max-w-[425px] bg-background/95 backdrop-blur-md border-border/50 shadow-2xl">
@@ -376,7 +312,7 @@ export default function WebMonitoringPage() {
                                         toast({ title: "Project updated successfully" });
                                     }
                                     queryClient.invalidateQueries({ queryKey: [api.projects.list.path] });
-                                    queryClient.invalidateQueries({ queryKey: [api.webMonitors.list.path] });
+                                    queryClient.invalidateQueries({ queryKey: [api.domainMonitors.list.path] });
                                     setIsProjectFormOpen(false);
                                     setEditingProject(null);
                                     setNewProject({ name: "", description: "" });
@@ -397,91 +333,63 @@ export default function WebMonitoringPage() {
     );
 }
 
-export function WebMonitorForm({ monitor, projects, onClose }: { monitor?: any, projects: any[], onClose: () => void }) {
+function DomainMonitorForm({ projects, onClose }: { projects: any[], onClose: () => void }) {
     const { toast } = useToast();
-    const queryClient = useQueryClient();
+    const createDomainMonitor = useCreateDomainMonitor();
+    const [domain, setDomain] = useState("");
+    const [projectId, setProjectId] = useState<string>("none");
 
-    const form = useForm<WebMonitorFormValues>({
-        resolver: zodResolver(insertWebMonitorSchema),
-        defaultValues: {
-            name: monitor?.name || "",
-            url: monitor?.url || "https://",
-            method: monitor?.method || "GET",
-            expectedStatus: monitor?.expectedStatus || 200,
-            healthCheckString: monitor?.healthCheckString || "",
-            followRedirects: monitor?.followRedirects ?? true,
-            timeout: monitor?.timeout || 10000,
-            sslExpiryThreshold: monitor?.sslExpiryThreshold || 7,
-            projectId: monitor?.projectId || null,
-        },
-    });
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
 
-    const mutation = useMutation({
-        mutationFn: async (data: WebMonitorFormValues) => {
-            const isUpdate = !!monitor;
-            const url = isUpdate ? api.webMonitors.update.path.replace(":id", String(monitor.id)) : api.webMonitors.create.path;
-            const method = isUpdate ? "PATCH" : "POST";
+        if (!domain) {
+            toast({ title: "Please enter a domain name", variant: "destructive" });
+            return;
+        }
 
-            const res = await fetch(url, {
-                method,
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(data),
+        let formattedDomain = domain.trim().toLowerCase();
+
+        if (formattedDomain.startsWith('http://')) {
+            formattedDomain = formattedDomain.substring(7);
+        } else if (formattedDomain.startsWith('https://')) {
+            formattedDomain = formattedDomain.substring(8);
+        }
+
+        formattedDomain = formattedDomain.split('/')[0];
+
+        try {
+            await createDomainMonitor.mutateAsync({
+                projectId: projectId === "none" ? null : Number(projectId),
+                domain: formattedDomain
             });
-            if (!res.ok) throw new Error("Failed to save monitor");
-            return res.json();
-        },
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: [api.webMonitors.list.path] });
-            toast({ title: monitor ? "Monitor updated" : "Monitor created", description: "Monitoring configuration saved." });
+
+            toast({ title: "Domain monitor added successfully" });
+            setDomain("");
+            setProjectId("none");
             onClose();
-        },
-        onError: (err: any) => {
-            toast({ title: "Error", description: err.message, variant: "destructive" });
-        },
-    });
+        } catch (error) {
+            toast({ title: "Failed to add domain monitor", variant: "destructive" });
+        }
+    };
 
     return (
-        <form onSubmit={form.handleSubmit((data) => mutation.mutate(data))} className="space-y-5 py-4">
+        <form onSubmit={handleSubmit} className="space-y-5 py-4">
             <div className="grid gap-2">
-                <Label htmlFor="name">Friendly Name</Label>
-                <Input id="name" placeholder="e.g. My Website" {...form.register("name")} className="rounded-xl h-11" />
-                {form.formState.errors.name && <span className="text-[10px] text-destructive font-bold uppercase">{form.formState.errors.name.message}</span>}
+                <Label htmlFor="domain">Domain Name</Label>
+                <Input
+                    id="domain"
+                    placeholder="e.g. example.com"
+                    value={domain}
+                    onChange={(e) => setDomain(e.target.value)}
+                    className="rounded-xl h-11"
+                />
             </div>
 
             <div className="grid gap-2">
-                <Label htmlFor="url">URL to Monitor</Label>
-                <Input id="url" placeholder="https://example.com" {...form.register("url")} className="rounded-xl h-11" />
-                {form.formState.errors.url && <span className="text-[10px] text-destructive font-bold uppercase">{form.formState.errors.url.message}</span>}
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-                <div className="grid gap-2">
-                    <Label htmlFor="method">Method</Label>
-                    <Select onValueChange={(val) => form.setValue("method", val)} defaultValue={form.getValues("method")}>
-                        <SelectTrigger className="rounded-xl h-11"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="GET">GET</SelectItem>
-                            <SelectItem value="POST">POST</SelectItem>
-                            <SelectItem value="HEAD">HEAD</SelectItem>
-                        </SelectContent>
-                    </Select>
-                </div>
-                <div className="grid gap-2">
-                    <Label htmlFor="expectedStatus">Expected Status</Label>
-                    <Input id="expectedStatus" type="number" {...form.register("expectedStatus", { valueAsNumber: true })} className="rounded-xl h-11" />
-                </div>
-            </div>
-
-            <div className="grid gap-2">
-                <Label htmlFor="healthCheckString">Keyword Match (Optional)</Label>
-                <Input id="healthCheckString" placeholder="e.g. Welcome to my site" {...form.register("healthCheckString")} className="rounded-xl h-11" />
-            </div>
-
-            <div className="grid gap-2">
-                <Label htmlFor="project">Assign to Project</Label>
+                <Label htmlFor="project">Assign to Project (Optional)</Label>
                 <Select
-                    onValueChange={(val) => form.setValue("projectId", val === "none" ? null : Number(val))}
-                    defaultValue={form.getValues("projectId") ? String(form.getValues("projectId")) : "none"}
+                    onValueChange={(val) => setProjectId(val)}
+                    value={projectId}
                 >
                     <SelectTrigger className="rounded-xl h-11">
                         <SelectValue placeholder="Select project" />
@@ -497,11 +405,10 @@ export function WebMonitorForm({ monitor, projects, onClose }: { monitor?: any, 
 
             <DialogFooter className="pt-4">
                 <Button type="button" variant="ghost" onClick={onClose} className="rounded-xl h-11 px-6">Cancel</Button>
-                <Button type="submit" disabled={mutation.isPending} className="rounded-xl h-11 px-8 shadow-lg shadow-primary/20">
-                    {mutation.isPending ? "Saving..." : monitor ? "Update Monitor" : "Create Monitor"}
+                <Button type="submit" disabled={createDomainMonitor.isPending || !domain} className="rounded-xl h-11 px-8 bg-indigo-500 hover:bg-indigo-600 text-white shadow-lg shadow-indigo-500/20">
+                    {createDomainMonitor.isPending ? "Adding..." : "Add Domain"}
                 </Button>
             </DialogFooter>
         </form>
     );
 }
-

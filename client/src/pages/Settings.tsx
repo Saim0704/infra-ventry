@@ -77,7 +77,7 @@ export default function SettingsPage() {
                       className="w-full justify-start gap-3 px-4 py-3 h-auto data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-xl transition-all duration-200 border border-transparent data-[state=active]:border-primary/20"
                     >
                       <Mail className="h-4 w-4" />
-                      <span className="font-medium">SMTP & Alerts</span>
+                      <span className="font-medium">Default SMTP Configuration</span>
                     </TabsTrigger>
                     <TabsTrigger
                       value="history"
@@ -795,6 +795,7 @@ function SmtpSettingsSection() {
       user: "",
       pass: "",
       fromEmail: "",
+      senderName: "",
     }
   });
 
@@ -821,8 +822,8 @@ function SmtpSettingsSection() {
                   <Mail className="h-5 w-5 text-primary" />
                 </div>
                 <div>
-                  <CardTitle className="text-xl font-bold">SMTP Configuration</CardTitle>
-                  <CardDescription>Configure your email server for sending alerts.</CardDescription>
+                  <CardTitle className="text-xl font-bold">Global SMTP Configuration</CardTitle>
+                  <CardDescription>Configure the default email server used when project-specific SMTP is not set.</CardDescription>
                 </div>
               </div>
             </CardHeader>
@@ -890,7 +891,20 @@ function SmtpSettingsSection() {
                       <FormControl>
                         <Input placeholder="alerts@infrawatch.com" className="h-11 bg-muted/20 border-border/40 rounded-xl" {...field} />
                       </FormControl>
-                      <FormDescription className="text-[10px]">This is the email address that will appear in the FROM field.</FormDescription>
+                      <FormDescription className="text-[10px]">Email address that will appear in the FROM field.</FormDescription>
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="senderName"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-[10px] font-bold uppercase tracking-widest text-foreground/70">Sender Name</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Infrastructure Monitor" className="h-11 bg-muted/20 border-border/40 rounded-xl" {...field} />
+                      </FormControl>
+                      <FormDescription className="text-[10px]">The display name shown to recipients (e.g. "Acme Corp Alerts").</FormDescription>
                     </FormItem>
                   )}
                 />
