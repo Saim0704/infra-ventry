@@ -44,6 +44,7 @@ export function useDeleteDatabase() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [api.databases.list.path] });
+      queryClient.invalidateQueries({ queryKey: [api.projects.resources.path] });
     },
   });
 }

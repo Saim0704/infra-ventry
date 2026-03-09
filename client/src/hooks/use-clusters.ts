@@ -44,6 +44,7 @@ export function useDeleteCluster() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [api.clusters.list.path] });
+      queryClient.invalidateQueries({ queryKey: [api.projects.resources.path] });
     },
   });
 }

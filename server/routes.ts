@@ -66,13 +66,8 @@ export async function registerRoutes(
 
       // Look up the token to get its project association
       const tokenData = await storage.getTokenByString(input.token);
-      console.log(`[DEBUG] VM Ingestion - Token: ${input.token.substring(0, 10)}...`);
-      console.log(`[DEBUG] Token Data found:`, tokenData ? `Yes (ID: ${tokenData.id})` : "No");
-
+      // Process metrics
       const projectId = tokenData?.projectId || null;
-      console.log(`[DEBUG] Associated Project ID:`, projectId);
-      console.log(`[DEBUG] Metrics received:`, JSON.stringify(metrics));
-      console.log(`[DEBUG] Top Processes:`, metrics.topProcesses);
 
       // Upsert server with project association
       const server = await storage.upsertServer({ ...serverInfo, projectId });
@@ -165,19 +160,25 @@ export async function registerRoutes(
   });
 
   app.patch(api.projects.update.path, isAuthenticated, async (req, res) => {
+    const id = Number(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ message: "Invalid project ID" });
     const input = api.projects.update.input.parse(req.body);
-    const project = await storage.updateProject(Number(req.params.id), input);
+    const project = await storage.updateProject(id, input);
     if (!project) return res.status(404).json({ message: "Project not found" });
     res.json(project);
   });
 
   app.delete(api.projects.delete.path, isAuthenticated, async (req, res) => {
-    await storage.deleteProject(Number(req.params.id));
+    const id = Number(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ message: "Invalid project ID" });
+    await storage.deleteProject(id);
     res.status(204).send();
   });
 
   app.get(api.projects.resources.path, isAuthenticated, async (req, res) => {
-    const resources = await storage.getProjectResources(Number(req.params.id));
+    const id = Number(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ message: "Invalid project ID" });
+    const resources = await storage.getProjectResources(id);
     if (!resources) return res.status(404).json({ message: "Project not found" });
     res.json(resources);
   });
@@ -291,7 +292,9 @@ export async function registerRoutes(
   });
 
   app.get(api.webMonitors.get.path, isAuthenticated, async (req, res) => {
-    const monitor = await storage.getWebMonitor(Number(req.params.id));
+    const id = Number(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ message: "Invalid monitor ID" });
+    const monitor = await storage.getWebMonitor(id);
     if (!monitor) return res.status(404).json({ message: "Monitor not found" });
     res.json(monitor);
   });
@@ -309,8 +312,10 @@ export async function registerRoutes(
 
   app.patch(api.webMonitors.update.path, isAuthenticated, async (req, res) => {
     try {
+      const id = Number(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ message: "Invalid monitor ID" });
       const input = api.webMonitors.update.input.parse(req.body);
-      const monitor = await storage.updateWebMonitor(Number(req.params.id), input);
+      const monitor = await storage.updateWebMonitor(id, input);
       if (!monitor) return res.status(404).json({ message: "Monitor not found" });
       res.json(monitor);
     } catch (err) {
@@ -320,7 +325,9 @@ export async function registerRoutes(
   });
 
   app.delete(api.webMonitors.delete.path, isAuthenticated, async (req, res) => {
-    await storage.deleteWebMonitor(Number(req.params.id));
+    const id = Number(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ message: "Invalid monitor ID" });
+    await storage.deleteWebMonitor(id);
     res.status(204).send();
   });
 
@@ -331,7 +338,9 @@ export async function registerRoutes(
   });
 
   app.get(api.domainMonitors.get.path, isAuthenticated, async (req, res) => {
-    const monitor = await storage.getDomainMonitor(Number(req.params.id));
+    const id = Number(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ message: "Invalid domain monitor ID" });
+    const monitor = await storage.getDomainMonitor(id);
     if (!monitor) return res.status(404).json({ message: "Domain monitor not found" });
     res.json(monitor);
   });
@@ -352,7 +361,9 @@ export async function registerRoutes(
   });
 
   app.delete(api.domainMonitors.delete.path, isAuthenticated, async (req, res) => {
-    await storage.deleteDomainMonitor(Number(req.params.id));
+    const id = Number(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ message: "Invalid domain monitor ID" });
+    await storage.deleteDomainMonitor(id);
     res.status(204).send();
   });
 
@@ -360,13 +371,10 @@ export async function registerRoutes(
   app.post(api.servers.create.path, isAuthenticated, async (req, res) => {
     try {
       const input = api.servers.create.input.parse(req.body);
-      console.log("Creating server with input:", JSON.stringify(input));
       const { cpuUsage, memoryUsage, diskUsage, ...serverData } = input;
       const server = await storage.upsertServer(serverData);
-      console.log("Server created/upserted:", server.id);
 
       if (cpuUsage !== undefined || memoryUsage !== undefined || diskUsage !== undefined) {
-        console.log("Adding initial metrics:", { cpuUsage, memoryUsage, diskUsage });
         await storage.addServerMetric({
           serverId: server.id,
           cpuUsage: cpuUsage ?? 0,
@@ -386,18 +394,14 @@ export async function registerRoutes(
     try {
       const id = Number(req.params.id);
       const input = api.servers.update.input.parse(req.body);
-      console.log(`Updating server ${id} with input:`, JSON.stringify(input));
       const { cpuUsage, memoryUsage, diskUsage, ...serverData } = input;
 
       const server = await storage.updateServer(id, serverData);
       if (!server) {
-        console.log(`Server ${id} not found for update`);
         return res.status(404).json({ message: "Server not found" });
       }
-      console.log(`Server ${id} updated successfully`);
 
       if (cpuUsage !== undefined || memoryUsage !== undefined || diskUsage !== undefined) {
-        console.log(`Adding updated metrics for server ${id}:`, { cpuUsage, memoryUsage, diskUsage });
         await storage.addServerMetric({
           serverId: server.id,
           cpuUsage: cpuUsage ?? 0,

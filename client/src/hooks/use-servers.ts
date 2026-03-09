@@ -1,4 +1,4 @@
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, buildUrl } from "@shared/routes";
 import { z } from "zod";
 
@@ -34,6 +34,7 @@ export function useServer(id: number | null) {
 }
 
 export function useCreateServer() {
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (data: z.infer<typeof api.servers.create.input>) => {
       const res = await fetch(api.servers.create.path, {
@@ -45,10 +46,17 @@ export function useCreateServer() {
       if (!res.ok) throw new Error("Failed to create server");
       return api.servers.create.responses[201].parse(await res.json());
     },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: [api.servers.list.path] });
+      if (data.projectId) {
+        queryClient.invalidateQueries({ queryKey: [api.projects.resources.path, data.projectId] });
+      }
+    },
   });
 }
 
 export function useUpdateServer() {
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, data }: { id: number; data: z.infer<typeof api.servers.update.input> }) => {
       const url = buildUrl(api.servers.update.path, { id });
@@ -61,10 +69,18 @@ export function useUpdateServer() {
       if (!res.ok) throw new Error("Failed to update server");
       return api.servers.update.responses[200].parse(await res.json());
     },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: [api.servers.list.path] });
+      queryClient.invalidateQueries({ queryKey: [api.servers.get.path, data.id] });
+      if (data.projectId) {
+        queryClient.invalidateQueries({ queryKey: [api.projects.resources.path, data.projectId] });
+      }
+    },
   });
 }
 
 export function useDeleteServer() {
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (id: number) => {
       const url = buildUrl(api.servers.delete.path, { id });
@@ -73,6 +89,10 @@ export function useDeleteServer() {
         credentials: "include",
       });
       if (!res.ok) throw new Error("Failed to delete server");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [api.servers.list.path] });
+      queryClient.invalidateQueries({ queryKey: [api.projects.resources.path] });
     },
   });
 }

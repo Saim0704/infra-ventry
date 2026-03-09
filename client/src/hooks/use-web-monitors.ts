@@ -44,6 +44,7 @@ export function useDeleteWebMonitor() {
         },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: [api.webMonitors.list.path] });
+            queryClient.invalidateQueries({ queryKey: [api.projects.resources.path] });
         },
     });
 }

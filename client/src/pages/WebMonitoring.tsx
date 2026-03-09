@@ -418,7 +418,7 @@ export function WebMonitorForm({ monitor, projects, onClose }: { monitor?: any, 
 
     const mutation = useMutation({
         mutationFn: async (data: WebMonitorFormValues) => {
-            const isUpdate = !!monitor;
+            const isUpdate = !!(monitor && monitor.id);
             const url = isUpdate ? api.webMonitors.update.path.replace(":id", String(monitor.id)) : api.webMonitors.create.path;
             const method = isUpdate ? "PATCH" : "POST";
 
@@ -430,8 +430,13 @@ export function WebMonitorForm({ monitor, projects, onClose }: { monitor?: any, 
             if (!res.ok) throw new Error("Failed to save monitor");
             return res.json();
         },
-        onSuccess: () => {
+        onSuccess: (data) => {
             queryClient.invalidateQueries({ queryKey: [api.webMonitors.list.path] });
+            if (data.projectId) {
+                queryClient.invalidateQueries({ queryKey: [api.projects.resources.path, data.projectId] });
+            } else {
+                queryClient.invalidateQueries({ queryKey: [api.projects.resources.path] });
+            }
             toast({ title: monitor ? "Monitor updated" : "Monitor created", description: "Monitoring configuration saved." });
             onClose();
         },

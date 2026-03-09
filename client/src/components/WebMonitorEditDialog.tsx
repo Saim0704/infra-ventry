@@ -66,9 +66,13 @@ export function WebMonitorEditDialog({ open, onOpenChange, monitor }: WebMonitor
             if (!res.ok) throw new Error("Failed to update monitor");
             return res.json();
         },
-        onSuccess: () => {
+        onSuccess: (data) => {
             queryClient.invalidateQueries({ queryKey: [api.webMonitors.list.path] });
-            queryClient.invalidateQueries({ queryKey: [api.projects.resources.path.replace(":id", String(monitor.projectId))] });
+            if (data.projectId) {
+                queryClient.invalidateQueries({ queryKey: [api.projects.resources.path, data.projectId] });
+            } else {
+                queryClient.invalidateQueries({ queryKey: [api.projects.resources.path] });
+            }
             toast({ title: "Monitor updated", description: "Monitoring configuration saved." });
             onOpenChange(false);
         },

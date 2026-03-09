@@ -14,7 +14,7 @@ services:
   db:
     image: postgres:15
     ports:
-      - "5432:5432" # host:container
+      - "5433:5432" # host:container
     environment:
       - POSTGRES_USER=user
       - POSTGRES_PASSWORD=password

@@ -1,4 +1,4 @@
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, buildUrl } from "@shared/routes";
 import { z } from "zod";
 
@@ -16,6 +16,7 @@ export function useProjects() {
 }
 
 export function useCreateProject() {
+    const queryClient = useQueryClient();
     return useMutation({
         mutationFn: async (data: z.infer<typeof api.projects.create.input>) => {
             const res = await fetch(api.projects.create.path, {
@@ -27,10 +28,14 @@ export function useCreateProject() {
             if (!res.ok) throw new Error("Failed to create project");
             return api.projects.create.responses[201].parse(await res.json());
         },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: [api.projects.list.path] });
+        },
     });
 }
 
 export function useDeleteProject() {
+    const queryClient = useQueryClient();
     return useMutation({
         mutationFn: async (id: number) => {
             const url = buildUrl(api.projects.delete.path, { id });
@@ -40,10 +45,14 @@ export function useDeleteProject() {
             });
             if (!res.ok) throw new Error("Failed to delete project");
         },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: [api.projects.list.path] });
+        },
     });
 }
 
 export function useUpdateProject() {
+    const queryClient = useQueryClient();
     return useMutation({
         mutationFn: async ({ id, data }: { id: number, data: Partial<z.infer<typeof api.projects.create.input>> }) => {
             const url = buildUrl(api.projects.update.path, { id });
@@ -55,6 +64,10 @@ export function useUpdateProject() {
             });
             if (!res.ok) throw new Error("Failed to update project");
             return api.projects.update.responses[200].parse(await res.json());
+        },
+        onSuccess: (data) => {
+            queryClient.invalidateQueries({ queryKey: [api.projects.list.path] });
+            queryClient.invalidateQueries({ queryKey: [api.projects.resources.path, data.id] });
         },
     });
 }
