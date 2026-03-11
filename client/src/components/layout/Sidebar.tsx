@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { LayoutDashboard, Server, Database, Cloud, Globe, Settings, LogOut, Terminal, Folder, Activity } from "lucide-react";
+import { LayoutDashboard, Server, Database, Cloud, Globe, Settings, LogOut, Terminal, Folder, Activity, Shield } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
 
@@ -15,6 +15,7 @@ export function Sidebar() {
     { href: "/servers", label: "Servers", icon: Server },
     { href: "/databases", label: "Databases", icon: Database },
     { href: "/clusters", label: "Kubernetes", icon: Cloud },
+    { href: "/service-audit", label: "Service Audit", icon: Shield },
     { href: "/web-monitoring", label: "Web Monitoring", icon: Activity },
     { href: "/domain-monitoring", label: "Domain Monitoring", icon: Globe },
   ];

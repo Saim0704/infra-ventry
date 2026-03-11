@@ -55,7 +55,6 @@ export default function ServersPage() {
   const [editingProject, setEditingProject] = useState<any>(null);
   const [newProject, setNewProject] = useState({ name: "", description: "" });
   const [expandedProjects, setExpandedProjects] = useState<Record<string, boolean>>({});
-
   const updateProject = useUpdateProject();
   const deleteProject = useDeleteProject();
 
@@ -403,6 +402,7 @@ export default function ServersPage() {
       </div>
 
       {/* Detail Dialog */}
+
       <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto bg-background/95 backdrop-blur-md border-border/50 shadow-2xl">
           <DialogHeader>

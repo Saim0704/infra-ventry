@@ -16,7 +16,7 @@ import WebMonitoringPage from "@/pages/WebMonitoring";
 import DomainMonitoringPage from "@/pages/DomainMonitoring";
 import StatusPage from "@/pages/StatusPage";
 import LoginPage from "@/pages/Login";
-import { Loader2 } from "lucide-react";
+import ServiceAuditPage from "@/pages/ServiceAudit";
 
 function Router() {
   useRealtime();
@@ -41,6 +41,7 @@ function Router() {
           <Route path="/servers" component={ServersPage} />
           <Route path="/databases" component={DatabasesPage} />
           <Route path="/clusters" component={ClustersPage} />
+          <Route path="/service-audit" component={ServiceAuditPage} />
           <Route path="/web-monitoring" component={WebMonitoringPage} />
           <Route path="/domain-monitoring" component={DomainMonitoringPage} />
           <Route path="/settings" component={SettingsPage} />
@@ -55,6 +56,7 @@ function Router() {
 
 import { ThemeProvider } from "./hooks/use-theme";
 import { useRealtime } from "./hooks/use-realtime";
+import { Loader2 } from "lucide-react";
 
 function App() {
   return (
