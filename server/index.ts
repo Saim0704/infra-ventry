@@ -3,9 +3,13 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
+import { setupRealtime } from "./lib/realtime";
 
 const app = express();
 const httpServer = createServer(app);
+
+// Initialize real-time updates
+setupRealtime(httpServer);
 
 declare module "http" {
   interface IncomingMessage {
@@ -23,16 +27,9 @@ app.use(
 
 app.use(express.urlencoded({ extended: false }));
 
-export function log(message: string, source = "express") {
-  const formattedTime = new Date().toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: true,
-  });
+import { log } from "./lib/logger";
 
-  console.log(`${formattedTime} [${source}] ${message}`);
-}
+export { log };
 
 app.use((req, res, next) => {
   const start = Date.now();

@@ -52,6 +52,7 @@ export const servers = pgTable("servers", {
   sshUser: text("ssh_user"),
   sshKey: text("ssh_key"),
   projectId: integer("project_id").references(() => projects.id, { onDelete: 'cascade' }),
+  serviceVersions: jsonb("service_versions"),
   lastSeen: timestamp("last_seen").defaultNow(),
 });
 
@@ -218,6 +219,8 @@ export const webMonitors = pgTable("web_monitors", {
   sslExpiryDate: timestamp("ssl_expiry_date"),
   lastCheck: timestamp("last_check"),
   nextCheck: timestamp("next_check"),
+  serverName: text("server_name"),
+  tlsVersion: text("tls_version"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -392,7 +395,7 @@ export const insertDatabaseMetricSchema = createInsertSchema(databaseMetrics).om
 export const insertClusterSchema = createInsertSchema(clusters).omit({ id: true, lastSeen: true });
 export const insertClusterMetricSchema = createInsertSchema(clusterMetrics).omit({ id: true, createdAt: true });
 
-export const insertWebMonitorSchema = createInsertSchema(webMonitors).omit({ id: true, createdAt: true, lastCheck: true, nextCheck: true, lastStatus: true, sslStatus: true, sslExpiryDate: true });
+export const insertWebMonitorSchema = createInsertSchema(webMonitors).omit({ id: true, createdAt: true, lastCheck: true, nextCheck: true, lastStatus: true, sslStatus: true, sslExpiryDate: true, serverName: true, tlsVersion: true });
 export const insertWebMonitorMetricSchema = createInsertSchema(webMonitorMetrics).omit({ id: true, createdAt: true });
 
 export const insertProjectEmailTemplateSchema = createInsertSchema(projectEmailTemplates).omit({ id: true, updatedAt: true });

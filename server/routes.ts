@@ -2,6 +2,8 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { api } from "@shared/routes";
+import path from 'path';
+import express from 'express';
 import { WebMonitorService } from "./lib/web-monitor-service";
 import { DomainMonitorService } from "./services/domainMonitor";
 import { setupAuth, registerAuthRoutes, isAuthenticated } from "./auth";
@@ -33,9 +35,20 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
+  // Serve Agent Scripts (Static)
+  const scriptsPath = path.join(process.cwd(), 'agents');
+  console.log(`[Static Service] Mapping /scripts to ${scriptsPath}`);
+  app.use('/scripts', express.static(scriptsPath, {
+    setHeaders: (res: any) => {
+      res.setHeader('Content-Type', 'text/x-shellscript');
+    }
+  }));
+
   // Setup Auth
   setupAuth(app);
   registerAuthRoutes(app);
+
+
 
   console.log(`Registering SMTP test route: ${api.settings.smtp.test.method} ${api.settings.smtp.test.path}`);
 
@@ -77,6 +90,49 @@ export async function registerRoutes(
     } catch (err) {
       console.error(err);
       res.status(400).json({ message: "Invalid data format" });
+    }
+  });
+
+  // Server Verification for Audit Script
+  app.get('/api/servers/verify', async (req, res) => {
+    try {
+      const ip = req.query.ip as string;
+      const hostname = req.query.hostname as string;
+      
+      const server = await storage.getServerByContact(ip, hostname);
+      if (server) {
+        const token = await storage.getTokenByProject(server.projectId);
+        res.json({ registered: true, token: token?.token });
+      } else {
+        res.json({ registered: false });
+      }
+    } catch (err) {
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // Service Audit Ingestion
+  app.post('/api/ingest/audit', validateAgentToken, async (req, res) => {
+    try {
+      const input = api.ingest.audit.input.parse(req.body);
+      const { hostname, ipAddress, serviceVersions } = input.data;
+      
+      // Look up the token to get its project association
+      const tokenData = await storage.getTokenByString(input.token);
+      const projectId = tokenData?.projectId || null;
+
+      // Upsert server with project association and service versions
+      await storage.upsertServer({
+        hostname,
+        ipAddress: ipAddress || "",
+        projectId,
+        serviceVersions
+      });
+
+      res.json({ success: true });
+    } catch (err) {
+      console.error(err);
+      res.status(400).json({ message: "Invalid audit data" });
     }
   });
 

@@ -930,7 +930,7 @@ export default function ProjectDetailPage() {
                                                     </div>
                                                 </TableCell>
                                                 <TableCell className="py-4 font-medium text-sm">
-                                                    {expiry ? format(expiry, "MMM dd, yyyy") : "Pending..."}
+                                                    {expiry ? format(expiry, "MMM dd, yyyy") : (d.lastCheck ? "Unknown" : "Pending...")}
                                                 </TableCell>
                                                 <TableCell className="py-4">
                                                     {daysLeft !== null ? (
@@ -941,7 +941,11 @@ export default function ProjectDetailPage() {
                                                             {daysLeft} days remaining
                                                         </div>
                                                     ) : (
-                                                        <span className="text-muted-foreground italic text-xs">Awaiting WHOIS...</span>
+                                                        d.lastCheck ? (
+                                                            <span className="text-destructive font-medium text-xs">Failed to fetch</span>
+                                                        ) : (
+                                                            <span className="text-muted-foreground italic text-xs">Awaiting WHOIS...</span>
+                                                        )
                                                     )}
                                                 </TableCell>
                                                 <TableCell className="py-4 text-xs font-medium text-muted-foreground">

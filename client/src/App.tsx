@@ -19,6 +19,7 @@ import LoginPage from "@/pages/Login";
 import { Loader2 } from "lucide-react";
 
 function Router() {
+  useRealtime();
   const { user, isLoading } = useAuth();
 
   if (isLoading) {
@@ -53,6 +54,7 @@ function Router() {
 }
 
 import { ThemeProvider } from "./hooks/use-theme";
+import { useRealtime } from "./hooks/use-realtime";
 
 function App() {
   return (

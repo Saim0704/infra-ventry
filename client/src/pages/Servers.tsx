@@ -25,6 +25,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { DialogDescription } from "@/components/ui/dialog";
 import { ServerDetailView } from "@/components/ServerDetailView";
 import { ServerEditDialog } from "@/components/ServerEditDialog";
+import { RegistrationModal } from "@/components/RegistrationModal";
+import { useTokens, useCreateToken } from "@/hooks/use-tokens";
 import { z } from "zod";
 
 type ServerWithMetrics = z.infer<typeof serverWithMetricsSchema>;
@@ -41,6 +43,11 @@ export default function ServersPage() {
   const createServer = useCreateServer();
   const updateServer = useUpdateServer();
   const deleteServer = useDeleteServer();
+  const { data: tokens } = useTokens();
+  const createToken = useCreateToken();
+  const [isRegistrationOpen, setIsRegistrationOpen] = useState(false);
+  const [activeRegToken, setActiveRegToken] = useState<string | null>(null);
+  const [activeRegProject, setActiveRegProject] = useState("Default Project");
 
   const { data: projects } = useProjects();
   const createProject = useCreateProject();
@@ -147,6 +154,33 @@ export default function ServersPage() {
     }
   };
 
+  const handleAgentSetup = async () => {
+    // Find a token to use
+    if (tokens && tokens.length > 0) {
+      setActiveRegToken(tokens[0].token);
+      setActiveRegProject(projects?.find(p => p.id === tokens[0].projectId)?.name || "Uncategorized");
+      setIsRegistrationOpen(true);
+    } else if (projects && projects.length > 0) {
+      // Create a token for the first project if none exists
+      try {
+        const newToken = await createToken.mutateAsync({
+          name: "Default Server Token",
+          type: "vm",
+          projectId: projects[0].id,
+          token: "auto-gen"
+        });
+        setActiveRegToken(newToken.token);
+        setActiveRegProject(projects[0].name);
+        setIsRegistrationOpen(true);
+      } catch (err) {
+        toast({ title: "Failed to initialize agent token", variant: "destructive" });
+      }
+    } else {
+      toast({ title: "Please create a project first", description: "Agents must be associated with a project." });
+      setIsProjectFormOpen(true);
+    }
+  };
+
   return (
     <Shell>
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-10 mt-2">
@@ -190,6 +224,9 @@ export default function ServersPage() {
             }); setIsFormOpen(true);
           }} className="h-11 px-6 bg-primary shadow-xl shadow-primary/20 hover:shadow-primary/40 transition-all duration-300 rounded-xl font-bold tracking-tight">
             <Plus className="mr-2 h-4 w-4 stroke-[3px]" /> Add Server
+          </Button>
+          <Button onClick={handleAgentSetup} variant="secondary" className="h-11 px-6 bg-accent/10 border-accent/20 hover:bg-accent/20 transition-all duration-300 rounded-xl font-bold tracking-tight text-accent">
+            <Terminal className="mr-2 h-4 w-4 stroke-[3px]" /> Agent Setup
           </Button>
         </div>
       </div>
@@ -681,6 +718,12 @@ export default function ServersPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <RegistrationModal
+        open={isRegistrationOpen}
+        onOpenChange={setIsRegistrationOpen}
+        token={activeRegToken}
+        projectName={activeRegProject}
+      />
     </Shell>
   );
 }

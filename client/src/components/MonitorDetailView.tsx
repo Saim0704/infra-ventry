@@ -1,7 +1,7 @@
 import { useWebMonitor } from "@/hooks/use-web-monitors";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent } from "@/components/ui/card";
-import { Activity, Clock, Shield } from "lucide-react";
+import { Activity, Clock, Shield, Server, Lock } from "lucide-react";
 import { format, formatDistanceToNow } from "date-fns";
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
 import { WebMonitorMetric } from "@shared/schema";
@@ -27,30 +27,30 @@ export function MonitorDetailView({ id }: MonitorDetailViewProps) {
 
     return (
         <div className="space-y-8 py-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
                 <Card className="bg-emerald-500/5 border-emerald-500/20 shadow-none rounded-2xl overflow-hidden group">
-                    <CardContent className="pt-6">
+                    <CardContent className="pt-6 px-4">
                         <div className="flex items-center gap-2 text-emerald-500 mb-2 font-bold uppercase tracking-widest text-[10px]">
                             <Activity className="h-3 w-3" />
                             Uptime (Last 30)
                         </div>
-                        <div className="text-4xl font-black font-display italic group-hover:scale-105 transition-transform">{uptimePct}%</div>
+                        <div className="text-3xl lg:text-4xl font-black font-display italic group-hover:scale-105 transition-transform">{uptimePct}%</div>
                     </CardContent>
                 </Card>
 
                 <Card className="bg-primary/5 border-primary/20 shadow-none rounded-2xl overflow-hidden group">
-                    <CardContent className="pt-6">
+                    <CardContent className="pt-6 px-4">
                         <div className="flex items-center gap-2 text-primary mb-2 font-bold uppercase tracking-widest text-[10px]">
                             <Clock className="h-3 w-3" />
                             Avg Response
                         </div>
-                        <div className="text-4xl font-black font-display italic group-hover:scale-105 transition-transform">{avgResponse}ms</div>
+                        <div className="text-3xl lg:text-4xl font-black font-display italic group-hover:scale-105 transition-transform">{avgResponse}ms</div>
                     </CardContent>
                 </Card>
 
-                <Card className="bg-accent/5 border-accent/20 shadow-none rounded-2xl overflow-hidden group">
-                    <CardContent className="pt-6">
-                        <div className="flex items-center gap-2 text-accent mb-2 font-bold uppercase tracking-widest text-[10px]">
+                <Card className="bg-amber-500/5 border-amber-500/20 shadow-none rounded-2xl overflow-hidden group">
+                    <CardContent className="pt-6 px-4">
+                        <div className="flex items-center gap-2 text-amber-500 mb-2 font-bold uppercase tracking-widest text-[10px]">
                             <Shield className="h-3 w-3" />
                             SSL Expiry
                         </div>
@@ -59,6 +59,36 @@ export function MonitorDetailView({ id }: MonitorDetailViewProps) {
                         </div>
                         <div className="text-[10px] text-muted-foreground font-bold uppercase mt-1">
                             {monitor.sslExpiryDate ? formatDistanceToNow(new Date(monitor.sslExpiryDate), { addSuffix: true }) : ''}
+                        </div>
+                    </CardContent>
+                </Card>
+
+                <Card className="bg-blue-500/5 border-blue-500/20 shadow-none rounded-2xl overflow-hidden group">
+                    <CardContent className="pt-6 px-4">
+                        <div className="flex items-center gap-2 text-blue-500 mb-2 font-bold uppercase tracking-widest text-[10px]">
+                            <Server className="h-3 w-3" />
+                            Web Server
+                        </div>
+                        <div className="text-lg font-black font-display italic truncate" title={monitor.serverName || 'Unknown'}>
+                            {monitor.serverName || 'Unknown'}
+                        </div>
+                        <div className="text-[10px] text-muted-foreground font-bold uppercase mt-1">
+                            Identification Header
+                        </div>
+                    </CardContent>
+                </Card>
+
+                <Card className="bg-indigo-500/5 border-indigo-500/20 shadow-none rounded-2xl overflow-hidden group">
+                    <CardContent className="pt-6 px-4">
+                        <div className="flex items-center gap-2 text-indigo-500 mb-2 font-bold uppercase tracking-widest text-[10px]">
+                            <Lock className="h-3 w-3" />
+                            TLS
+                        </div>
+                        <div className="text-2xl font-black font-display italic">
+                            {monitor.tlsVersion || 'N/A'}
+                        </div>
+                        <div className="text-[10px] text-muted-foreground font-bold uppercase mt-1">
+                            Protocol Version
                         </div>
                     </CardContent>
                 </Card>

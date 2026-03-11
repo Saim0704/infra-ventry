@@ -145,37 +145,45 @@ export default function StatusPage() {
                             <div className="h-px flex-1 mx-8 bg-white/5" />
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            {domainMonitors.map((d: any) => {
-                                const expiry = d.expiryDate ? new Date(d.expiryDate) : null;
-                                const daysLeft = expiry ? Math.ceil((expiry.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)) : null;
-                                let statusText = 'Monitored';
-                                let statusColor = 'text-emerald-400';
+                                {domainMonitors.map((d: any) => {
+                                    const expiry = d.expiryDate ? new Date(d.expiryDate) : null;
+                                    const daysLeft = expiry ? Math.ceil((expiry.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)) : null;
+                                    let statusText = 'Monitored';
+                                    let statusColor = 'text-emerald-400';
+                                    let isDown = false;
 
-                                if (daysLeft !== null && daysLeft <= domainThreshold) {
-                                    statusText = 'Expiring Soon';
-                                    statusColor = 'text-rose-400';
-                                } else if (daysLeft !== null && daysLeft <= 60) {
-                                    statusText = 'Expiring';
-                                    statusColor = 'text-amber-400';
-                                } else if (d.status === 'error') {
-                                    statusText = 'Check Failed';
-                                    statusColor = 'text-rose-400';
-                                }
+                                    if (daysLeft !== null) {
+                                        if (daysLeft <= domainThreshold) {
+                                            statusText = 'Expiring Soon';
+                                            statusColor = 'text-rose-400';
+                                            isDown = true;
+                                        } else if (daysLeft <= 60) {
+                                            statusText = 'Expiring';
+                                            statusColor = 'text-amber-400';
+                                        }
+                                    } else if (d.lastCheck) {
+                                        statusText = 'Check Failed';
+                                        statusColor = 'text-rose-400';
+                                        isDown = true;
+                                    } else {
+                                        statusText = 'Pending Check';
+                                        statusColor = 'text-zinc-500';
+                                    }
 
-                                return (
-                                    <StatusCard
-                                        key={d.domain}
-                                        name={d.domain}
-                                        sub="Domain"
-                                        icon={Globe}
-                                        status={d.status === 'active' && (daysLeft === null || daysLeft > domainThreshold) ? 'up' : 'down'}
-                                        metric={daysLeft !== null ? `${daysLeft} days` : (d.status === 'error' ? 'Error' : 'Pending')}
-                                        metricLabel="Expires In"
-                                        customStatusText={statusText}
-                                        customStatusColor={statusColor}
-                                    />
-                                );
-                            })}
+                                    return (
+                                        <StatusCard
+                                            key={d.domain}
+                                            name={d.domain}
+                                            sub="Domain"
+                                            icon={Globe}
+                                            status={isDown ? 'down' : 'up'}
+                                            metric={daysLeft !== null ? `${daysLeft} days` : (d.lastCheck ? 'Failed' : 'Pending')}
+                                            metricLabel="Expires In"
+                                            customStatusText={statusText}
+                                            customStatusColor={statusColor}
+                                        />
+                                    );
+                                })}
                         </div>
                     </section>
                 )}

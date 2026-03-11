@@ -4,6 +4,10 @@ import { EmailService } from "../lib/email";
 import { db } from "../db";
 import { domainMonitors } from "@shared/schema";
 import { eq, or, isNull, lt } from "drizzle-orm";
+import { exec } from "child_process";
+import { promisify } from "util";
+
+const execAsync = promisify(exec);
 
 export class DomainMonitorService {
     private static interval: NodeJS.Timeout | null = null;
@@ -70,32 +74,71 @@ export class DomainMonitorService {
         }
     }
 
+    private static async runWithTimeout<T>(promise: Promise<T>, ms: number = 10000): Promise<T> {
+        let timer: NodeJS.Timeout;
+        const timeoutPromise = new Promise<never>((_, reject) => {
+            timer = setTimeout(() => reject(new Error('timeout')), ms);
+        });
+        return Promise.race([promise, timeoutPromise]).finally(() => clearTimeout(timer));
+    }
+
     static async checkSingleDomain(monitor: any) {
+        let expiryDate: Date | null = null;
         try {
-            console.log(`[DomainMonitor] Checking WHOIS for ${monitor.domain}`);
-            const domainWhois = await whoisDomain(monitor.domain, { follow: 1 });
+            console.log(`[DomainMonitor] Checking WHOIS via whoiser for ${monitor.domain}`);
+            
+            if (!monitor.domain.endsWith('.in') && !monitor.domain.endsWith('.co.in')) {
+                const domainWhois = await this.runWithTimeout(whoisDomain(monitor.domain, { follow: 1 }), 15000);
 
-            let expiryDate: Date | null = null;
-
-            // whoiser returns an object with registrar keys or domain name keys
-            const firstKey = Object.keys(domainWhois)[0];
-            if (firstKey && domainWhois[firstKey]) {
-                const whoisData = domainWhois[firstKey];
-                if (whoisData["Expiry Date"]) {
-                    expiryDate = new Date(whoisData["Expiry Date"] as string);
-                } else if (whoisData["Registrar Registration Expiration Date"]) {
-                    expiryDate = new Date(whoisData["Registrar Registration Expiration Date"] as string);
-                } else if (whoisData["Registry Expiry Date"]) {
-                    expiryDate = new Date(whoisData["Registry Expiry Date"] as string);
+                const firstKey = Object.keys(domainWhois)[0];
+                if (firstKey && domainWhois[firstKey]) {
+                    const whoisData = domainWhois[firstKey];
+                    if (whoisData["Expiry Date"]) {
+                        expiryDate = new Date(whoisData["Expiry Date"] as string);
+                    } else if (whoisData["Registrar Registration Expiration Date"]) {
+                        expiryDate = new Date(whoisData["Registrar Registration Expiration Date"] as string);
+                    } else if (whoisData["Registry Expiry Date"]) {
+                        expiryDate = new Date(whoisData["Registry Expiry Date"] as string);
+                    }
                 }
             }
+        } catch (err) {
+            console.error(`[DomainMonitor] whoiser failed for ${monitor.domain}:`, err instanceof Error ? err.message : err);
+        }
 
+        if (!expiryDate) {
+            console.log(`[DomainMonitor] Falling back to native whois for ${monitor.domain}`);
+            try {
+                const isDotIn = monitor.domain.endsWith('.in') || monitor.domain.endsWith('.co.in');
+                const cmd = isDotIn ? `whois -h whois.nixiregistry.in ${monitor.domain}` : `whois ${monitor.domain}`;
+                
+                const { stdout } = await this.runWithTimeout(execAsync(cmd), 15000);
+                
+                let matches = stdout.match(/Registry Expiry Date:\s*([^\n\r]+)/i);
+                if (matches) expiryDate = new Date(matches[1].trim());
+                
+                if (!expiryDate) {
+                    matches = stdout.match(/Registrar Registration Expiration Date:\s*([^\n\r]+)/i);
+                    if (matches) expiryDate = new Date(matches[1].trim());
+                }
+                
+                if (!expiryDate) {
+                    matches = stdout.match(/Expiry Date:\s*([^\n\r]+)/i);
+                    if (matches) expiryDate = new Date(matches[1].trim());
+                }
+            } catch (fallbackErr) {
+                console.error(`[DomainMonitor] Native whois fallback failed for ${monitor.domain}:`, fallbackErr instanceof Error ? fallbackErr.message : fallbackErr);
+            }
+        }
+
+        try {
             const now = new Date();
-            // Next check in 7 days roughly, unless expiring sooner
-            let nextCheck = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+            // Next check in 7 days roughly if successful, else in 12 hours for failures
+            let nextCheckMs = expiryDate ? 7 * 24 * 60 * 60 * 1000 : 12 * 60 * 60 * 1000;
+            let nextCheck = new Date(now.getTime() + nextCheckMs);
 
             await storage.updateDomainMonitor(monitor.id, {
-                expiryDate: expiryDate,
+                expiryDate: expiryDate || monitor.expiryDate,
                 lastCheck: now,
                 nextCheck: nextCheck,
             });
@@ -104,7 +147,6 @@ export class DomainMonitorService {
                 const daysToExpiry = Math.ceil((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
                 console.log(`[DomainMonitor] ${monitor.domain} expires in ${daysToExpiry} days (${expiryDate.toISOString()})`);
 
-                // Alert check handled in triggerExpiryAlert
                 const lastAlert = monitor.lastAlertSentAt ? new Date(monitor.lastAlertSentAt) : null;
                 const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
@@ -112,8 +154,8 @@ export class DomainMonitorService {
                     await this.triggerExpiryAlert(monitor, daysToExpiry, expiryDate);
                 }
             }
-        } catch (err) {
-            console.error(`[DomainMonitor] Error checking ${monitor.domain}:`, err);
+        } catch (dbErr) {
+            console.error(`[DomainMonitor] DB Error updating monitor for ${monitor.domain}:`, dbErr);
         }
     }
 

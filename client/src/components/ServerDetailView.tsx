@@ -4,7 +4,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { UsageBar } from "@/components/ui/UsageBar";
 import { format } from "date-fns";
-import { Server, Activity, CircuitBoard, Cpu, Folder } from "lucide-react";
+import { Server, Activity, CircuitBoard, Cpu, Folder, Package } from "lucide-react";
 
 interface ServerDetailViewProps {
     id: number | null;
@@ -19,6 +19,8 @@ export function ServerDetailView({ id }: ServerDetailViewProps) {
     // The detail view returns all metrics, we want the latest for current status
     const lastMetric = server.metrics?.[server.metrics.length - 1];
     const hasProcesses = lastMetric?.topProcesses && Array.isArray(lastMetric.topProcesses) && lastMetric.topProcesses.length > 0;
+    const serviceVersions = server.serviceVersions as Record<string, string> | null;
+    const hasServices = serviceVersions && Object.keys(serviceVersions).length > 0;
 
     return (
         <div className="py-2 h-[60vh] flex flex-col">
@@ -27,6 +29,7 @@ export function ServerDetailView({ id }: ServerDetailViewProps) {
                     <TabsList>
                         <TabsTrigger value="overview">Overview</TabsTrigger>
                         <TabsTrigger value="processes">Processes</TabsTrigger>
+                        <TabsTrigger value="services">Services</TabsTrigger>
                     </TabsList>
                 </div>
 
@@ -161,6 +164,36 @@ export function ServerDetailView({ id }: ServerDetailViewProps) {
                         <div className="h-full flex flex-col items-center justify-center text-muted-foreground p-8 border border-dashed rounded-xl border-border/50">
                             <Activity className="h-8 w-8 mb-2 opacity-50" />
                             <p>No process data available currently.</p>
+                        </div>
+                    )}
+                </TabsContent>
+
+                <TabsContent value="services" className="flex-1 overflow-y-auto pr-2 mt-0">
+                    {hasServices ? (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+                            {Object.entries(serviceVersions!).map(([service, version]) => (
+                                <div key={service} className="flex items-center justify-between p-4 bg-secondary/20 rounded-2xl border border-border/40 group hover:border-primary/50 transition-colors">
+                                    <div className="flex items-center gap-3">
+                                        <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary group-hover:scale-110 transition-transform">
+                                            <Package className="h-5 w-5" />
+                                        </div>
+                                        <div>
+                                            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60">{service}</p>
+                                            <p className="text-sm font-bold tracking-tight">{version}</p>
+                                        </div>
+                                    </div>
+                                    <div className="h-2 w-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="h-full flex flex-col items-center justify-center text-muted-foreground p-8 border border-dashed rounded-3xl border-border/50 bg-muted/5">
+                            <Package className="h-12 w-12 mb-4 opacity-20" />
+                            <p className="text-lg font-black italic">No Audit Data</p>
+                            <p className="text-xs font-medium text-muted-foreground mt-1">Run the service audit script on this server to populate this view.</p>
+                            <div className="mt-6 p-4 bg-card rounded-2xl border border-border/50 w-full max-w-md font-mono text-[10px] overflow-x-auto">
+                                <code className="text-primary"># Recommended Monthly Audit Cron:<br/>0 0 1 * * /path/to/audit_services.sh https://domain.com ag_token</code>
+                            </div>
                         </div>
                     )}
                 </TabsContent>

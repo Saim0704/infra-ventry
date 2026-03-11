@@ -185,6 +185,15 @@ export default function DomainMonitoringPage() {
                                             const expiry = m.expiryDate ? new Date(m.expiryDate) : null;
                                             const daysLeft = expiry ? Math.ceil((expiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)) : null;
 
+                                            let derivedStatus = 'pending';
+                                            if (m.lastCheck) {
+                                                if (expiry) {
+                                                    derivedStatus = (daysLeft !== null && daysLeft <= 0) ? 'error' : 'active';
+                                                } else {
+                                                    derivedStatus = 'error';
+                                                }
+                                            }
+
                                             return (
                                                 <TableRow key={m.id} className="group hover:bg-muted/20 border-b border-border/40 transition-colors">
                                                     <TableCell className="pl-8 py-4">
@@ -198,11 +207,11 @@ export default function DomainMonitoringPage() {
                                                     <TableCell className="py-4">
                                                         <div className={cn(
                                                             "inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border uppercase tracking-wider",
-                                                            m.status === 'active' ? "text-emerald-500 bg-emerald-500/10 border-emerald-500/20" :
-                                                                m.status === 'error' ? "text-destructive bg-destructive/10 border-destructive/20" :
+                                                            derivedStatus === 'active' ? "text-emerald-500 bg-emerald-500/10 border-emerald-500/20" :
+                                                                derivedStatus === 'error' ? "text-destructive bg-destructive/10 border-destructive/20" :
                                                                     "text-amber-500 bg-amber-500/10 border-amber-500/20"
                                                         )}>
-                                                            {m.status || 'pending'}
+                                                            {derivedStatus}
                                                         </div>
                                                     </TableCell>
                                                     <TableCell className="py-4 font-bold text-sm">
@@ -210,10 +219,10 @@ export default function DomainMonitoringPage() {
                                                             <span className={cn(daysLeft <= 30 ? "text-destructive" : daysLeft <= 60 ? "text-amber-500" : "text-emerald-500")}>
                                                                 {daysLeft} days
                                                             </span>
-                                                        ) : "Checking..."}
+                                                        ) : (m.lastCheck ? <span className="text-destructive text-xs">Failed</span> : "Checking...")}
                                                     </TableCell>
                                                     <TableCell className="py-4 text-xs font-medium text-muted-foreground">
-                                                        {expiry ? format(expiry, "MMM dd, yyyy") : "Pending"}
+                                                        {expiry ? format(expiry, "MMM dd, yyyy") : (m.lastCheck ? "Unknown" : "Pending...")}
                                                     </TableCell>
                                                     <TableCell className="py-4 text-xs font-medium text-muted-foreground">
                                                         {m.lastCheck ? formatDistanceToNow(new Date(m.lastCheck), { addSuffix: true }) : "Never"}

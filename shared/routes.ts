@@ -194,6 +194,13 @@ export const api = {
 
   // === SERVERS ===
   servers: {
+    verify: {
+      method: 'GET' as const,
+      path: '/api/servers/verify' as const,
+      responses: {
+        200: z.object({ registered: z.boolean(), token: z.string().optional() })
+      }
+    },
     list: {
       method: 'GET' as const,
       path: '/api/servers' as const,
@@ -410,7 +417,24 @@ export const api = {
               memory: z.number(),
             })).optional(),
           }),
+          serviceVersions: z.record(z.string()).optional(),
         }),
+      }),
+      responses: {
+        200: z.object({ success: z.boolean() }),
+        401: errorSchemas.unauthorized,
+      },
+    },
+    audit: {
+      method: 'POST' as const,
+      path: '/api/ingest/audit' as const,
+      input: z.object({
+        token: z.string(),
+        data: z.object({
+          hostname: z.string(),
+          ipAddress: z.string().optional(),
+          serviceVersions: z.record(z.string())
+        })
       }),
       responses: {
         200: z.object({ success: z.boolean() }),

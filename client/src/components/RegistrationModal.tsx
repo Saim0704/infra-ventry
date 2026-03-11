@@ -1,7 +1,7 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { Copy, Database, Cloud, Server, ChevronRight, Info, Clock, Terminal, Activity, Globe } from "lucide-react";
+import { Copy, Database, Cloud, Server, ChevronRight, Info, Clock, Terminal, Activity, Globe, Package, Calendar } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { motion, AnimatePresence } from "framer-motion";
 import { useState } from "react";
@@ -61,6 +61,7 @@ export function RegistrationModal({ open, onOpenChange, token, projectName, init
     const { toast } = useToast();
     const [cronTime, setCronTime] = useState({ hour: "02", minute: "00" });
     const [serverMethod, setServerMethod] = useState<"cron" | "agent">("cron");
+    const [auditMethod, setAuditMethod] = useState<"once" | "monthly">("once");
 
     const copyToClipboard = (text: string, label: string) => {
         navigator.clipboard.writeText(text);
@@ -77,6 +78,10 @@ export function RegistrationModal({ open, onOpenChange, token, projectName, init
     // Cron logic
     const cronExpression = `${parseInt(cronTime.minute)} ${parseInt(cronTime.hour)} * * *`;
     const cronCommand = `(crontab -l 2>/dev/null; echo "${cronExpression} ${baseVmCommand}") | crontab -`;
+
+    // Audit Commands
+    const auditOnceCommand = `curl -s -L "${serverUrl}/scripts/audit_services.sh" | bash -s -- ${serverUrl} ${token || "YOUR_TOKEN"}`;
+    const auditMonthlyCommand = `(crontab -l 2>/dev/null; echo "0 0 1 * * ${auditOnceCommand}") | crontab -`;
 
     return (
         <AnimatePresence>
@@ -136,16 +141,13 @@ export function RegistrationModal({ open, onOpenChange, token, projectName, init
                                 </div>
                             </motion.div>
 
-                            <Tabs defaultValue={initialTab} className="w-full">
-                                <TabsList className="grid w-full grid-cols-3 bg-muted/30 p-1.5 rounded-[1.5rem] border border-border/40 mb-8 h-14">
+                            <Tabs defaultValue={initialTab === "vm" ? "vm" : "audit"} className="w-full">
+                                <TabsList className="grid w-full grid-cols-2 bg-muted/30 p-1.5 rounded-[1.5rem] border border-border/40 mb-8 h-14">
                                     <TabsTrigger value="vm" className="rounded-[1.1rem] font-bold transition-all data-[state=active]:bg-background data-[state=active]:shadow-xl py-3 text-sm">
-                                        <Server className="w-4 h-4 mr-2" /> Server
+                                        <Activity className="w-4 h-4 mr-2" /> Server Monitoring
                                     </TabsTrigger>
-                                    <TabsTrigger value="db" className="rounded-[1.1rem] font-bold transition-all data-[state=active]:bg-background data-[state=active]:shadow-xl py-3 text-sm">
-                                        <Database className="w-4 h-4 mr-2" /> Database
-                                    </TabsTrigger>
-                                    <TabsTrigger value="k8s" className="rounded-[1.1rem] font-bold transition-all data-[state=active]:bg-background data-[state=active]:shadow-xl py-3 text-sm">
-                                        <Cloud className="w-4 h-4 mr-2" /> K8s
+                                    <TabsTrigger value="audit" className="rounded-[1.1rem] font-bold transition-all data-[state=active]:bg-background data-[state=active]:shadow-xl py-3 text-sm">
+                                        <Package className="w-4 h-4 mr-2" /> Service Audit
                                     </TabsTrigger>
                                 </TabsList>
 
@@ -248,22 +250,83 @@ export function RegistrationModal({ open, onOpenChange, token, projectName, init
                                     </motion.div>
                                 </TabsContent>
 
-                                <TabsContent value="db" className="mt-0 focus-visible:outline-none">
-                                    <TabContentContainer
-                                        title="Database Connector"
-                                        description="Run the bridge as a Docker container for internal observability."
-                                        command={dbCommand}
-                                        onCopy={(cmd: string) => copyToClipboard(cmd, "Command")}
-                                    />
-                                </TabsContent>
+                                <TabsContent value="audit" className="mt-0 focus-visible:outline-none">
+                                    <motion.div
+                                        initial={{ opacity: 0, x: 20 }}
+                                        animate={{ opacity: 1, x: 0 }}
+                                        exit={{ opacity: 0, x: -20 }}
+                                        transition={{ type: "spring", damping: 25, stiffness: 200 }}
+                                        className="space-y-5"
+                                    >
+                                        <div className="space-y-1.5 px-1">
+                                            <h3 className="text-base font-black tracking-tight leading-none text-primary">Service Version Audit</h3>
+                                            <p className="text-xs text-muted-foreground font-medium mt-1">Detect versions of Nginx, PostgreSQL, Node.js, and more.</p>
+                                        </div>
 
-                                <TabsContent value="k8s" className="mt-0 focus-visible:outline-none">
-                                    <TabContentContainer
-                                        title="Kubernetes Helm Chart"
-                                        description="Deploy the full stack to your cluster in one command."
-                                        command={k8sCommand}
-                                        onCopy={(cmd: string) => copyToClipboard(cmd, "Command")}
-                                    />
+                                        {/* Method selector for Audit */}
+                                        <div className="flex gap-3">
+                                            {/* Run Once */}
+                                            <button
+                                                onClick={() => setAuditMethod("once")}
+                                                className={`flex-1 flex items-center gap-3 p-4 rounded-2xl border transition-all duration-200 text-left ${auditMethod === "once"
+                                                    ? "border-primary bg-primary/5 shadow-md shadow-primary/10"
+                                                    : "border-border/40 bg-muted/20 hover:border-border/70 hover:bg-muted/40"
+                                                    }`}
+                                            >
+                                                <div className={`flex h-9 w-9 items-center justify-center rounded-xl shrink-0 ${auditMethod === "once" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>
+                                                    <Terminal className="w-4 h-4" />
+                                                </div>
+                                                <div>
+                                                    <div className="flex items-center gap-2 mb-1">
+                                                        <p className="text-sm font-bold leading-none">Run Once</p>
+                                                    </div>
+                                                    <p className="text-xs text-muted-foreground">Immediate execution scan</p>
+                                                </div>
+                                                {auditMethod === "once" && (
+                                                    <div className="ml-auto h-2 w-2 rounded-full bg-primary shrink-0" />
+                                                )}
+                                            </button>
+
+                                            {/* Monthly */}
+                                            <button
+                                                onClick={() => setAuditMethod("monthly")}
+                                                className={`flex-1 flex items-center gap-3 p-4 rounded-2xl border transition-all duration-200 text-left ${auditMethod === "monthly"
+                                                    ? "border-primary bg-primary/5 shadow-md shadow-primary/10"
+                                                    : "border-border/40 bg-muted/20 hover:border-border/70 hover:bg-muted/40"
+                                                    }`}
+                                            >
+                                                <div className={`flex h-9 w-9 items-center justify-center rounded-xl shrink-0 ${auditMethod === "monthly" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>
+                                                    <Calendar className="w-4 h-4" />
+                                                </div>
+                                                <div>
+                                                    <div className="flex items-center gap-2 mb-1">
+                                                        <p className="text-sm font-bold leading-none">Monthly Audit</p>
+                                                    </div>
+                                                    <p className="text-xs text-muted-foreground">Every 1st of month at 00:00</p>
+                                                </div>
+                                                {auditMethod === "monthly" && (
+                                                    <div className="ml-auto h-2 w-2 rounded-full bg-primary shrink-0" />
+                                                )}
+                                            </button>
+                                        </div>
+
+                                        <div className="p-5 bg-muted/20 rounded-2xl border border-border/40 space-y-4">
+                                            <div className="flex items-start gap-3">
+                                                <div className="h-5 w-5 rounded-full bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
+                                                    <Info className="w-3 h-3 text-primary" />
+                                                </div>
+                                                <p className="text-xs leading-relaxed text-muted-foreground">
+                                                    {auditMethod === "once" 
+                                                        ? "Run this command manually on your server to perform an immediate version audit. Results will appear in the 'Services' tab."
+                                                        : "This command adds a cron job to your server to automatically perform a deep service scan on the 1st of every month."}
+                                                </p>
+                                            </div>
+                                            <TerminalBlock 
+                                                command={auditMethod === "once" ? auditOnceCommand : auditMonthlyCommand} 
+                                                onCopy={(cmd) => copyToClipboard(cmd, "Audit Command")} 
+                                            />
+                                        </div>
+                                    </motion.div>
                                 </TabsContent>
                             </Tabs>
 

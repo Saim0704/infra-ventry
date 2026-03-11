@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { eq, desc, sql } from "drizzle-orm";
+import { eq, desc, sql, or } from "drizzle-orm";
 import {
   users, tokens, servers, serverMetrics, databases, databaseMetrics, clusters, clusterMetrics, projects,
   smtpSettings, alerts, projectAlertSettings, webMonitors, webMonitorMetrics, domainMonitors, projectEmailTemplates,
@@ -14,6 +14,7 @@ import {
   insertWebMonitorSchema, insertWebMonitorMetricSchema, insertDomainMonitorSchema,
 } from "@shared/schema";
 import { EmailService } from "./lib/email";
+import { broadcast } from "./lib/realtime";
 import { z } from "zod";
 
 // Safe logging helper that won't crash if file doesn't exist
@@ -31,6 +32,7 @@ export interface IStorage {
   // === TOKENS ===
   getTokens(projectId?: number | null): Promise<Token[]>;
   getTokenByString(tokenStr: string): Promise<Token | undefined>;
+  getTokenByProject(projectId: number | null): Promise<Token | undefined>;
   createToken(name: string, type: string, projectId?: number | null): Promise<Token>;
   validateToken(token: string): Promise<boolean>;
   revokeToken(id: number): Promise<void>;
@@ -56,6 +58,8 @@ export interface IStorage {
   updateServer(id: number, data: Partial<z.infer<typeof insertServerSchema>>): Promise<Server | undefined>;
   deleteServer(id: number): Promise<void>;
   addServerMetric(data: z.infer<typeof insertServerMetricSchema>): Promise<void>;
+  getServerByHostname(hostname: string): Promise<Server | undefined>;
+  getServerByContact(ip: string, hostname: string): Promise<Server | undefined>;
 
   // === DATABASES ===
   getDatabases(): Promise<(Database & { metrics: DatabaseMetric[], project?: Project })[]>;
@@ -130,6 +134,12 @@ export class DatabaseStorage implements IStorage {
 
   async getTokenByString(tokenStr: string): Promise<Token | undefined> {
     const [token] = await db.select().from(tokens).where(eq(tokens.token, tokenStr));
+    return token;
+  }
+
+  async getTokenByProject(projectId: number | null): Promise<Token | undefined> {
+    if (projectId === null) return undefined;
+    const [token] = await db.select().from(tokens).where(eq(tokens.projectId, projectId)).limit(1);
     return token;
   }
 
@@ -212,6 +222,7 @@ export class DatabaseStorage implements IStorage {
       domainMonitors: showDomains ? resources.domainMonitors.map(d => ({
         domain: d.domain,
         expiryDate: d.expiryDate,
+        lastCheck: d.lastCheck,
         status: d.expiryDate && (Math.ceil((new Date(d.expiryDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)) > domainThreshold) ? 'active' : 'warning',
       })) : [],
     };
@@ -339,6 +350,20 @@ export class DatabaseStorage implements IStorage {
         set: updateData
       })
       .returning();
+
+    broadcast({ type: "resource_update", resource: "server", id: server.id });
+    return server;
+  }
+
+  async getServerByHostname(hostname: string): Promise<Server | undefined> {
+    const [server] = await db.select().from(servers).where(eq(servers.hostname, hostname));
+    return server;
+  }
+
+  async getServerByContact(ip: string, hostname: string): Promise<Server | undefined> {
+    const [server] = await db.select().from(servers).where(
+      or(eq(servers.ipAddress, ip), eq(servers.hostname, hostname))
+    );
     return server;
   }
 
@@ -354,6 +379,10 @@ export class DatabaseStorage implements IStorage {
       .set(updateData)
       .where(eq(servers.id, id))
       .returning();
+
+    if (updated) {
+      broadcast({ type: "resource_update", resource: "server", id: updated.id });
+    }
     return updated;
   }
 
@@ -372,6 +401,8 @@ export class DatabaseStorage implements IStorage {
       { type: 'memory', value: data.memoryUsage, operator: '>' },
       { type: 'storage', value: data.diskUsage, operator: '>' },
     ]);
+
+    broadcast({ type: "metric_update", resource: "server", id: data.serverId });
   }
 
   async checkAndTriggerAlert(resourceId: number, type: 'server' | 'database' | 'cluster' | 'web' | 'domain', currentMetrics: { type: string, value: number | null | undefined, operator: '>' | '<=' }[]): Promise<void> {
@@ -737,6 +768,8 @@ export class DatabaseStorage implements IStorage {
       const [created] = await db.insert(databases)
         .values({ ...data, lastSeen: new Date() })
         .returning();
+
+      broadcast({ type: "resource_update", resource: "database", id: created.id });
       return created;
     }
   }
@@ -761,6 +794,8 @@ export class DatabaseStorage implements IStorage {
     await this.checkAndTriggerAlert(data.databaseId, 'database', [
       { type: 'db_storage', value: data.storageUsed, operator: '>' },
     ]);
+
+    broadcast({ type: "metric_update", resource: "database", id: data.databaseId });
   }
 
   // === CLUSTERS ===
@@ -800,6 +835,8 @@ export class DatabaseStorage implements IStorage {
         set: { ...data, lastSeen: new Date() }
       })
       .returning();
+
+    broadcast({ type: "resource_update", resource: "cluster", id: cluster.id });
     return cluster;
   }
 
@@ -811,6 +848,8 @@ export class DatabaseStorage implements IStorage {
       { type: 'cluster_cpu', value: data.cpuUsage, operator: '>' },
       { type: 'cluster_memory', value: data.memoryUsage, operator: '>' },
     ]);
+
+    broadcast({ type: "metric_update", resource: "cluster", id: data.clusterId });
   }
 
   // === USERS ===
