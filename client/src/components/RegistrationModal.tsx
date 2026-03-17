@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Copy, Database, Cloud, Server, ChevronRight, Info, Clock, Terminal, Activity, Globe, Package, Calendar } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { motion, AnimatePresence } from "framer-motion";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
@@ -60,37 +60,60 @@ interface RegistrationModalProps {
 export function RegistrationModal({ open, onOpenChange, token, projectName, initialTab = "vm" }: RegistrationModalProps) {
     const { toast } = useToast();
     const [cronTime, setCronTime] = useState({ hour: "02", minute: "00" });
-    const [serverMethod, setServerMethod] = useState<"cron" | "agent">("cron");
-    const [auditMethod, setAuditMethod] = useState<"once" | "monthly">("once");
+    const [serverMethod, setServerMethod] = useState<"cron" | "agent">("agent");
+    const [agentSubMethod, setAgentSubMethod] = useState<"persistent" | "test">("persistent");
+    const [activeTab, setActiveTab] = useState(initialTab || "vm");
 
-    const copyToClipboard = (text: string, label: string) => {
-        navigator.clipboard.writeText(text);
-        toast({ title: `${label} Copied!`, description: "Ready to be pasted." });
+    useEffect(() => {
+        if (open) {
+            setActiveTab(initialTab || "vm");
+        }
+    }, [open, initialTab]);
+
+    const copyToClipboard = async (text: string, label: string) => {
+        if (!text) return;
+        try {
+            if (navigator.clipboard && window.isSecureContext) {
+                await navigator.clipboard.writeText(text);
+            } else {
+                // Fallback for non-secure contexts (HTTP)
+                const textArea = document.createElement("textarea");
+                textArea.value = text;
+                textArea.style.position = "fixed";
+                textArea.style.left = "-999999px";
+                textArea.style.top = "-999999px";
+                document.body.appendChild(textArea);
+                textArea.focus();
+                textArea.select();
+                const successful = document.execCommand('copy');
+                document.body.removeChild(textArea);
+                if (!successful) throw new Error('execCommand copy failed');
+            }
+            toast({ title: `${label} Copied!`, description: "Ready to be pasted." });
+        } catch (err) {
+            console.error('Failed to copy: ', err);
+            toast({ title: "Copy Failed", description: "Please copy manually from the terminal block.", variant: "destructive" });
+        }
     };
 
-    const serverUrl = typeof window !== 'undefined' ? window.location.origin : "http://YOUR_SERVER_IP:5400";
-    const baseVmCommand = `curl -s -L "https://gitlab.bigohtech.com/devops-public/infrawatch-bash-scripts/-/raw/dd01770d64390aa48ec3ed83c3a4888d885650c5/vm_agent.sh" | bash -s -- ${serverUrl} ${token || "YOUR_TOKEN"}`;
+    const serverUrl = typeof window !== 'undefined' ? window.location.origin : "http://YOUR_SERVER_IP:3000";
+    const baseVmCommand = `curl -s -L "${serverUrl}/get/vm_agent.sh" | bash -s -- ${serverUrl} ${token || "YOUR_TOKEN"}`;
 
-    const vmCommand = baseVmCommand;
     const dbCommand = `docker run -d --name infra-db-agent -e AGENT_TOKEN=${token || "YOUR_TOKEN"} infrawatch/db-agent:latest`;
     const k8sCommand = `helm install infra-agent infrawatch/infra-agent --set token=${token || "YOUR_TOKEN"}`;
 
-    // Cron logic
+    const auditOnceCommand = `curl -s -L "${serverUrl}/get/audit_services.sh" | bash -s -- ${serverUrl} ${token || "YOUR_TOKEN"}`;
     const cronExpression = `${parseInt(cronTime.minute)} ${parseInt(cronTime.hour)} * * *`;
-    const cronCommand = `(crontab -l 2>/dev/null; echo "${cronExpression} ${baseVmCommand}") | crontab -`;
-
-    // Audit Commands
-    const auditOnceCommand = `curl -s -L "${serverUrl}/scripts/audit_services.sh" | bash -s -- ${serverUrl} ${token || "YOUR_TOKEN"}`;
-    const auditMonthlyCommand = `(crontab -l 2>/dev/null; echo "0 0 1 * * ${auditOnceCommand}") | crontab -`;
+    const cronCommand = `(crontab -l 2>/dev/null; echo "${cronExpression} ${baseVmCommand} && ${auditOnceCommand}") | crontab -`;
 
     return (
         <AnimatePresence>
             {open && (
                 <Dialog open={open} onOpenChange={onOpenChange}>
-                    <DialogContent className="sm:max-w-[700px] p-0 overflow-hidden bg-background/95 backdrop-blur-2xl border border-border/50 rounded-[2.5rem] shadow-[0_32px_128px_-16px_rgba(0,0,0,0.3)]">
+                    <DialogContent className="sm:max-w-[750px] h-[850px] p-0 overflow-hidden bg-background/95 backdrop-blur-2xl border border-border/50 rounded-[2.5rem] shadow-[0_32px_128px_-16px_rgba(0,0,0,0.3)]">
                         <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-accent/5 pointer-events-none" />
 
-                        <div className="relative p-10 space-y-8">
+                        <div className="relative p-10 h-full flex flex-col space-y-8">
                             <DialogHeader>
                                 <motion.div
                                     initial={{ opacity: 0, y: -20 }}
@@ -106,71 +129,55 @@ export function RegistrationModal({ open, onOpenChange, token, projectName, init
                                 </motion.div>
                             </DialogHeader>
 
-                            {/* API Token Section - Glassmorphism */}
-                            <motion.div
-                                initial={{ opacity: 0, scale: 0.95 }}
-                                animate={{ opacity: 1, scale: 1 }}
-                                transition={{ duration: 0.5, delay: 0.1 }}
-                                className="group relative p-7 glass-card rounded-[2rem] overflow-hidden"
-                            >
-                                <div className="absolute top-0 right-0 p-6 opacity-5 group-hover:opacity-10 transition-all duration-500">
-                                    <Info className="w-16 h-16" />
-                                </div>
+                            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full flex-1 flex flex-col">
+                                {!initialTab && (
+                                    <TabsList className="grid w-full grid-cols-3 bg-muted/30 p-1.5 rounded-[1.5rem] border border-border/40 mb-8 h-14">
+                                        <TabsTrigger value="vm" className="rounded-[1.1rem] font-bold transition-all data-[state=active]:bg-background data-[state=active]:shadow-xl py-3 text-sm">
+                                            <Server className="w-4 h-4 mr-2" /> Server
+                                        </TabsTrigger>
+                                        <TabsTrigger value="db" className="rounded-[1.1rem] font-bold transition-all data-[state=active]:bg-background data-[state=active]:shadow-xl py-3 text-sm">
+                                            <Database className="w-4 h-4 mr-2" /> Database
+                                        </TabsTrigger>
+                                        <TabsTrigger value="cluster" className="rounded-[1.1rem] font-bold transition-all data-[state=active]:bg-background data-[state=active]:shadow-xl py-3 text-sm">
+                                            <Cloud className="w-4 h-4 mr-2" /> Cluster
+                                        </TabsTrigger>
+                                    </TabsList>
+                                )}
 
-                                <div className="flex flex-col gap-5">
-                                    <div className="flex items-center gap-2">
-                                        <div className="h-5 w-1 bg-primary rounded-full shadow-[0_0_12px_rgba(var(--primary),0.5)]" />
-                                        <p className="text-[11px] font-black text-muted-foreground uppercase tracking-[0.25em]">Secure Project Access Token</p>
-                                    </div>
-
-                                    <div className="flex items-center gap-3">
-                                        <code className="flex-1 p-4 bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/5 rounded-2xl font-mono text-sm break-all font-semibold tracking-tight">
-                                            {token || "Creating secure gateway..."}
-                                        </code>
-                                        <Button
-                                            size="icon"
-                                            variant="outline"
-                                            className="h-12 w-12 rounded-2xl hover:bg-primary hover:text-primary-foreground border-primary/20 transition-all active:scale-95 shadow-lg group-hover:shadow-primary/20"
-                                            onClick={() => copyToClipboard(token || "", "Token")}
-                                            disabled={!token}
-                                        >
-                                            <Copy className="h-5 w-5" />
-                                        </Button>
-                                    </div>
-                                    <p className="text-[10px] text-muted-foreground/60 italic font-medium">This key is required to authenticate your agent metrics.</p>
-                                </div>
-                            </motion.div>
-
-                            <Tabs defaultValue={initialTab === "vm" ? "vm" : "audit"} className="w-full">
-                                <TabsList className="grid w-full grid-cols-2 bg-muted/30 p-1.5 rounded-[1.5rem] border border-border/40 mb-8 h-14">
-                                    <TabsTrigger value="vm" className="rounded-[1.1rem] font-bold transition-all data-[state=active]:bg-background data-[state=active]:shadow-xl py-3 text-sm">
-                                        <Activity className="w-4 h-4 mr-2" /> Server Monitoring
-                                    </TabsTrigger>
-                                    <TabsTrigger value="audit" className="rounded-[1.1rem] font-bold transition-all data-[state=active]:bg-background data-[state=active]:shadow-xl py-3 text-sm">
-                                        <Package className="w-4 h-4 mr-2" /> Service Audit
-                                    </TabsTrigger>
-                                </TabsList>
-
-                                {/* Server Tab — with method selector */}
                                 <TabsContent value="vm" className="mt-0 focus-visible:outline-none">
                                     <motion.div
                                         initial={{ opacity: 0, x: 20 }}
                                         animate={{ opacity: 1, x: 0 }}
                                         exit={{ opacity: 0, x: -20 }}
                                         transition={{ type: "spring", damping: 25, stiffness: 200 }}
-                                        className="space-y-5"
+                                        className="space-y-6"
                                     >
                                         <div className="space-y-1.5 px-1">
                                             <h3 className="text-base font-black tracking-tight leading-none">Linux Agent Installation</h3>
-                                            <p className="text-xs text-muted-foreground font-medium">Deploy our lightweight agent on any Cloud or On-Prem server.</p>
+                                            <p className="text-xs text-muted-foreground font-medium">Deploy our agent on any Cloud or On-Prem server to track resources and service versions.</p>
                                         </div>
 
-                                        {/* Method selector */}
-                                        <div className="flex gap-3">
-                                            {/* Cron Job */}
+                                        {/* Method Selector */}
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <button
+                                                onClick={() => setServerMethod("agent")}
+                                                className={`flex items-center gap-3 p-4 rounded-2xl border transition-all duration-200 text-left ${serverMethod === "agent"
+                                                    ? "border-emerald-500 bg-emerald-500/5 shadow-md shadow-emerald-500/10"
+                                                    : "border-border/40 bg-muted/20 hover:border-border/70 hover:bg-muted/40"
+                                                    }`}
+                                            >
+                                                <div className={`flex h-9 w-9 items-center justify-center rounded-xl shrink-0 ${serverMethod === "agent" ? "bg-emerald-500 text-white" : "bg-muted text-muted-foreground"}`}>
+                                                    <Terminal className="w-4 h-4" />
+                                                </div>
+                                                <div>
+                                                    <p className="text-sm font-bold leading-none mb-1">Real-time Agent</p>
+                                                    <p className="text-[10px] text-muted-foreground uppercase font-black">Persistent Service</p>
+                                                </div>
+                                            </button>
+
                                             <button
                                                 onClick={() => setServerMethod("cron")}
-                                                className={`flex-1 flex items-center gap-3 p-4 rounded-2xl border transition-all duration-200 text-left ${serverMethod === "cron"
+                                                className={`flex items-center gap-3 p-4 rounded-2xl border transition-all duration-200 text-left ${serverMethod === "cron"
                                                     ? "border-primary bg-primary/5 shadow-md shadow-primary/10"
                                                     : "border-border/40 bg-muted/20 hover:border-border/70 hover:bg-muted/40"
                                                     }`}
@@ -179,158 +186,107 @@ export function RegistrationModal({ open, onOpenChange, token, projectName, init
                                                     <Clock className="w-4 h-4" />
                                                 </div>
                                                 <div>
-                                                    <p className="text-sm font-bold leading-none mb-1">Cron Job</p>
-                                                    <p className="text-xs text-muted-foreground">Scheduled, automatic runs</p>
-                                                </div>
-                                                {serverMethod === "cron" && (
-                                                    <div className="ml-auto h-2 w-2 rounded-full bg-primary shrink-0" />
-                                                )}
-                                            </button>
-
-                                            {/* Agent — coming soon */}
-                                            <button
-                                                disabled
-                                                className="flex-1 flex items-center gap-3 p-4 rounded-2xl border border-border/30 bg-muted/10 opacity-50 cursor-not-allowed text-left"
-                                            >
-                                                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-muted text-muted-foreground shrink-0">
-                                                    <Terminal className="w-4 h-4" />
-                                                </div>
-                                                <div>
-                                                    <div className="flex items-center gap-2 mb-1">
-                                                        <p className="text-sm font-bold leading-none">Agent</p>
-                                                        <span className="text-[9px] font-black uppercase tracking-widest bg-muted text-muted-foreground px-1.5 py-0.5 rounded-full">Soon</span>
-                                                    </div>
-                                                    <p className="text-xs text-muted-foreground">Persistent, always-on agent</p>
+                                                    <p className="text-sm font-bold leading-none mb-1">Periodic (Cron)</p>
+                                                    <p className="text-[10px] text-muted-foreground uppercase font-black">Daily Collection</p>
                                                 </div>
                                             </button>
                                         </div>
 
-                                        {/* Cron method content */}
-                                        {serverMethod === "cron" && (
-                                            <motion.div
-                                                key="cron-content"
-                                                initial={{ opacity: 0, y: 8 }}
-                                                animate={{ opacity: 1, y: 0 }}
-                                                transition={{ duration: 0.25 }}
-                                                className="space-y-4"
-                                            >
-                                                <div className="flex items-end gap-4 p-5 bg-muted/30 rounded-2xl border border-border/40">
-                                                    <div className="space-y-2">
-                                                        <Label htmlFor="hour" className="text-xs font-bold uppercase text-muted-foreground">Hour (0-23)</Label>
-                                                        <Input
-                                                            id="hour"
-                                                            type="number"
-                                                            min="0"
-                                                            max="23"
-                                                            value={cronTime.hour}
-                                                            onChange={(e) => setCronTime({ ...cronTime, hour: e.target.value })}
-                                                            className="w-24 bg-background border-border/60"
-                                                        />
+                                        {/* Method Content */}
+                                        <div className="relative min-h-[200px]">
+                                            {serverMethod === "agent" ? (
+                                                <div className="space-y-6">
+                                                    {/* Agent Sub-selector */}
+                                                    <div className="flex p-1 bg-muted/30 rounded-xl border border-border/20 w-fit">
+                                                        <button
+                                                            onClick={() => setAgentSubMethod("persistent")}
+                                                            className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${agentSubMethod === "persistent" ? "bg-background text-emerald-500 shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+                                                        >
+                                                            Persistent Install
+                                                        </button>
+                                                        <button
+                                                            onClick={() => setAgentSubMethod("test")}
+                                                            className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${agentSubMethod === "test" ? "bg-background text-emerald-500 shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+                                                        >
+                                                            One-time Test
+                                                        </button>
                                                     </div>
-                                                    <div className="text-2xl font-black text-muted-foreground pb-2">:</div>
-                                                    <div className="space-y-2">
-                                                        <Label htmlFor="minute" className="text-xs font-bold uppercase text-muted-foreground">Minute (0-59)</Label>
-                                                        <Input
-                                                            id="minute"
-                                                            type="number"
-                                                            min="0"
-                                                            max="59"
-                                                            value={cronTime.minute}
-                                                            onChange={(e) => setCronTime({ ...cronTime, minute: e.target.value })}
-                                                            className="w-24 bg-background border-border/60"
-                                                        />
+
+                                                    <div className="p-5 bg-emerald-500/5 rounded-2xl border border-emerald-500/20">
+                                                        <div className="flex items-center gap-2 mb-2">
+                                                            <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                                                            <span className="text-xs font-bold text-emerald-600">
+                                                                {agentSubMethod === "persistent" ? "Systemd Service Mode" : "Manual Test Mode"}
+                                                            </span>
+                                                        </div>
+                                                        <p className="text-xs text-muted-foreground leading-relaxed">
+                                                            {agentSubMethod === "persistent" 
+                                                                ? "Downloads and installs the binary as a registered systemd service. It will restart automatically on reboot."
+                                                                : "Runs the agent binary directly in the current session. Perfect for verifying connection before a full install."}
+                                                        </p>
                                                     </div>
-                                                    <div className="flex-1 text-xs text-muted-foreground pb-3 text-right font-mono">
-                                                        Runs daily at <span className="font-bold text-foreground">{cronTime.hour.padStart(2, '0')}:{cronTime.minute.padStart(2, '0')}</span>
-                                                    </div>
+
+                                                    <TerminalBlock 
+                                                        command={agentSubMethod === "persistent" 
+                                                            ? `curl -s -L "${serverUrl}/get/install-agent.sh" | sudo bash -s -- "${serverUrl}" "${token || 'YOUR_TOKEN'}"`
+                                                            : `curl -s -L "${serverUrl}/get/audit_services.sh" | bash -s -- "${serverUrl}" "${token || 'YOUR_TOKEN'}" && export SERVER_URL="${serverUrl}" AGENT_TOKEN="${token || 'YOUR_TOKEN'}" && curl -s -L "$SERVER_URL/get/infrawatch-agent" -o infrawatch-agent && chmod +x infrawatch-agent && ./infrawatch-agent`
+                                                        } 
+                                                        onCopy={(cmd) => copyToClipboard(cmd, agentSubMethod === "persistent" ? "Persistent Install" : "Test Command")} 
+                                                    />
                                                 </div>
-                                                <TerminalBlock command={cronCommand} onCopy={(cmd) => copyToClipboard(cmd, "Cron Command")} />
-                                            </motion.div>
-                                        )}
+                                            ) : (
+                                                <div className="space-y-6">
+                                                    <div className="flex items-center gap-4 p-5 bg-muted/30 rounded-2xl border border-border/40">
+                                                        <div className="space-y-2">
+                                                            <Label className="text-[10px] font-black uppercase text-muted-foreground">Execution Time</Label>
+                                                            <div className="flex items-center gap-2">
+                                                                <Input
+                                                                    type="number"
+                                                                    value={cronTime.hour}
+                                                                    min="0" max="23"
+                                                                    onChange={(e) => setCronTime({ ...cronTime, hour: e.target.value })}
+                                                                    className="w-16 h-10 bg-background font-bold text-center rounded-lg"
+                                                                />
+                                                                <span className="font-bold">:</span>
+                                                                <Input
+                                                                    type="number"
+                                                                    value={cronTime.minute}
+                                                                    min="0" max="59"
+                                                                    onChange={(e) => setCronTime({ ...cronTime, minute: e.target.value })}
+                                                                    className="w-16 h-10 bg-background font-bold text-center rounded-lg"
+                                                                />
+                                                                <div className="ml-4 text-xs text-muted-foreground font-medium">
+                                                                    Daily at <span className="text-foreground font-black">{cronTime.hour.padStart(2, '0')}:{cronTime.minute.padStart(2, '0')}</span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <TerminalBlock command={cronCommand} onCopy={(cmd) => copyToClipboard(cmd, "Cron Command")} />
+                                                </div>
+                                            )}
+                                        </div>
                                     </motion.div>
                                 </TabsContent>
 
-                                <TabsContent value="audit" className="mt-0 focus-visible:outline-none">
-                                    <motion.div
-                                        initial={{ opacity: 0, x: 20 }}
-                                        animate={{ opacity: 1, x: 0 }}
-                                        exit={{ opacity: 0, x: -20 }}
-                                        transition={{ type: "spring", damping: 25, stiffness: 200 }}
-                                        className="space-y-5"
-                                    >
-                                        <div className="space-y-1.5 px-1">
-                                            <h3 className="text-base font-black tracking-tight leading-none text-primary">Service Version Audit</h3>
-                                            <p className="text-xs text-muted-foreground font-medium mt-1">Detect versions of Nginx, PostgreSQL, Node.js, and more.</p>
-                                        </div>
+                                <TabsContent value="db" className="mt-0 focus-visible:outline-none">
+                                    <TabContentContainer
+                                        title="Database Monitoring"
+                                        description="Run our lightweight collector as a container to monitor your SQL/NoSQL databases."
+                                        command={dbCommand}
+                                        onCopy={(cmd: string) => copyToClipboard(cmd, "Docker Command")}
+                                    />
+                                </TabsContent>
 
-                                        {/* Method selector for Audit */}
-                                        <div className="flex gap-3">
-                                            {/* Run Once */}
-                                            <button
-                                                onClick={() => setAuditMethod("once")}
-                                                className={`flex-1 flex items-center gap-3 p-4 rounded-2xl border transition-all duration-200 text-left ${auditMethod === "once"
-                                                    ? "border-primary bg-primary/5 shadow-md shadow-primary/10"
-                                                    : "border-border/40 bg-muted/20 hover:border-border/70 hover:bg-muted/40"
-                                                    }`}
-                                            >
-                                                <div className={`flex h-9 w-9 items-center justify-center rounded-xl shrink-0 ${auditMethod === "once" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>
-                                                    <Terminal className="w-4 h-4" />
-                                                </div>
-                                                <div>
-                                                    <div className="flex items-center gap-2 mb-1">
-                                                        <p className="text-sm font-bold leading-none">Run Once</p>
-                                                    </div>
-                                                    <p className="text-xs text-muted-foreground">Immediate execution scan</p>
-                                                </div>
-                                                {auditMethod === "once" && (
-                                                    <div className="ml-auto h-2 w-2 rounded-full bg-primary shrink-0" />
-                                                )}
-                                            </button>
-
-                                            {/* Monthly */}
-                                            <button
-                                                onClick={() => setAuditMethod("monthly")}
-                                                className={`flex-1 flex items-center gap-3 p-4 rounded-2xl border transition-all duration-200 text-left ${auditMethod === "monthly"
-                                                    ? "border-primary bg-primary/5 shadow-md shadow-primary/10"
-                                                    : "border-border/40 bg-muted/20 hover:border-border/70 hover:bg-muted/40"
-                                                    }`}
-                                            >
-                                                <div className={`flex h-9 w-9 items-center justify-center rounded-xl shrink-0 ${auditMethod === "monthly" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>
-                                                    <Calendar className="w-4 h-4" />
-                                                </div>
-                                                <div>
-                                                    <div className="flex items-center gap-2 mb-1">
-                                                        <p className="text-sm font-bold leading-none">Monthly Audit</p>
-                                                    </div>
-                                                    <p className="text-xs text-muted-foreground">Every 1st of month at 00:00</p>
-                                                </div>
-                                                {auditMethod === "monthly" && (
-                                                    <div className="ml-auto h-2 w-2 rounded-full bg-primary shrink-0" />
-                                                )}
-                                            </button>
-                                        </div>
-
-                                        <div className="p-5 bg-muted/20 rounded-2xl border border-border/40 space-y-4">
-                                            <div className="flex items-start gap-3">
-                                                <div className="h-5 w-5 rounded-full bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
-                                                    <Info className="w-3 h-3 text-primary" />
-                                                </div>
-                                                <p className="text-xs leading-relaxed text-muted-foreground">
-                                                    {auditMethod === "once" 
-                                                        ? "Run this command manually on your server to perform an immediate version audit. Results will appear in the 'Services' tab."
-                                                        : "This command adds a cron job to your server to automatically perform a deep service scan on the 1st of every month."}
-                                                </p>
-                                            </div>
-                                            <TerminalBlock 
-                                                command={auditMethod === "once" ? auditOnceCommand : auditMonthlyCommand} 
-                                                onCopy={(cmd) => copyToClipboard(cmd, "Audit Command")} 
-                                            />
-                                        </div>
-                                    </motion.div>
+                                <TabsContent value="cluster" className="mt-0 focus-visible:outline-none">
+                                    <TabContentContainer
+                                        title="Kubernetes Integration"
+                                        description="Deploy our Helm chart to monitor your entire cluster performance."
+                                        command={k8sCommand}
+                                        onCopy={(cmd: string) => copyToClipboard(cmd, "Helm Command")}
+                                    />
                                 </TabsContent>
                             </Tabs>
 
-                            {/* Footer/Next Steps */}
                             <motion.div
                                 initial={{ opacity: 0 }}
                                 animate={{ opacity: 1 }}
@@ -372,3 +328,4 @@ function TabContentContainer({ title, description, command, onCopy }: any) {
         </motion.div>
     );
 }
+

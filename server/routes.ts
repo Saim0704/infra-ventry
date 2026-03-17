@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { api } from "@shared/routes";
 import path from 'path';
+import fs from 'fs';
 import express from 'express';
 import { WebMonitorService } from "./lib/web-monitor-service";
 import { DomainMonitorService } from "./services/domainMonitor";
@@ -35,15 +36,6 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
-  // Serve Agent Scripts (Static)
-  const scriptsPath = path.join(process.cwd(), 'agents');
-  console.log(`[Static Service] Mapping /scripts to ${scriptsPath}`);
-  app.use('/scripts', express.static(scriptsPath, {
-    setHeaders: (res: any) => {
-      res.setHeader('Content-Type', 'text/x-shellscript');
-    }
-  }));
-
   // Setup Auth
   setupAuth(app);
   registerAuthRoutes(app);

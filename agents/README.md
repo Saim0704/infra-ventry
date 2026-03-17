@@ -1,47 +1,61 @@
-# Infrastructure Agents
+# Infrawatch Agents
 
-This folder contains the Python agents responsible for collecting and pushing metrics to the central dashboard.
+This folder contains monitoring agents responsible for collecting and pushing metrics to the Infrawatch central dashboard.
 
-## Setup
+## Directory Structure
 
-1.  **Install Dependencies**:
-    ```bash
-    pip install -r requirements.txt
-    ```
-
-2.  **Get an Agent Token**:
-    -   Log in to the Central Dashboard.
-    -   Go to **Settings**.
-    -   Generate a new token (e.g., for "VM Agent").
-    -   Copy the token.
-
-## Running the Agents
-
-You can run these agents as system services or cron jobs.
-
-### VM Agent
-Captures CPU, RAM, Disk usage, and Hostname info.
-
-```bash
-export API_URL="https://your-app-url.repl.co/api/ingest/vm"
-export AGENT_TOKEN="your_token_here"
-python vm_agent.py
+```
+agents/
+├── src/            # Source code for high-performance agents (TS, Go)
+├── scripts/        # Bash and Python helper scripts for one-time/cron tasks
+├── dist/           # Compiled binaries for distribution
+└── README.md       # This file
 ```
 
-### Database Agent
-Captures DB stats (mocked for demo, can connect to Postgres).
+## High-Performance Agents
 
+### Real-time Binary Agent (TypeScript/Node)
+Located at `src/agent.ts`.
+
+**Build Command:**
 ```bash
-export API_URL="https://your-app-url.repl.co/api/ingest/db"
-export AGENT_TOKEN="your_token_here"
-python db_agent.py
+npx esbuild agents/src/agent.ts --bundle --platform=node --format=cjs --outfile=agents/dist/infrawatch-agent --banner:js='#!/usr/bin/env node' && chmod +x agents/dist/infrawatch-agent
 ```
 
-### Kubernetes Agent
-Captures Cluster stats.
-
+**Run Command:**
 ```bash
-export API_URL="https://your-app-url.repl.co/api/ingest/k8s"
-export AGENT_TOKEN="your_token_here"
-python k8s_agent.py
+export SERVER_URL="http://your-server:3000"
+export AGENT_TOKEN="your_token"
+./agents/dist/infrawatch-agent
 ```
+
+### Go Agent (Maximum Efficiency)
+Located at `src/agent.go`.
+
+**Build Command:**
+```bash
+go build -o agents/dist/infrawatch-go-agent agents/src/agent.go
+```
+
+**Run Command:**
+```bash
+export SERVER_URL="http://your-server:3000"
+export AGENT_TOKEN="your_token"
+./agents/dist/infrawatch-go-agent
+```
+
+## Helper Scripts
+
+### Bash Monitoring Script
+Located at `scripts/vm_agent.sh`. Used for Periodic (Cron) monitoring.
+
+### Service Version Auditor
+Located at `scripts/audit_services.sh`. Used to detect versions of Nginx, PostgreSQL, etc.
+
+## Deployment
+
+Production-ready scripts and binaries are synced to the `public/scripts/` directory on the server to be served to target machines via `curl`.
+
+- `public/scripts/infrawatch-agent`: The compiled binary.
+- `public/scripts/install-agent.sh`: The systemd persistent installer.
+- `public/scripts/audit_services.sh`: The version auditor.
