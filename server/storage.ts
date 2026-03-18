@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { eq, desc, sql, or } from "drizzle-orm";
+import { eq, desc, asc, sql, or } from "drizzle-orm";
 import {
   users, tokens, servers, serverMetrics, databases, databaseMetrics, clusters, clusterMetrics, projects,
   smtpSettings, alerts, projectAlertSettings, webMonitors, webMonitorMetrics, domainMonitors, projectEmailTemplates,
@@ -50,6 +50,8 @@ export interface IStorage {
   getProjects(): Promise<Project[]>;
   getProjectStatusBySlug(slug: string): Promise<any | null>;
   createProject(data: z.infer<typeof insertProjectSchema>): Promise<Project>;
+  updateProject(id: number, data: Partial<z.infer<typeof insertProjectSchema>>): Promise<Project>;
+  updateProjectSortOrder(id: number, order: number): Promise<void>;
   deleteProject(id: number): Promise<void>;
 
   // === SERVERS ===
@@ -57,6 +59,7 @@ export interface IStorage {
   getServer(id: number): Promise<(Server & { metrics: ServerMetric[] }) | undefined>;
   upsertServer(data: z.infer<typeof insertServerSchema>): Promise<Server>;
   updateServer(id: number, data: Partial<z.infer<typeof insertServerSchema>>): Promise<Server | undefined>;
+  updateServerSortOrder(id: number, order: number): Promise<void>;
   deleteServer(id: number): Promise<void>;
   addServerMetric(data: z.infer<typeof insertServerMetricSchema>): Promise<void>;
   getServerByHostname(hostname: string): Promise<Server | undefined>;
@@ -155,7 +158,7 @@ export class DatabaseStorage implements IStorage {
 
   // === PROJECTS ===
   async getProjects(): Promise<Project[]> {
-    return await db.select().from(projects).orderBy(desc(projects.createdAt));
+    return await db.select().from(projects).orderBy(asc(projects.sortOrder), asc(projects.name));
   }
 
   async createProject(data: z.infer<typeof insertProjectSchema>): Promise<Project> {
@@ -230,8 +233,12 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateProject(id: number, data: Partial<z.infer<typeof insertProjectSchema>>): Promise<Project> {
-    const [project] = await db.update(projects).set(data).where(eq(projects.id, id)).returning();
+    const [project] = await db.update(projects).set({ ...data }).where(eq(projects.id, id)).returning();
     return project;
+  }
+
+  async updateProjectSortOrder(id: number, order: number): Promise<void> {
+    await db.update(projects).set({ sortOrder: order }).where(eq(projects.id, id));
   }
 
   async deleteProject(id: number): Promise<void> {
@@ -298,21 +305,23 @@ export class DatabaseStorage implements IStorage {
 
   // === SERVERS ===
   async getServers(): Promise<(Server & { metrics: ServerMetric[], project?: Project })[]> {
-    const allServers = await db.select().from(servers).orderBy(desc(servers.lastSeen));
+    const allServers = await db.select({
+      server: servers,
+      project: projects
+    })
+    .from(servers)
+    .leftJoin(projects, eq(servers.projectId, projects.id))
+    .orderBy(asc(projects.sortOrder), asc(servers.sortOrder), asc(servers.hostname));
 
     // Fetch latest metrics and project for each server
-    const serversWithExtras = await Promise.all(allServers.map(async (server) => {
+    const serversWithExtras = await Promise.all(allServers.map(async (row) => {
+      const server = row.server;
       const metrics = await db.select().from(serverMetrics)
         .where(eq(serverMetrics.serverId, server.id))
         .orderBy(desc(serverMetrics.createdAt))
         .limit(1);
 
-      let project;
-      if (server.projectId) {
-        [project] = await db.select().from(projects).where(eq(projects.id, server.projectId));
-      }
-
-      return { ...server, metrics, project };
+      return { ...server, metrics, project: row.project || undefined };
     }));
 
     return serversWithExtras;
@@ -385,6 +394,10 @@ export class DatabaseStorage implements IStorage {
       broadcast({ type: "resource_update", resource: "server", id: updated.id });
     }
     return updated;
+  }
+
+  async updateServerSortOrder(id: number, order: number): Promise<void> {
+    await db.update(servers).set({ sortOrder: order }).where(eq(servers.id, id));
   }
 
   async deleteServer(id: number): Promise<void> {

@@ -56,6 +56,7 @@ export const servers = pgTable("servers", {
   checkInterval: integer("check_interval").default(5).notNull(), // Interval in minutes
   lastAuditAt: timestamp("last_audit_at"),
   lastSeen: timestamp("last_seen").defaultNow(),
+  sortOrder: integer("sort_order").default(0).notNull(),
 });
 
 // === PROJECTS ===
@@ -65,6 +66,7 @@ export const projects = pgTable("projects", {
   description: text("description"),
   slug: text("slug").notNull().unique(),
   createdAt: timestamp("created_at").defaultNow(),
+  sortOrder: integer("sort_order").default(0).notNull(),
 });
 
 // === PROJECT ALERT SETTINGS ===
@@ -423,6 +425,7 @@ export const serverWithMetricsSchema = z.object({
   memoryUsage: z.number().min(0).max(100).optional(),
   diskUsage: z.number().min(0).max(100).optional(),
   checkInterval: z.number().int().min(1).default(5).optional(),
+  sortOrder: z.number().int().optional(),
 });
 
 // === TYPES ===

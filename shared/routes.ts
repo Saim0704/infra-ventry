@@ -94,6 +94,15 @@ export const api = {
         404: errorSchemas.notFound,
       },
     },
+    updateOrder: {
+      method: 'PATCH' as const,
+      path: '/api/projects/:id/order' as const,
+      input: z.object({ order: z.number().int() }),
+      responses: {
+        200: z.object({ success: z.boolean() }),
+        404: errorSchemas.notFound,
+      },
+    },
     resources: {
       method: 'GET' as const,
       path: '/api/projects/:id/resources' as const,
@@ -238,6 +247,15 @@ export const api = {
       path: '/api/servers/:id' as const,
       responses: {
         204: z.void(),
+        404: errorSchemas.notFound,
+      },
+    },
+    updateOrder: {
+      method: 'PATCH' as const,
+      path: '/api/servers/:id/order' as const,
+      input: z.object({ order: z.number().int() }),
+      responses: {
+        200: z.object({ success: z.boolean() }),
         404: errorSchemas.notFound,
       },
     },

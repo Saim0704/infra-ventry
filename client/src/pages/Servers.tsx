@@ -1,4 +1,4 @@
-import { useServers, useServer, useCreateServer, useUpdateServer, useDeleteServer } from "@/hooks/use-servers";
+import { useServers, useServer, useCreateServer, useUpdateServer, useDeleteServer, useUpdateServerOrder } from "@/hooks/use-servers";
 import { useProjects, useCreateProject, useUpdateProject, useDeleteProject } from "@/hooks/use-projects";
 import { Shell } from "@/components/layout/Shell";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -17,7 +17,7 @@ import { serverWithMetricsSchema } from "@shared/schema";
 import { useState, Fragment } from "react";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { format, formatDistanceToNow } from "date-fns";
-import { Server, Cpu, HardDrive, CircuitBoard, Plus, Edit2, Trash2, Eye, Terminal, Layout, Activity, Shield, Globe, User, Key, Search, ChevronDown, ChevronRight, Folder } from "lucide-react";
+import { Server, Cpu, HardDrive, CircuitBoard, Plus, Edit2, Trash2, Eye, Terminal, Layout, Activity, Shield, Globe, User, Key, Search, ChevronDown, ChevronRight, Folder, ChevronUp } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
 import { api } from "@shared/routes";
@@ -141,6 +141,35 @@ export default function ServersPage() {
     setEditingServer(server);
   };
 
+  const updateServerOrder = useUpdateServerOrder();
+
+  const handleMoveServer = async (server: any, groupItems: any[], direction: 'up' | 'down') => {
+    const index = groupItems.findIndex(s => s.id === server.id);
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+
+    if (targetIndex < 0 || targetIndex >= groupItems.length) return;
+
+    const targetServer = groupItems[targetIndex];
+    
+    let newCurrentOrder = targetServer.sortOrder;
+    let newTargetOrder = server.sortOrder;
+
+    if (newCurrentOrder === newTargetOrder) {
+      newCurrentOrder = targetIndex;
+      newTargetOrder = index;
+    }
+
+    try {
+      await Promise.all([
+        updateServerOrder.mutateAsync({ id: server.id, order: newCurrentOrder }),
+        updateServerOrder.mutateAsync({ id: targetServer.id, order: newTargetOrder })
+      ]);
+      queryClient.invalidateQueries({ queryKey: [api.servers.list.path] });
+    } catch (err) {
+      toast({ title: "Failed to move server", variant: "destructive" });
+    }
+  };
+
   const handleDelete = async (id: number) => {
     if (confirm("Are you sure you want to delete this server?")) {
       try {
@@ -234,7 +263,8 @@ export default function ServersPage() {
         <Table>
           <TableHeader className="bg-muted/40 border-b border-border/40">
             <TableRow className="hover:bg-transparent border-none">
-              <TableHead className="py-6 text-[10px] uppercase tracking-[0.2em] font-black text-muted-foreground/60 pl-8">Identifier</TableHead>
+              <TableHead className="py-6 text-[10px] uppercase tracking-[0.2em] font-black text-muted-foreground/60 pl-8 w-[80px]">#</TableHead>
+              <TableHead className="py-6 text-[10px] uppercase tracking-[0.2em] font-black text-muted-foreground/60">Identifier</TableHead>
               <TableHead className="py-6 text-[10px] uppercase tracking-[0.2em] font-black text-muted-foreground/60">Network</TableHead>
               <TableHead className="py-6 text-[10px] uppercase tracking-[0.2em] font-black text-muted-foreground/60">System</TableHead>
               <TableHead className="py-6 text-[10px] uppercase tracking-[0.2em] font-black text-muted-foreground/60 w-[160px]">vCPU Load</TableHead>
@@ -248,29 +278,36 @@ export default function ServersPage() {
             {isLoading ? (
               Array.from({ length: 5 }).map((_, i) => (
                 <TableRow key={i}>
-                  <TableCell className="pl-6"><Skeleton className="h-5 w-32" /></TableCell>
+                  <TableCell className="pl-8"><Skeleton className="h-5 w-8" /></TableCell>
+                  <TableCell><Skeleton className="h-5 w-32" /></TableCell>
                   <TableCell><Skeleton className="h-5 w-24" /></TableCell>
                   <TableCell><Skeleton className="h-5 w-32" /></TableCell>
                   <TableCell><Skeleton className="h-5 w-24" /></TableCell>
                   <TableCell colSpan={3} className="px-4"><Skeleton className="h-5 w-full" /></TableCell>
-                  <TableCell className="pr-6 text-right"><Skeleton className="h-8 w-16 ml-auto" /></TableCell>
                 </TableRow>
               ))
             ) : Object.keys(groupedServers || {}).length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} className="h-32 text-center text-muted-foreground font-medium">
+                <TableCell colSpan={9} className="h-32 text-center text-muted-foreground font-medium">
                   {searchTerm ? "No servers match your search criteria." : "No servers mapped yet. Ready to expand?"}
                 </TableCell>
               </TableRow>
             ) : (
-              Object.entries(groupedServers || {}).map(([projectKey, group]) => {
+              Object.entries(groupedServers || {})
+                .sort(([, a], [, b]) => {
+                  const orderA = a.project?.sortOrder ?? 0;
+                  const orderB = b.project?.sortOrder ?? 0;
+                  if (orderA !== orderB) return orderA - orderB;
+                  return (a.project?.name || "").localeCompare(b.project?.name || "");
+                })
+                .map(([projectKey, group]) => {
                 const { project, items: projectServers } = group;
                 const projectName = project.name;
                 const isExpanded = expandedProjects[projectKey];
                 return (
                   <Fragment key={projectKey}>
                     <TableRow className="bg-muted/10 hover:bg-muted/20 group/header transition-colors">
-                      <TableCell colSpan={8} className="py-3 px-6">
+                      <TableCell colSpan={9} className="py-3 px-6">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2 cursor-pointer flex-1" onClick={() => toggleProject(projectKey)}>
                             {isExpanded ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
@@ -319,11 +356,38 @@ export default function ServersPage() {
                         </div>
                       </TableCell>
                     </TableRow>
-                    {isExpanded && projectServers.map((server) => {
+                    {isExpanded && projectServers.map((server, serverIndex) => {
                       const lastMetric = server.metrics?.[0];
                       return (
                         <TableRow key={server.id} className="group hover:bg-muted/20 border-b border-border/40 transition-colors">
-                          <TableCell className="pl-8 py-4">
+                          <TableCell className="pl-8 py-4 font-bold text-muted-foreground/60 w-[80px]">
+                            <div className="flex items-center gap-3">
+                              <span className="w-4 text-xs font-mono">{serverIndex + 1}</span>
+                              {!searchTerm && (
+                                <div className="flex flex-col -gap-1">
+                                  <Button 
+                                    variant="ghost" 
+                                    size="icon" 
+                                    className="h-5 w-5 rounded hover:bg-primary/20 hover:text-primary transition-colors disabled:opacity-30" 
+                                    onClick={() => handleMoveServer(server, projectServers, 'up')}
+                                    disabled={serverIndex === 0}
+                                  >
+                                    <ChevronUp className="h-3.5 w-3.5" />
+                                  </Button>
+                                  <Button 
+                                    variant="ghost" 
+                                    size="icon" 
+                                    className="h-5 w-5 rounded hover:bg-primary/20 hover:text-primary transition-colors disabled:opacity-30" 
+                                    onClick={() => handleMoveServer(server, projectServers, 'down')}
+                                    disabled={serverIndex === projectServers.length - 1}
+                                  >
+                                    <ChevronDown className="h-3.5 w-3.5" />
+                                  </Button>
+                                </div>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell className="py-4">
                             <div className="flex items-center gap-3 cursor-pointer group/name" onClick={() => { setSelectedServerId(server.id); setIsDetailOpen(true); }}>
                               <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary group-hover/name:scale-110 transition-transform duration-300">
                                 <Server className="h-4 w-4" />

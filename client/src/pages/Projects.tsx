@@ -1,5 +1,5 @@
 import { Link } from "wouter";
-import { useProjects, useCreateProject, useDeleteProject, useUpdateProject } from "@/hooks/use-projects";
+import { useProjects, useCreateProject, useDeleteProject, useUpdateProject, useUpdateProjectOrder } from "@/hooks/use-projects";
 import { useServers } from "@/hooks/use-servers";
 import { useDatabases } from "@/hooks/use-databases";
 import { useClusters } from "@/hooks/use-clusters";
@@ -12,7 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { useState } from "react";
-import { Plus, Trash2, Folder, Server, Edit2, Search, Eye, Database, Cloud, Globe, Activity } from "lucide-react";
+import { Plus, Trash2, Folder, Server, Edit2, Search, Eye, Database, Cloud, Globe, Activity, ChevronUp, ChevronDown } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
 import { api } from "@shared/routes";
@@ -87,6 +87,35 @@ export default function ProjectsPage() {
         setIsFormOpen(true);
     };
 
+    const updateOrder = useUpdateProjectOrder();
+
+    const handleMove = async (project: any, direction: 'up' | 'down') => {
+        if (!projects) return;
+        const index = projects.findIndex(p => p.id === project.id);
+        const targetIndex = direction === 'up' ? index - 1 : index + 1;
+
+        if (targetIndex < 0 || targetIndex >= projects.length) return;
+
+        const targetProject = projects[targetIndex];
+        
+        let newCurrentOrder = targetProject.sortOrder;
+        let newTargetOrder = project.sortOrder;
+
+        if (newCurrentOrder === newTargetOrder) {
+            newCurrentOrder = targetIndex;
+            newTargetOrder = index;
+        }
+
+        try {
+            await Promise.all([
+                updateOrder.mutateAsync({ id: project.id, order: newCurrentOrder }),
+                updateOrder.mutateAsync({ id: targetProject.id, order: newTargetOrder })
+            ]);
+        } catch (err) {
+            toast({ title: "Failed to move project", variant: "destructive" });
+        }
+    };
+
     const handleDelete = async (id: number) => {
         if (confirm("Are you sure you want to delete this project? Servers will be unassigned but not deleted.")) {
             try {
@@ -129,7 +158,8 @@ export default function ProjectsPage() {
                 <Table>
                     <TableHeader className="bg-muted/40 border-b border-border/40">
                         <TableRow className="hover:bg-transparent border-none">
-                            <TableHead className="py-6 text-[10px] uppercase tracking-[0.2em] font-black text-muted-foreground/60 pl-8">Project Name</TableHead>
+                            <TableHead className="py-6 text-[10px] uppercase tracking-[0.2em] font-black text-muted-foreground/60 pl-8 w-[80px]">S.No</TableHead>
+                            <TableHead className="py-6 text-[10px] uppercase tracking-[0.2em] font-black text-muted-foreground/60">Project Name</TableHead>
                             <TableHead className="py-6 text-[10px] uppercase tracking-[0.2em] font-black text-muted-foreground/60">
                                 <div className="flex items-center gap-2">
                                     <Server className="h-3 w-3" />
@@ -167,7 +197,8 @@ export default function ProjectsPage() {
                         {isLoading ? (
                             Array.from({ length: 5 }).map((_, i) => (
                                 <TableRow key={i}>
-                                    <TableCell className="pl-8 py-4"><Skeleton className="h-5 w-32" /></TableCell>
+                                    <TableCell className="pl-8 py-4"><Skeleton className="h-5 w-8" /></TableCell>
+                                    <TableCell className="py-4"><Skeleton className="h-5 w-32" /></TableCell>
                                     <TableCell className="py-4"><Skeleton className="h-5 w-12" /></TableCell>
                                     <TableCell className="py-4"><Skeleton className="h-5 w-12" /></TableCell>
                                     <TableCell className="py-4"><Skeleton className="h-5 w-12" /></TableCell>
@@ -178,12 +209,12 @@ export default function ProjectsPage() {
                             ))
                         ) : filteredProjects?.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={7} className="h-32 text-center text-muted-foreground font-medium">
+                                <TableCell colSpan={8} className="h-32 text-center text-muted-foreground font-medium">
                                     {searchTerm ? "No projects match your search criteria." : "No projects created yet. Start by adding one!"}
                                 </TableCell>
                             </TableRow>
                         ) : (
-                            filteredProjects?.map((project) => {
+                            filteredProjects?.map((project, index) => {
                                 const projectServers = getServersInProject(project.id);
                                 const projectDbs = getDatabasesInProject(project.id);
                                 const projectClusters = getClustersInProject(project.id);
@@ -192,7 +223,34 @@ export default function ProjectsPage() {
 
                                 return (
                                     <TableRow key={project.id} className="group hover:bg-muted/20 border-b border-border/40 transition-colors">
-                                        <TableCell className="pl-8 py-4">
+                                        <TableCell className="pl-8 py-4 font-bold text-muted-foreground/60 w-[80px]">
+                                            <div className="flex items-center gap-3">
+                                                <span className="w-4 text-xs font-mono">{index + 1}</span>
+                                                {!searchTerm && (
+                                                    <div className="flex flex-col -gap-1">
+                                                        <Button 
+                                                            variant="ghost" 
+                                                            size="icon" 
+                                                            className="h-5 w-5 rounded hover:bg-primary/20 hover:text-primary transition-colors disabled:opacity-30" 
+                                                            onClick={() => handleMove(project, 'up')}
+                                                            disabled={index === 0}
+                                                        >
+                                                            <ChevronUp className="h-3 w-3" />
+                                                        </Button>
+                                                        <Button 
+                                                            variant="ghost" 
+                                                            size="icon" 
+                                                            className="h-5 w-5 rounded hover:bg-primary/20 hover:text-primary transition-colors disabled:opacity-30" 
+                                                            onClick={() => handleMove(project, 'down')}
+                                                            disabled={index === (projects?.length || 0) - 1}
+                                                        >
+                                                            <ChevronDown className="h-3 w-3" />
+                                                        </Button>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </TableCell>
+                                        <TableCell className="py-4">
                                             <Link href={`/projects/${project.id}`}>
                                                 <div className="flex items-center gap-3 cursor-pointer group/name">
                                                     <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary group-hover/name:bg-primary group-hover/name:text-white transition-all duration-300">

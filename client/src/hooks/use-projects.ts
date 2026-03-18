@@ -84,3 +84,22 @@ export function useProjectResources(id: number) {
         enabled: !!id,
     });
 }
+export function useUpdateProjectOrder() {
+    const queryClient = useQueryClient();
+    return useMutation({
+        mutationFn: async ({ id, order }: { id: number, order: number }) => {
+            const url = buildUrl(api.projects.updateOrder.path, { id });
+            const res = await fetch(url, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ order }),
+                credentials: "include",
+            });
+            if (!res.ok) throw new Error("Failed to update project order");
+            return api.projects.updateOrder.responses[200].parse(await res.json());
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: [api.projects.list.path] });
+        },
+    });
+}

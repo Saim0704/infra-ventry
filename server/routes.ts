@@ -233,6 +233,14 @@ export async function registerRoutes(
     res.status(204).send();
   });
 
+  app.patch(api.projects.updateOrder.path, isAuthenticated, async (req, res) => {
+    const id = Number(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ message: "Invalid project ID" });
+    const { order } = api.projects.updateOrder.input.parse(req.body);
+    await storage.updateProjectSortOrder(id, order);
+    res.json({ success: true });
+  });
+
   app.get(api.projects.resources.path, isAuthenticated, async (req, res) => {
     const id = Number(req.params.id);
     if (isNaN(id)) return res.status(400).json({ message: "Invalid project ID" });
@@ -478,6 +486,14 @@ export async function registerRoutes(
   app.delete(api.servers.delete.path, isAuthenticated, async (req, res) => {
     await storage.deleteServer(Number(req.params.id));
     res.status(204).send();
+  });
+
+  app.patch(api.servers.updateOrder.path, isAuthenticated, async (req, res) => {
+    const id = Number(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ message: "Invalid server ID" });
+    const { order } = api.servers.updateOrder.input.parse(req.body);
+    await storage.updateServerSortOrder(id, order);
+    res.json({ success: true });
   });
 
   // === USER MANAGEMENT ===
