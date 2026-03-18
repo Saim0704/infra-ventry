@@ -1,6 +1,10 @@
 import { Link } from "wouter";
 import { useProjects, useCreateProject, useDeleteProject, useUpdateProject } from "@/hooks/use-projects";
 import { useServers } from "@/hooks/use-servers";
+import { useDatabases } from "@/hooks/use-databases";
+import { useClusters } from "@/hooks/use-clusters";
+import { useWebMonitors } from "@/hooks/use-web-monitors";
+import { useDomainMonitors } from "@/hooks/use-domain-monitors";
 import { Shell } from "@/components/layout/Shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,16 +12,19 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { useState } from "react";
-import { Plus, Trash2, Folder, Server, Edit2, Search, Eye } from "lucide-react";
+import { Plus, Trash2, Folder, Server, Edit2, Search, Eye, Database, Cloud, Globe, Activity } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient } from "@/lib/queryClient";
 import { api } from "@shared/routes";
 import { Skeleton } from "@/components/ui/skeleton";
-import { format } from "date-fns";
 
 export default function ProjectsPage() {
     const { data: projects, isLoading: projectsLoading } = useProjects();
     const { data: servers, isLoading: serversLoading } = useServers();
+    const { data: databases, isLoading: databasesLoading } = useDatabases();
+    const { data: clusters, isLoading: clustersLoading } = useClusters();
+    const { data: webMonitors, isLoading: webMonitorsLoading } = useWebMonitors();
+    const { data: domainMonitors, isLoading: domainMonitorsLoading } = useDomainMonitors();
     const createProject = useCreateProject();
     const updateProject = useUpdateProject();
     const deleteProject = useDeleteProject();
@@ -28,7 +35,7 @@ export default function ProjectsPage() {
     const [newProject, setNewProject] = useState({ name: "", description: "" });
     const [searchTerm, setSearchTerm] = useState("");
 
-    const isLoading = projectsLoading || serversLoading;
+    const isLoading = projectsLoading || serversLoading || databasesLoading || clustersLoading || webMonitorsLoading || domainMonitorsLoading;
 
     const filteredProjects = projects?.filter(p =>
         p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -37,6 +44,22 @@ export default function ProjectsPage() {
 
     const getServersInProject = (projectId: number) => {
         return servers?.filter(s => s.projectId === projectId) || [];
+    };
+
+    const getDatabasesInProject = (projectId: number) => {
+        return databases?.filter(d => d.projectId === projectId) || [];
+    };
+
+    const getClustersInProject = (projectId: number) => {
+        return clusters?.filter(c => c.projectId === projectId) || [];
+    };
+
+    const getWebInProject = (projectId: number) => {
+        return webMonitors?.filter(w => w.projectId === projectId) || [];
+    };
+
+    const getDomainsInProject = (projectId: number) => {
+        return domainMonitors?.filter(d => d.projectId === projectId) || [];
     };
 
     const onSubmit = async () => {
@@ -107,9 +130,36 @@ export default function ProjectsPage() {
                     <TableHeader className="bg-muted/40 border-b border-border/40">
                         <TableRow className="hover:bg-transparent border-none">
                             <TableHead className="py-6 text-[10px] uppercase tracking-[0.2em] font-black text-muted-foreground/60 pl-8">Project Name</TableHead>
-                            <TableHead className="py-6 text-[10px] uppercase tracking-[0.2em] font-black text-muted-foreground/60">Description</TableHead>
-                            <TableHead className="py-6 text-[10px] uppercase tracking-[0.2em] font-black text-muted-foreground/60">Servers</TableHead>
-                            <TableHead className="py-6 text-[10px] uppercase tracking-[0.2em] font-black text-muted-foreground/60">Created At</TableHead>
+                            <TableHead className="py-6 text-[10px] uppercase tracking-[0.2em] font-black text-muted-foreground/60">
+                                <div className="flex items-center gap-2">
+                                    <Server className="h-3 w-3" />
+                                    <span>Servers</span>
+                                </div>
+                            </TableHead>
+                            <TableHead className="py-6 text-[10px] uppercase tracking-[0.2em] font-black text-muted-foreground/60">
+                                <div className="flex items-center gap-2">
+                                    <Database className="h-3 w-3" />
+                                    <span>DB</span>
+                                </div>
+                            </TableHead>
+                            <TableHead className="py-6 text-[10px] uppercase tracking-[0.2em] font-black text-muted-foreground/60">
+                                <div className="flex items-center gap-2">
+                                    <Cloud className="h-3 w-3" />
+                                    <span>Cluster</span>
+                                </div>
+                            </TableHead>
+                            <TableHead className="py-6 text-[10px] uppercase tracking-[0.2em] font-black text-muted-foreground/60">
+                                <div className="flex items-center gap-2">
+                                    <Globe className="h-3 w-3" />
+                                    <span>Websites</span>
+                                </div>
+                            </TableHead>
+                            <TableHead className="py-6 text-[10px] uppercase tracking-[0.2em] font-black text-muted-foreground/60">
+                                <div className="flex items-center gap-2">
+                                    <Activity className="h-3 w-3" />
+                                    <span>Domains</span>
+                                </div>
+                            </TableHead>
                             <TableHead className="py-6 text-[10px] uppercase tracking-[0.2em] font-black text-muted-foreground/60 text-right pr-8">Actions</TableHead>
                         </TableRow>
                     </TableHeader>
@@ -118,21 +168,28 @@ export default function ProjectsPage() {
                             Array.from({ length: 5 }).map((_, i) => (
                                 <TableRow key={i}>
                                     <TableCell className="pl-8 py-4"><Skeleton className="h-5 w-32" /></TableCell>
-                                    <TableCell className="py-4"><Skeleton className="h-5 w-64" /></TableCell>
-                                    <TableCell className="py-4"><Skeleton className="h-5 w-16" /></TableCell>
-                                    <TableCell className="py-4"><Skeleton className="h-5 w-24" /></TableCell>
+                                    <TableCell className="py-4"><Skeleton className="h-5 w-12" /></TableCell>
+                                    <TableCell className="py-4"><Skeleton className="h-5 w-12" /></TableCell>
+                                    <TableCell className="py-4"><Skeleton className="h-5 w-12" /></TableCell>
+                                    <TableCell className="py-4"><Skeleton className="h-5 w-12" /></TableCell>
+                                    <TableCell className="py-4"><Skeleton className="h-5 w-12" /></TableCell>
                                     <TableCell className="pr-8 text-right"><Skeleton className="h-8 w-16 ml-auto" /></TableCell>
                                 </TableRow>
                             ))
                         ) : filteredProjects?.length === 0 ? (
                             <TableRow>
-                                <TableCell colSpan={5} className="h-32 text-center text-muted-foreground font-medium">
+                                <TableCell colSpan={7} className="h-32 text-center text-muted-foreground font-medium">
                                     {searchTerm ? "No projects match your search criteria." : "No projects created yet. Start by adding one!"}
                                 </TableCell>
                             </TableRow>
                         ) : (
                             filteredProjects?.map((project) => {
                                 const projectServers = getServersInProject(project.id);
+                                const projectDbs = getDatabasesInProject(project.id);
+                                const projectClusters = getClustersInProject(project.id);
+                                const projectWeb = getWebInProject(project.id);
+                                const projectDomains = getDomainsInProject(project.id);
+
                                 return (
                                     <TableRow key={project.id} className="group hover:bg-muted/20 border-b border-border/40 transition-colors">
                                         <TableCell className="pl-8 py-4">
@@ -145,19 +202,45 @@ export default function ProjectsPage() {
                                                 </div>
                                             </Link>
                                         </TableCell>
-                                        <TableCell className="py-4 text-sm text-muted-foreground">
-                                            <span className="line-clamp-1">{project.description || "—"}</span>
-                                        </TableCell>
                                         <TableCell className="py-4">
-                                            <div className="flex items-center gap-2">
-                                                <div className="h-6 w-6 rounded bg-primary/10 flex items-center justify-center text-primary">
+                                            <div className="flex items-center gap-2 group/stat">
+                                                <div className="h-6 w-6 rounded bg-primary/10 flex items-center justify-center text-primary group-hover/stat:bg-primary group-hover/stat:text-white transition-all duration-300">
                                                     <Server className="h-3 w-3" />
                                                 </div>
                                                 <span className="text-sm font-bold">{projectServers.length}</span>
                                             </div>
                                         </TableCell>
-                                        <TableCell className="py-4 text-xs font-medium text-muted-foreground">
-                                            {project.createdAt ? format(new Date(project.createdAt), "MMM d, yyyy") : "N/A"}
+                                        <TableCell className="py-4">
+                                            <div className="flex items-center gap-2 group/stat">
+                                                <div className="h-6 w-6 rounded bg-indigo-500/10 flex items-center justify-center text-indigo-500 group-hover/stat:bg-indigo-500 group-hover/stat:text-white transition-all duration-300">
+                                                    <Database className="h-3 w-3" />
+                                                </div>
+                                                <span className="text-sm font-bold">{projectDbs.length}</span>
+                                            </div>
+                                        </TableCell>
+                                        <TableCell className="py-4">
+                                            <div className="flex items-center gap-2 group/stat">
+                                                <div className="h-6 w-6 rounded bg-emerald-500/10 flex items-center justify-center text-emerald-500 group-hover/stat:bg-emerald-500 group-hover/stat:text-white transition-all duration-300">
+                                                    <Cloud className="h-3 w-3" />
+                                                </div>
+                                                <span className="text-sm font-bold">{projectClusters.length}</span>
+                                            </div>
+                                        </TableCell>
+                                        <TableCell className="py-4">
+                                            <div className="flex items-center gap-2 group/stat">
+                                                <div className="h-6 w-6 rounded bg-blue-500/10 flex items-center justify-center text-blue-500 group-hover/stat:bg-blue-500 group-hover/stat:text-white transition-all duration-300">
+                                                    <Globe className="h-3 w-3" />
+                                                </div>
+                                                <span className="text-sm font-bold">{projectWeb.length}</span>
+                                            </div>
+                                        </TableCell>
+                                        <TableCell className="py-4">
+                                            <div className="flex items-center gap-2 group/stat">
+                                                <div className="h-6 w-6 rounded bg-amber-500/10 flex items-center justify-center text-amber-500 group-hover/stat:bg-amber-500 group-hover/stat:text-white transition-all duration-300">
+                                                    <Activity className="h-3 w-3" />
+                                                </div>
+                                                <span className="text-sm font-bold">{projectDomains.length}</span>
+                                            </div>
                                         </TableCell>
                                         <TableCell className="py-4 text-right pr-8">
                                             <div className="flex justify-end gap-1 transition-all duration-300">
