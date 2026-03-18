@@ -109,13 +109,13 @@ export function ServerDetailView({ id }: ServerDetailViewProps) {
                                     </div>
                                     <div className="border-x border-border/50">
                                         <p className="text-[10px] text-muted-foreground uppercase mb-1">Memory</p>
-                                        <p className="text-xl font-bold">{server.totalRam} GB</p>
-                                        <p className="text-[10px] text-muted-foreground">RAM</p>
+                                        <p className="text-xl font-bold">{Number(server.totalRam).toFixed(2)} GB</p>
+                                        <p className="text-[10px] text-muted-foreground">RAM Capacity</p>
                                     </div>
                                     <div>
                                         <p className="text-[10px] text-muted-foreground uppercase mb-1">Storage</p>
-                                        <p className="text-xl font-bold">{server.totalDisk} GB</p>
-                                        <p className="text-[10px] text-muted-foreground">Disk</p>
+                                        <p className="text-xl font-bold">{Number(server.totalDisk).toFixed(2)} GB</p>
+                                        <p className="text-[10px] text-muted-foreground">Disk Capacity</p>
                                     </div>
                                 </div>
                             </section>
@@ -126,8 +126,14 @@ export function ServerDetailView({ id }: ServerDetailViewProps) {
                                 </h3>
                                 <div className="space-y-5 bg-secondary/10 rounded-xl p-5 border border-border/50">
                                     <UsageBar value={lastMetric?.cpuUsage || 0} label="CPU Load" />
-                                    <UsageBar value={lastMetric?.memoryUsage || 0} label="RAM Consumption" />
-                                    <UsageBar value={lastMetric?.diskUsage || 0} label="Disk Occupancy" />
+                                    <UsageBar 
+                                        value={lastMetric?.memoryUsage || 0} 
+                                        label={`RAM Consumption: ${Math.round(((lastMetric?.memoryUsage || 0) / 100) * (server.totalRam || 0))} / ${Math.round(server.totalRam || 0)} GB`} 
+                                    />
+                                    <UsageBar 
+                                        value={lastMetric?.diskUsage || 0} 
+                                        label={`Disk Occupancy: ${Math.round(((lastMetric?.diskUsage || 0) / 100) * (server.totalDisk || 0))} / ${Math.round(server.totalDisk || 0)} GB`} 
+                                    />
                                 </div>
                             </section>
                         </div>
@@ -152,8 +158,8 @@ export function ServerDetailView({ id }: ServerDetailViewProps) {
                                             <TableRow key={idx} className="border-border/40 hover:bg-muted/20">
                                                 <TableCell className="py-2.5 font-mono text-xs pl-6">{proc.pid}</TableCell>
                                                 <TableCell className="py-2.5 font-medium text-sm">{proc.name}</TableCell>
-                                                <TableCell className="py-2.5 text-right font-mono text-xs">{proc.cpu}%</TableCell>
-                                                <TableCell className="py-2.5 text-right font-mono text-xs pr-6">{proc.memory}%</TableCell>
+                                                <TableCell className="py-2.5 text-right font-mono text-xs">{Number(proc.cpu).toFixed(2)}%</TableCell>
+                                                <TableCell className="py-2.5 text-right font-mono text-xs pr-6">{Number(proc.memory).toFixed(2)}%</TableCell>
                                             </TableRow>
                                         ))}
                                     </TableBody>
@@ -185,12 +191,28 @@ export function ServerDetailView({ id }: ServerDetailViewProps) {
                                     <div className="h-2 w-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
                                 </div>
                             ))}
+                            {server.lastAuditAt && (
+                                <div className="col-span-1 md:col-span-2 mt-4 p-4 bg-primary/5 rounded-2xl border border-primary/10 flex items-center justify-between">
+                                    <div className="flex items-center gap-3">
+                                        <Activity className="h-4 w-4 text-primary" />
+                                        <span className="text-xs font-bold text-primary italic uppercase tracking-widest">Last Comprehensive Audit</span>
+                                    </div>
+                                    <span className="text-xs font-mono font-medium text-primary/80">
+                                        {format(new Date(server.lastAuditAt), "MMM d, yyyy HH:mm:ss")}
+                                    </span>
+                                </div>
+                            )}
                         </div>
                     ) : (
                         <div className="h-full flex flex-col items-center justify-center text-muted-foreground p-8 border border-dashed rounded-3xl border-border/50 bg-muted/5">
                             <Package className="h-12 w-12 mb-4 opacity-20" />
                             <p className="text-lg font-black italic">No Audit Data</p>
                             <p className="text-xs font-medium text-muted-foreground mt-1">Run the service audit script on this server to populate this view.</p>
+                            {server.lastAuditAt && (
+                                <p className="text-[10px] text-muted-foreground mt-2">
+                                    Last Audit attempted: {format(new Date(server.lastAuditAt), "MMM d, yyyy HH:mm:ss")}
+                                </p>
+                            )}
                             <div className="mt-6 p-4 bg-card rounded-2xl border border-border/50 w-full max-w-md font-mono text-[10px] overflow-x-auto">
                                 <code className="text-primary"># Recommended Monthly Audit Cron:<br/>0 0 1 * * /path/to/audit_services.sh https://domain.com ag_token</code>
                             </div>

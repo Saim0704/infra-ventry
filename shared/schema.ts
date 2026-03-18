@@ -53,6 +53,8 @@ export const servers = pgTable("servers", {
   sshKey: text("ssh_key"),
   projectId: integer("project_id").references(() => projects.id, { onDelete: 'cascade' }),
   serviceVersions: jsonb("service_versions"),
+  checkInterval: integer("check_interval").default(5).notNull(), // Interval in minutes
+  lastAuditAt: timestamp("last_audit_at"),
   lastSeen: timestamp("last_seen").defaultNow(),
 });
 
@@ -420,6 +422,7 @@ export const serverWithMetricsSchema = z.object({
   storageUsed: z.number().min(0, "Storage Used must be positive").optional(),
   memoryUsage: z.number().min(0).max(100).optional(),
   diskUsage: z.number().min(0).max(100).optional(),
+  checkInterval: z.number().int().min(1).default(5).optional(),
 });
 
 // === TYPES ===

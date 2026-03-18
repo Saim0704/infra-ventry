@@ -2,6 +2,7 @@ import passport from "passport";
 import { Strategy as LocalStrategy } from "passport-local";
 import { Express } from "express";
 import session from "express-session";
+import { log } from "./lib/logger";
 import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
 import { users, insertUserSchema, type User } from "@shared/schema";
@@ -92,7 +93,7 @@ export function setupAuth(app: Express) {
                 firstName: "System",
                 lastName: "Administrator"
             });
-            console.log("Created default user 'admin' with password 'password'");
+            log("Created default user 'admin' with password 'password'", "auth");
         }
     })();
 }

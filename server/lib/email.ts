@@ -1,3 +1,4 @@
+import { log as info, error } from "./logger";
 import nodemailer from "nodemailer";
 import type { SmtpSettings } from "@shared/schema";
 
@@ -130,7 +131,7 @@ export class EmailService {
   }
 
   static async sendTestEmail(settings: SmtpSettings & { senderName?: string }, recipient: string) {
-    console.log(`Attempting to send test email to ${recipient} via ${settings.host}:${settings.port}`);
+    info(`Attempting to send test email to ${recipient} via ${settings.host}:${settings.port}`);
 
     // We recreate transporter to ensure we use current settings
     const transporter = nodemailer.createTransport({
@@ -151,9 +152,9 @@ export class EmailService {
 
     try {
       await transporter.verify();
-      console.log("SMTP connection verified successfully");
+      info("SMTP connection verified successfully");
     } catch (verifyError) {
-      console.error("SMTP Verification failed:", verifyError);
+      error("SMTP Verification failed:", verifyError);
       throw new Error(`SMTP Connection failed: ${verifyError instanceof Error ? verifyError.message : String(verifyError)}`);
     }
 

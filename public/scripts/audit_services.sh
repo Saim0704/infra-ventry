@@ -6,11 +6,15 @@ export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"
 # Configuration
 SERVER_URL="$1"
 AGENT_TOKEN="$2"
-LOG_FILE="/tmp/infrawatch_audit.log"
+LOG_FILE="/tmp/infrawatch_audit_$(id -u).log"
 
 # Function to log both to console and file
 log() {
-    echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" | tee -a "$LOG_FILE"
+    echo "$(date '+%Y-%m-%d %H:%M:%S') - $1"
+    # Try to append to log if possible, but don't fail if not
+    if [ -w "/tmp" ]; then
+        echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" >> "$LOG_FILE" 2>/dev/null || true
+    fi
 }
 
 if [ -z "$SERVER_URL" ]; then

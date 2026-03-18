@@ -3,14 +3,10 @@ import type { Server } from "http";
 
 let wss: WebSocketServer | null = null;
 
+import { info, error as errLogger } from "./logger";
+
 function log(message: string, source = "websocket") {
-  const formattedTime = new Date().toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: true,
-  });
-  console.log(`${formattedTime} [${source}] ${message}`);
+  info(message, source);
 }
 
 export function setupRealtime(server: Server) {

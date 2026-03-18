@@ -41,7 +41,7 @@ export function ClusterDetailView({ id }: ClusterDetailViewProps) {
                             <Cpu className="h-3 w-3" />
                             Cluster CPU %
                         </div>
-                        <div className="text-4xl font-black font-display italic group-hover:scale-105 transition-transform">{cluster.metrics[0]?.cpuUsage?.toFixed(1) ?? 0}%</div>
+                        <div className="text-4xl font-black font-display italic group-hover:scale-105 transition-transform">{cluster.metrics[0]?.cpuUsage?.toFixed(2) ?? 0}%</div>
                     </CardContent>
                 </Card>
                 <Card className="bg-secondary/10 border-border/50 rounded-2xl overflow-hidden group">

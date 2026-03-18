@@ -21,7 +21,7 @@ export function UsageBar({ value, label, className, showValue = true }: UsageBar
             "text-[11px] font-mono font-bold",
             isHigh ? "text-destructive" : isWarning ? "text-orange-500" : "text-primary/90"
           )}>
-            {value.toFixed(1)}%
+            {value.toFixed(2)}%
           </span>
         )}
       </div>

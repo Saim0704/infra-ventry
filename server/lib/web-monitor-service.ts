@@ -1,8 +1,8 @@
+import { info, error, debug, warn } from "./logger";
 import axios from "axios";
 import { storage } from "../storage";
 import { WebMonitor, WebMonitorMetric } from "@shared/schema";
 import tls from "tls";
-import { log } from "./logger";
 
 export class WebMonitorService {
     private static interval: NodeJS.Timeout | null = null;
@@ -10,7 +10,7 @@ export class WebMonitorService {
     static start() {
         if (this.interval) return;
 
-        log("Web Monitor Service started", "monitor");
+        info("Web Monitor Service started", "monitor");
 
         // Run checks every minute
         this.interval = setInterval(() => this.runChecks(), 60 * 1000);
@@ -29,15 +29,16 @@ export class WebMonitorService {
                 return new Date(m.nextCheck) <= now;
             });
 
+            debug(`Monitors check triggered. Total: ${allMonitors.length}, Due: ${dueMonitors.length}`, "monitor");
             if (dueMonitors.length === 0) return;
 
-            log(`Running checks for ${dueMonitors.length} monitors`, "monitor");
+            info(`Running checks for ${dueMonitors.length} monitors`, "monitor");
 
             for (const monitor of dueMonitors) {
                 await this.performCheck(monitor);
             }
         } catch (err) {
-            console.error("Error in WebMonitorService.runChecks:", err);
+            error("Error in WebMonitorService.runChecks:", err);
         }
     }
 
@@ -54,7 +55,7 @@ export class WebMonitorService {
         const urlToCheck = urlStr.includes("://") ? urlStr : `https://${urlStr}`;
 
         try {
-            log(`Checking ${urlToCheck}`, "monitor");
+            info(`Checking ${urlToCheck}`, "monitor");
             const response = await axios({
                 method: (monitor.method || "GET").toUpperCase() as any,
                 url: urlToCheck,
@@ -69,6 +70,7 @@ export class WebMonitorService {
             status = response.status;
             responseTime = Date.now() - start;
             serverName = response.headers['server'] || null;
+            debug(`Response headers for ${urlToCheck}:`, response.headers, "monitor");
 
             const statusMatches = status === (monitor.expectedStatus || 200);
             let contentMatches = true;
@@ -79,10 +81,10 @@ export class WebMonitorService {
             }
 
             isUp = statusMatches && contentMatches;
-            log(`Check result for ${urlToCheck}: status=${status}, isUp=${isUp}`, "monitor");
+            info(`Check result for ${urlToCheck}: status=${status}, isUp=${isUp}`, "monitor");
         } catch (err: any) {
             responseTime = Date.now() - start;
-            log(`Check failed for ${urlToCheck}: ${err.message}`, "monitor");
+            warn(`Check failed for ${urlToCheck}: ${err.message}`, "monitor");
         }
 
         // SSL Check
@@ -101,6 +103,7 @@ export class WebMonitorService {
                     sslStatus = 'expired';
                 } else if (daysToExpiry <= (monitor.sslExpiryThreshold || 7)) {
                     sslStatus = 'expiring';
+                    warn(`SSL certificate for ${urlToCheck} is expiring in ${daysToExpiry} days!`, "monitor");
                 } else {
                     sslStatus = 'valid';
                 }
@@ -108,10 +111,10 @@ export class WebMonitorService {
                 // Trigger SSL expiry alert
                 await storage.checkAndTriggerAlert(monitor.id, 'web', [
                     { type: 'web_ssl', value: daysToExpiry, operator: '<=' },
-                ]).catch(e => log(`SSL Alert failed for ${urlToCheck}: ${e.message}`, "monitor"));
+                ]).catch(e => info(`SSL Alert failed for ${urlToCheck}: ${e.message}`, "monitor"));
             } catch (err: any) {
                 sslStatus = 'invalid';
-                log(`SSL check failed for ${urlToCheck}: ${err.message}`, "monitor");
+                warn(`SSL check failed for ${urlToCheck}: ${err.message}`, "monitor");
             }
         }
 
@@ -135,7 +138,7 @@ export class WebMonitorService {
                 tlsVersion: tlsVersion ?? undefined,
             });
         } catch (err: any) {
-            log(`Storage update failed for ${urlToCheck}: ${err.message}`, "monitor");
+            info(`Storage update failed for ${urlToCheck}: ${err.message}`, "monitor");
         }
     }
 

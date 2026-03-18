@@ -15,6 +15,7 @@ import {
 } from "@shared/schema";
 import { EmailService } from "./lib/email";
 import { broadcast } from "./lib/realtime";
+import { log as info, error } from "./lib/logger";
 import { z } from "zod";
 
 // Safe logging helper that won't crash if file doesn't exist
@@ -23,8 +24,8 @@ function safeLog(message: string) {
     const fs = require("fs");
     fs.appendFileSync("alerts_debug.log", message);
   } catch (err) {
-    // Silently fail or use console.log as fallback
-    console.log(message.trim());
+    // Silently fail or use info as fallback
+    info(message.trim(), "storage");
   }
 }
 
@@ -402,7 +403,13 @@ export class DatabaseStorage implements IStorage {
       { type: 'storage', value: data.diskUsage, operator: '>' },
     ]);
 
-    broadcast({ type: "metric_update", resource: "server", id: data.serverId });
+    const server = await this.getServer(data.serverId);
+    broadcast({ 
+      type: "metric_update", 
+      resource: "server", 
+      id: data.serverId,
+      projectId: server?.projectId 
+    });
   }
 
   async checkAndTriggerAlert(resourceId: number, type: 'server' | 'database' | 'cluster' | 'web' | 'domain', currentMetrics: { type: string, value: number | null | undefined, operator: '>' | '<=' }[]): Promise<void> {
@@ -504,7 +511,7 @@ export class DatabaseStorage implements IStorage {
             .limit(1);
 
           if (!lastAlert) {
-            console.log(`[ALERTS] Triggering alert for ${resourceName}: ${m.type} value ${m.value} (threshold ${threshold})`);
+            info(`[ALERTS] Triggering alert for ${resourceName}: ${m.type} value ${m.value} (threshold ${threshold})`, "storage");
             await this.createAlert({
               ...idFields,
               type: m.type,
@@ -580,15 +587,15 @@ export class DatabaseStorage implements IStorage {
               );
             }
             safeLog(`[${new Date().toISOString()}] Alert emails SENT to ${recipients.join(', ')}\n`);
-            console.log(`[ALERTS] Alert emails sent to ${recipients.join(', ')}`);
+            info(`[ALERTS] Alert emails sent to ${recipients.join(', ')}`, "storage");
           } else {
             safeLog(`[${new Date().toISOString()}] Alert SKIPPED (spam protection) for ${resourceName} ${m.type}\n`);
-            console.log(`[ALERTS] Alert for ${resourceName} ${m.type} already sent within the last hour. Skipping.`);
+            info(`[ALERTS] Alert for ${resourceName} ${m.type} already sent within the last hour. Skipping.`, "storage");
           }
         }
       }
     } catch (err) {
-      console.error("Alert check error:", err);
+      error(`Alert check error: ${err}`, "storage");
     }
   }
 
@@ -795,7 +802,13 @@ export class DatabaseStorage implements IStorage {
       { type: 'db_storage', value: data.storageUsed, operator: '>' },
     ]);
 
-    broadcast({ type: "metric_update", resource: "database", id: data.databaseId });
+    const database = await this.getDatabase(data.databaseId);
+    broadcast({ 
+      type: "metric_update", 
+      resource: "database", 
+      id: data.databaseId,
+      projectId: database?.projectId 
+    });
   }
 
   // === CLUSTERS ===
@@ -849,7 +862,13 @@ export class DatabaseStorage implements IStorage {
       { type: 'cluster_memory', value: data.memoryUsage, operator: '>' },
     ]);
 
-    broadcast({ type: "metric_update", resource: "cluster", id: data.clusterId });
+    const cluster = await this.getCluster(data.clusterId);
+    broadcast({ 
+      type: "metric_update", 
+      resource: "cluster", 
+      id: data.clusterId,
+      projectId: cluster?.project?.id 
+    });
   }
 
   // === USERS ===
@@ -946,6 +965,14 @@ export class DatabaseStorage implements IStorage {
         { type: 'web_response', value: data.responseTime, operator: '>' },
       ]);
     }
+
+    const monitor = await this.getWebMonitor(data.monitorId);
+    broadcast({ 
+      type: "metric_update", 
+      resource: "web", 
+      id: data.monitorId,
+      projectId: monitor?.projectId 
+    });
   }
 
   // === DOMAIN MONITORS ===

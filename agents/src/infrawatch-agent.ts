@@ -11,6 +11,7 @@ import { execSync } from "child_process";
 const SERVER_URL = process.env.SERVER_URL || "http://localhost:3000";
 const AGENT_TOKEN = process.env.AGENT_TOKEN || "infra_inventory_agent_secret_2026";
 const INTERVAL = parseInt(process.env.INTERVAL || "60000", 10);
+const ONCE = process.argv.includes("--once");
 
 /**
  * Get internal IP address (non-loopback)
@@ -141,4 +142,6 @@ console.log(`Interval: ${INTERVAL / 1000}s`);
 console.log("-----------------------------------------");
 
 report();
-setInterval(report, INTERVAL);
+if (!ONCE) {
+  setInterval(report, INTERVAL);
+}

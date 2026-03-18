@@ -1,4 +1,5 @@
 import { whoisDomain } from "whoiser";
+import { log as info, error, debug, warn } from "../lib/logger";
 import { storage } from "../storage";
 import { EmailService } from "../lib/email";
 import { db } from "../db";
@@ -22,7 +23,7 @@ export class DomainMonitorService {
         // Initial check after a short wait
         setTimeout(() => {
             this.checkDomains().catch((err) => {
-                console.error("Initial Domain Monitor Check Error:", err);
+                error(`Initial Domain Monitor Check Error: ${err}`, "domainMonitor");
             });
         }, 10000);
 
@@ -31,18 +32,18 @@ export class DomainMonitorService {
             try {
                 await this.checkDomains();
             } catch (err) {
-                console.error("Domain Monitor Loop Error:", err);
+                error(`Domain Monitor Loop Error: ${err}`, "domainMonitor");
             }
         }, this.CHECK_INTERVAL_MS);
 
-        console.log("[DomainMonitor] Service started");
+        info("[DomainMonitor] Service started", "domainMonitor");
     }
 
     static stop() {
         if (this.interval) {
             clearInterval(this.interval);
             this.interval = null;
-            console.log("[DomainMonitor] Service stopped");
+            info("[DomainMonitor] Service stopped", "domainMonitor");
         }
     }
 
@@ -62,15 +63,16 @@ export class DomainMonitorService {
                     )
                 );
 
+            debug(`Domain monitor loop running. Total domains found: ${domainsToCheck.length}`, "domainMonitor");
             if (domainsToCheck.length === 0) return;
 
-            console.log(`[DomainMonitor] Checking ${domainsToCheck.length} domains...`);
+            info(`[DomainMonitor] Checking ${domainsToCheck.length} domains...`, "domainMonitor");
 
             for (const monitor of domainsToCheck) {
                 await this.checkSingleDomain(monitor);
             }
         } catch (err) {
-            console.error("[DomainMonitor] Failed to fetch domains to check:", err);
+            error(`[DomainMonitor] Failed to fetch domains to check: ${err}`, "domainMonitor");
         }
     }
 
@@ -79,13 +81,16 @@ export class DomainMonitorService {
         const timeoutPromise = new Promise<never>((_, reject) => {
             timer = setTimeout(() => reject(new Error('timeout')), ms);
         });
-        return Promise.race([promise, timeoutPromise]).finally(() => clearTimeout(timer));
+        return Promise.race([promise, timeoutPromise]).finally(() => {
+            clearTimeout(timer);
+            debug(`Timeout wrapper cleared for task`, "domainMonitor");
+        });
     }
 
     static async checkSingleDomain(monitor: any) {
         let expiryDate: Date | null = null;
         try {
-            console.log(`[DomainMonitor] Checking WHOIS via whoiser for ${monitor.domain}`);
+            info(`[DomainMonitor] Checking WHOIS via whoiser for ${monitor.domain}`, "domainMonitor");
             
             if (!monitor.domain.endsWith('.in') && !monitor.domain.endsWith('.co.in')) {
                 const domainWhois = await this.runWithTimeout(whoisDomain(monitor.domain, { follow: 1 }), 15000);
@@ -103,11 +108,11 @@ export class DomainMonitorService {
                 }
             }
         } catch (err) {
-            console.error(`[DomainMonitor] whoiser failed for ${monitor.domain}:`, err instanceof Error ? err.message : err);
+            warn(`[DomainMonitor] whoiser failed for ${monitor.domain}: ${err instanceof Error ? err.message : err}. Falling back...`, "domainMonitor");
         }
 
         if (!expiryDate) {
-            console.log(`[DomainMonitor] Falling back to native whois for ${monitor.domain}`);
+            info(`[DomainMonitor] Falling back to native whois for ${monitor.domain}`, "domainMonitor");
             try {
                 const isDotIn = monitor.domain.endsWith('.in') || monitor.domain.endsWith('.co.in');
                 const cmd = isDotIn ? `whois -h whois.nixiregistry.in ${monitor.domain}` : `whois ${monitor.domain}`;
@@ -127,7 +132,7 @@ export class DomainMonitorService {
                     if (matches) expiryDate = new Date(matches[1].trim());
                 }
             } catch (fallbackErr) {
-                console.error(`[DomainMonitor] Native whois fallback failed for ${monitor.domain}:`, fallbackErr instanceof Error ? fallbackErr.message : fallbackErr);
+                warn(`[DomainMonitor] Native whois fallback failed for ${monitor.domain}: ${fallbackErr instanceof Error ? fallbackErr.message : fallbackErr}`, "domainMonitor");
             }
         }
 
@@ -145,7 +150,11 @@ export class DomainMonitorService {
 
             if (expiryDate) {
                 const daysToExpiry = Math.ceil((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-                console.log(`[DomainMonitor] ${monitor.domain} expires in ${daysToExpiry} days (${expiryDate.toISOString()})`);
+                if (daysToExpiry < 30) {
+                    warn(`[DomainMonitor] ${monitor.domain} is expiring SOON: ${daysToExpiry} days remaining! (${expiryDate.toISOString()})`, "domainMonitor");
+                } else {
+                    info(`[DomainMonitor] ${monitor.domain} expires in ${daysToExpiry} days (${expiryDate.toISOString()})`, "domainMonitor");
+                }
 
                 const lastAlert = monitor.lastAlertSentAt ? new Date(monitor.lastAlertSentAt) : null;
                 const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
@@ -155,7 +164,7 @@ export class DomainMonitorService {
                 }
             }
         } catch (dbErr) {
-            console.error(`[DomainMonitor] DB Error updating monitor for ${monitor.domain}:`, dbErr);
+            error(`[DomainMonitor] DB Error updating monitor for ${monitor.domain}: ${dbErr}`, "domainMonitor");
         }
     }
 
@@ -173,9 +182,9 @@ export class DomainMonitorService {
                 lastAlertSentAt: new Date()
             });
 
-            console.log(`[DomainMonitor] Centralized alert check triggered for expiring domain ${monitor.domain}`);
+            info(`[DomainMonitor] Centralized alert check triggered for expiring domain ${monitor.domain}`, "domainMonitor");
         } catch (err) {
-            console.error(`[DomainMonitor] Failed to trigger centralized alert for ${monitor.domain}:`, err);
+            error(`[DomainMonitor] Failed to trigger centralized alert for ${monitor.domain}: ${err}`, "domainMonitor");
         }
     }
 }

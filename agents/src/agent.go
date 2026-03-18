@@ -53,18 +53,22 @@ type Process struct {
 	Memory float64 `json:"memory"`
 }
 
+type ServerResponse struct {
+	Success     bool `json:"success"`
+	Interval    int  `json:"interval"`
+	ShouldAudit bool `json:"shouldAudit"`
+}
+
 func main() {
 	fmt.Println("-----------------------------------------")
 	fmt.Println("Infrawatch Go Agent Started")
 	fmt.Println("Server:", ServerURL)
-	fmt.Println("Interval:", Interval)
+	fmt.Println("Initial Interval:", Interval)
 	fmt.Println("-----------------------------------------")
 
-	report()
-
-	ticker := time.NewTicker(Interval)
-	for range ticker.C {
+	for {
 		report()
+		time.Sleep(Interval)
 	}
 }
 
@@ -85,6 +89,20 @@ func report() {
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusOK {
+		var srvResp ServerResponse
+		if err := json.NewDecoder(resp.Body).Decode(&srvResp); err == nil {
+			if srvResp.Interval > 0 {
+				newInterval := time.Duration(srvResp.Interval) * time.Minute
+				if newInterval != Interval {
+					log.Printf("[%s] Updating interval to %v", time.Now().Format(time.RFC3339), newInterval)
+					Interval = newInterval
+				}
+			}
+			if srvResp.ShouldAudit {
+				log.Printf("[%s] Server requested monthly audit. Running audit tool...", time.Now().Format(time.RFC3339))
+				runAudit()
+			}
+		}
 		log.Printf("[%s] Reported metrics for %s", time.Now().Format(time.RFC3339), stats.Hostname)
 	} else {
 		body, _ := io.ReadAll(resp.Body)
@@ -92,9 +110,20 @@ func report() {
 	}
 }
 
+func runAudit() {
+	// Call the standalone audit script via curl fallback for simplicity and consistency
+	cmdStr := fmt.Sprintf("curl -s -L %s/get/audit_services.sh | bash -s -- %s %s", ServerURL, ServerURL, AgentToken)
+	cmd := exec.Command("sh", "-c", cmdStr)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		log.Printf("Audit Error: %v. Output: %s", err, string(out))
+	} else {
+		log.Printf("Audit completed successfully.")
+	}
+}
+
 func collectStats() SystemStats {
 	hostname, _ := os.Hostname()
-	
 	totalDisk, diskUsage := getDiskStats()
 
 	return SystemStats{
@@ -129,24 +158,57 @@ func getIPAddress() string {
 }
 
 func getTotalRAM() float64 {
-	// Approximation for demo cross-platform
-	// On Linux/Mac we could parse 'free' or 'sysctl'
-	if runtime.GOOS == "darwin" {
+	if runtime.GOOS == "linux" {
+		out, _ := exec.Command("grep", "MemTotal", "/proc/meminfo").Output()
+		fields := strings.Fields(string(out))
+		if len(fields) >= 2 {
+			kb, _ := strconv.ParseFloat(fields[1], 64)
+			return kb / (1024 * 1024)
+		}
+	} else if runtime.GOOS == "darwin" {
 		out, _ := exec.Command("sysctl", "-n", "hw.memsize").Output()
 		mem, _ := strconv.ParseFloat(strings.TrimSpace(string(out)), 64)
 		return mem / (1024 * 1024 * 1024)
 	}
-	return 8.0 // Default
+	return 8.0 // Default fallback
 }
 
 func getMemoryUsage() float64 {
-	// Simulated for demo, real implementation would read /proc/meminfo or use sysctl
-	return 45.0
+	if runtime.GOOS == "linux" {
+		out, _ := exec.Command("free").Output()
+		lines := strings.Split(string(out), "\n")
+		if len(lines) >= 2 {
+			fields := strings.Fields(lines[1])
+			if len(fields) >= 3 {
+				total, _ := strconv.ParseFloat(fields[1], 64)
+				used, _ := strconv.ParseFloat(fields[2], 64)
+				if total > 0 {
+					return (used / total) * 100.0
+				}
+			}
+		}
+	}
+	return 45.0 // Default fallback
 }
 
 func getCPUUsage() float64 {
-	// Executing 'top' or 'ps' to get a quick sample
-	return 10.5
+	if runtime.GOOS == "linux" {
+		// Use a quick sample from top
+		out, _ := exec.Command("top", "-bn1").Output()
+		lines := strings.Split(string(out), "\n")
+		for _, line := range lines {
+			if strings.Contains(line, "%Cpu(s)") {
+				fields := strings.Fields(line)
+				for i, field := range fields {
+					if strings.Contains(field, "id") { // matches "id," or "id"
+						idle, _ := strconv.ParseFloat(fields[i-1], 64)
+						return 100.0 - idle
+					}
+				}
+			}
+		}
+	}
+	return 10.5 // Default fallback
 }
 
 func getDiskStats() (total float64, usage int) {

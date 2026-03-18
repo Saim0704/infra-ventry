@@ -8,7 +8,7 @@ import { setupRealtime } from "./lib/realtime";
 const app = express();
 const httpServer = createServer(app);
 
-import { log } from "./lib/logger";
+import { log, error, info, warn, debug } from "./lib/logger";
 import path from "path";
 import fs from "fs";
 
@@ -17,14 +17,14 @@ const scriptsPath = path.resolve(process.cwd(), "public", "scripts");
 
 const serveScript = (filename: string) => (req: Request, res: Response) => {
   const filePath = path.join(scriptsPath, filename);
-  console.log(`[Script Service] Request for ${filename} -> ${filePath}`);
+  log(`[Script Service] Request for ${filename} -> ${filePath}`, "express");
   
   if (fs.existsSync(filePath)) {
-    console.log(`[Script Service] SERVING: ${filename}`);
+    log(`[Script Service] SERVING: ${filename}`, "express");
     res.setHeader("Content-Type", filename.endsWith(".sh") ? "text/x-shellscript" : "application/octet-stream");
     return res.sendFile(filePath);
   }
-  console.error(`[Script Service] NOT FOUND: ${filename}`);
+  error(`[Script Service] NOT FOUND: ${filename}`, "express");
   res.status(404).send("Script not found");
 };
 
@@ -93,14 +93,14 @@ app.use((req, res, next) => {
 });
 
 (async () => {
-  console.log("--- BOOM: Registering Routes ---");
+  info("--- BOOM: Registering Routes ---", "express");
   await registerRoutes(httpServer, app);
 
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
 
-    console.error("Internal Server Error:", err);
+    error(`Internal Server Error: ${err.message || err}`, "express");
 
     if (res.headersSent) {
       return next(err);

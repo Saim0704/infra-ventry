@@ -23,15 +23,32 @@ export function useRealtime() {
                         if (id) {
                             queryClient.invalidateQueries({ queryKey: [api.servers.get.path, id] });
                         }
+                        if (message.projectId) {
+                            queryClient.invalidateQueries({ queryKey: [api.projects.resources.path, message.projectId] });
+                        }
                     } else if (resource === "database") {
                         queryClient.invalidateQueries({ queryKey: [api.databases.list.path] });
                         if (id) {
                             queryClient.invalidateQueries({ queryKey: [api.databases.get.path, id] });
                         }
+                        if (message.projectId) {
+                            queryClient.invalidateQueries({ queryKey: [api.projects.resources.path, message.projectId] });
+                        }
                     } else if (resource === "cluster") {
                         queryClient.invalidateQueries({ queryKey: [api.clusters.list.path] });
                         if (id) {
                             queryClient.invalidateQueries({ queryKey: [api.clusters.get.path, id] });
+                        }
+                        if (message.projectId) {
+                            queryClient.invalidateQueries({ queryKey: [api.projects.resources.path, message.projectId] });
+                        }
+                    } else if (resource === "web") {
+                        queryClient.invalidateQueries({ queryKey: [api.webMonitors.list.path] });
+                        if (id) {
+                            queryClient.invalidateQueries({ queryKey: [api.webMonitors.get.path, id] });
+                        }
+                        if (message.projectId) {
+                            queryClient.invalidateQueries({ queryKey: [api.projects.resources.path, message.projectId] });
                         }
                     }
 

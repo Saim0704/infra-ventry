@@ -1,3 +1,4 @@
+import { log as info, error } from "./lib/logger";
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
@@ -20,7 +21,7 @@ function safeLog(message: string) {
     fs.appendFileSync("alerts_debug.log", message);
   } catch (err) {
     // Silently fail or use console.log as fallback
-    console.log(message.trim());
+    info(message.trim());
   }
 }
 
@@ -42,7 +43,7 @@ export async function registerRoutes(
 
 
 
-  console.log(`Registering SMTP test route: ${api.settings.smtp.test.method} ${api.settings.smtp.test.path}`);
+  info(`Registering SMTP test route: ${api.settings.smtp.test.method} ${api.settings.smtp.test.path}`);
 
   // === PUBLIC API (Ingestion) ===
   // These routes are protected by Agent Tokens, not User Auth
@@ -78,9 +79,17 @@ export async function registerRoutes(
       const server = await storage.upsertServer({ ...serverInfo, projectId });
       await storage.addServerMetric({ ...metrics, serverId: server.id });
 
-      res.json({ success: true });
+      const oneMonthAgo = new Date();
+      oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
+      const shouldAudit = !server.lastAuditAt || server.lastAuditAt < oneMonthAgo;
+
+      res.json({ 
+        success: true, 
+        interval: server.checkInterval,
+        shouldAudit 
+      });
     } catch (err) {
-      console.error(err);
+      error(err);
       res.status(400).json({ message: "Invalid data format" });
     }
   });
@@ -118,12 +127,13 @@ export async function registerRoutes(
         hostname,
         ipAddress: ipAddress || "",
         projectId,
-        serviceVersions
+        serviceVersions,
+        lastAuditAt: new Date()
       });
 
       res.json({ success: true });
     } catch (err) {
-      console.error(err);
+      error(err);
       res.status(400).json({ message: "Invalid audit data" });
     }
   });
@@ -143,7 +153,7 @@ export async function registerRoutes(
 
       res.json({ success: true });
     } catch (err) {
-      console.error(err);
+      error(err);
       res.status(400).json({ message: "Invalid data format" });
     }
   });
@@ -163,7 +173,7 @@ export async function registerRoutes(
 
       res.json({ success: true });
     } catch (err) {
-      console.error(err);
+      error(err);
       res.status(400).json({ message: "Invalid data format" });
     }
   });
@@ -292,9 +302,9 @@ export async function registerRoutes(
       const database = await storage.upsertDatabase(input);
       res.status(201).json(database);
     } catch (err) {
-      console.error("Database Create Error:", err);
+      error("Database Create Error:", err);
       if (err instanceof z.ZodError) {
-        console.error("Validation details:", JSON.stringify((err as z.ZodError).errors, null, 2));
+        error("Validation details:", JSON.stringify((err as z.ZodError).errors, null, 2));
       }
       res.status(400).json({ message: "Invalid data format", details: err });
     }
@@ -308,9 +318,9 @@ export async function registerRoutes(
       if (!database) return res.status(404).json({ message: "Database not found" });
       res.json(database);
     } catch (err) {
-      console.error("Database Update Error:", err);
+      error("Database Update Error:", err);
       if (err instanceof z.ZodError) {
-        console.error("Validation details:", JSON.stringify((err as z.ZodError).errors, null, 2));
+        error("Validation details:", JSON.stringify((err as z.ZodError).errors, null, 2));
       }
       res.status(400).json({ message: "Invalid data format", details: err });
     }
@@ -353,7 +363,7 @@ export async function registerRoutes(
       const monitor = await storage.createWebMonitor(input);
       res.status(201).json(monitor);
     } catch (err) {
-      console.error(err);
+      error(err);
       res.status(400).json({ message: "Invalid data format" });
     }
   });
@@ -367,7 +377,7 @@ export async function registerRoutes(
       if (!monitor) return res.status(404).json({ message: "Monitor not found" });
       res.json(monitor);
     } catch (err) {
-      console.error(err);
+      error(err);
       res.status(400).json({ message: "Invalid data format" });
     }
   });
@@ -399,11 +409,11 @@ export async function registerRoutes(
       const monitor = await storage.createDomainMonitor(input);
       // Trigger a proactive check for the newly added domain asynchronously
       DomainMonitorService.checkSingleDomain(monitor).catch(err => {
-        console.error("Proactive domain check failed:", err);
+        error("Proactive domain check failed:", err);
       });
       res.status(201).json(monitor);
     } catch (err) {
-      console.error(err);
+      error(err);
       res.status(400).json({ message: "Invalid data format" });
     }
   });
@@ -433,7 +443,7 @@ export async function registerRoutes(
 
       res.status(201).json(server);
     } catch (err) {
-      console.error(err);
+      error(err);
       res.status(400).json({ message: "Invalid data format" });
     }
   });
@@ -460,7 +470,7 @@ export async function registerRoutes(
 
       res.json(server);
     } catch (err) {
-      console.error(err);
+      error(err);
       res.status(400).json({ message: "Invalid data format" });
     }
   });
@@ -517,7 +527,7 @@ export async function registerRoutes(
       await storage.deleteUser(req.params.id);
       res.status(204).send();
     } catch (err) {
-      console.error("Error deleting user:", err);
+      error("Error deleting user:", err);
       res.status(500).json({ message: "Internal server error" });
     }
   });
@@ -600,7 +610,7 @@ export async function registerRoutes(
       await EmailService.sendTestEmail(settingsToUse as any, recipient);
       res.json({ success: true, message: "Test email sent successfully" });
     } catch (err: any) {
-      console.error("Test email failed:", err);
+      error("Test email failed:", err);
       // Return a more descriptive error if possible
       res.status(400).json({
         success: false,
@@ -634,11 +644,11 @@ export async function registerRoutes(
 async function seedDatabase() {
   const existingTokens = await storage.getTokens();
   if (existingTokens.length === 0) {
-    console.log("Seeding database...");
+    info("Seeding database...");
 
     // Create a default token for testing agents
     const token = await storage.createToken("Default Dev Token", "vm");
-    console.log(`Created default token: ${token.token}`);
+    info(`Created default token: ${token.token}`);
 
     // Create some dummy servers
     const s1 = await storage.upsertServer({
@@ -683,6 +693,6 @@ async function seedDatabase() {
     });
     await storage.addClusterMetric({ clusterId: k8s1.id, cpuUsage: 65, memoryUsage: 70, podCount: 120 });
 
-    console.log("Seeding complete.");
+    info("Seeding complete.");
   }
 }

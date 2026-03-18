@@ -46,6 +46,7 @@ export function ServerEditDialog({ open, onOpenChange, server }: ServerEditDialo
             storageUsed: 0,
             memoryUsage: 0,
             diskUsage: 0,
+            checkInterval: 5,
         },
     });
 
@@ -83,6 +84,7 @@ export function ServerEditDialog({ open, onOpenChange, server }: ServerEditDialo
             storageUsed: Number(storageUsed.toFixed(2)),
             memoryUsage: lastMetric?.memoryUsage || 0,
             diskUsage: lastMetric?.diskUsage || 0,
+            checkInterval: server.checkInterval || 5,
         });
     }
 
@@ -149,34 +151,49 @@ export function ServerEditDialog({ open, onOpenChange, server }: ServerEditDialo
                                     </FormItem>
                                 )}
                             />
-                            <FormField
-                                control={form.control}
-                                name="projectId"
-                                render={({ field }) => (
-                                    <FormItem>
-                                        <FormLabel>Project</FormLabel>
-                                        <Select
-                                            onValueChange={(val) => field.onChange(val === "none" ? null : Number(val))}
-                                            value={field.value?.toString() || "none"}
-                                        >
+                            <div className="grid grid-cols-2 gap-2">
+                                <FormField
+                                    control={form.control}
+                                    name="projectId"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>Project</FormLabel>
+                                            <Select
+                                                onValueChange={(val) => field.onChange(val === "none" ? null : Number(val))}
+                                                value={field.value?.toString() || "none"}
+                                            >
+                                                <FormControl>
+                                                    <SelectTrigger>
+                                                        <SelectValue placeholder="Project" />
+                                                    </SelectTrigger>
+                                                </FormControl>
+                                                <SelectContent className="bg-background border-border shadow-xl">
+                                                    <SelectItem value="none">No Project</SelectItem>
+                                                    {projects?.map((p) => (
+                                                        <SelectItem key={p.id} value={p.id.toString()}>
+                                                            {p.name}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                                <FormField
+                                    control={form.control}
+                                    name="checkInterval"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>Interval (Min)</FormLabel>
                                             <FormControl>
-                                                <SelectTrigger>
-                                                    <SelectValue placeholder="Select a project" />
-                                                </SelectTrigger>
+                                                <Input type="number" {...field} onChange={e => field.onChange(Number(e.target.value))} />
                                             </FormControl>
-                                            <SelectContent className="bg-background border-border shadow-xl">
-                                                <SelectItem value="none">No Project</SelectItem>
-                                                {projects?.map((p) => (
-                                                    <SelectItem key={p.id} value={p.id.toString()}>
-                                                        {p.name}
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                        <FormMessage />
-                                    </FormItem>
-                                )}
-                            />
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                            </div>
                         </div>
 
                         <div className="grid grid-cols-2 gap-4">
