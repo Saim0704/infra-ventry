@@ -31,6 +31,7 @@ type MetricPayload struct {
 type SystemStats struct {
 	Hostname        string            `json:"hostname"`
 	OS              string            `json:"os"`
+	OSVersion       string            `json:"osVersion,omitempty"`
 	CPUCores        int               `json:"cpuCores"`
 	TotalRAM        float64           `json:"totalRam"`
 	TotalDisk       float64           `json:"totalDisk"`
@@ -125,10 +126,12 @@ func runAudit() {
 func collectStats() SystemStats {
 	hostname, _ := os.Hostname()
 	totalDisk, diskUsage := getDiskStats()
+	osName, osVer := getOSInfo()
 
 	return SystemStats{
 		Hostname:  hostname,
-		OS:        fmt.Sprintf("%s %s", runtime.GOOS, runtime.GOARCH),
+		OS:        osName,
+		OSVersion: osVer,
 		CPUCores:  runtime.NumCPU(),
 		TotalRAM:  getTotalRAM(),
 		TotalDisk: totalDisk,
@@ -171,6 +174,28 @@ func getTotalRAM() float64 {
 		return mem / (1024 * 1024 * 1024)
 	}
 	return 8.0 // Default fallback
+}
+
+func getOSInfo() (string, string) {
+	if runtime.GOOS == "linux" {
+		data, err := os.ReadFile("/etc/os-release")
+		if err == nil {
+			lines := strings.Split(string(data), "\n")
+			var name, version string
+			for _, line := range lines {
+				if strings.HasPrefix(line, "NAME=") {
+					name = strings.Trim(strings.TrimPrefix(line, "NAME="), "\"")
+				}
+				if strings.HasPrefix(line, "VERSION_ID=") {
+					version = strings.Trim(strings.TrimPrefix(line, "VERSION_ID="), "\"")
+				}
+			}
+			if name != "" {
+				return name, version
+			}
+		}
+	}
+	return runtime.GOOS, runtime.GOARCH
 }
 
 func getMemoryUsage() float64 {

@@ -11,6 +11,14 @@ report() {
     local HOSTNAME=$(hostname)
     local OS_NAME=$(uname -s)
     local OS_VERSION=$(uname -r)
+
+    # Try to get more specific OS info on Linux
+    if [ -f /etc/os-release ]; then
+        . /etc/os-release
+        OS_NAME=$NAME
+        OS_VERSION=$VERSION_ID
+    fi
+
     local CPU_CORES=$(nproc)
 
     # RAM in GB (Total)

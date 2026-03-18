@@ -402,6 +402,7 @@ export const api = {
         data: z.object({
           hostname: z.string(),
           os: z.string().optional(),
+          osVersion: z.string().optional(),
           cpuCores: z.number().optional(),
           totalRam: z.number().optional(),
           totalDisk: z.number().optional(),
