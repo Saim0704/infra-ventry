@@ -12,13 +12,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel } from "@/components/ui/form";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Globe, Server, Database, Cloud, Edit, Edit2, Trash2, ChevronLeft, Plus, ChevronDown, Shield, Bell, Activity, Layout, Eye, Terminal, Mail, Save, Key, Send, ExternalLink, Settings, AlertTriangle, Check, X, Info } from "lucide-react";
+import { Globe, Server, Database, Cloud, Edit, Edit2, Trash2, ChevronLeft, Plus, ChevronDown, Shield, Bell, Activity, Layout, Eye, Terminal, Mail, Save, Key, Send, ExternalLink, Settings, AlertTriangle, Check, X, Info, MessageSquare, Type } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ServerDetailView } from "@/components/ServerDetailView";
@@ -1641,13 +1642,26 @@ function ProjectEmailTemplatesSection({ projectId }: { projectId: number }) {
     const [viewMode, setViewMode] = useState<"edit" | "preview">("edit");
     const [isSimpleMode, setIsSimpleMode] = useState(true);
     const [simpleConfig, setSimpleConfig] = useState({
+        // Branding Layer
+        showHeaderFooter: true,
         showLogo: true,
+        showCompany: true,
+        showFooter: true,
+        // Content Section
+        showBadge: true,
+        showTitle: true,
+        showSubtitle: true,
+        // Data Table
         showProject: true,
         showResource: true,
         showMetric: true,
         showValue: true,
         showThreshold: true,
-        showCompany: true,
+        // Text Content
+        badgeText: editingType === "Domain" ? "Expiry Warning" : "Critical Alert",
+        titleText: editingType === "Domain" ? "Domain Expiry Alert" : "High usage detected",
+        subtitleText: editingType === "Domain" ? "One of your domains is about to expire." : "Your infrastructure requires immediate attention.",
+        footerText: "Sent via {{company}} Infrastructure Monitoring",
     });
 
     const alertTypes = [
@@ -1658,18 +1672,29 @@ function ProjectEmailTemplatesSection({ projectId }: { projectId: number }) {
         { id: "Domain", label: "Domain Alerts", description: "Templates for Domain name expiry alerts." },
     ];
 
+    const [expandedSections, setExpandedSections] = useState<string[]>(["content", "metrics"]);
+    const toggleSection = (section: string) => {
+        setExpandedSections(prev => 
+            prev.includes(section) ? prev.filter(s => s !== section) : [...prev, section]
+        );
+    };
+
     const replaceVariables = (text: string, isHtml: boolean = false) => {
         const brands = {
             company: isHtml ? '<span style="color: #6366f1; font-weight: 800; letter-spacing: -0.02em;">InfraWatch</span>' : "InfraWatch",
             logo: isHtml ? '<img src="https://antigravity-demo.s3.amazonaws.com/logo-placeholder.png" alt="Logo" style="max-height: 40px; width: auto; vertical-align: middle;">' : ""
         };
 
+        const isDomain = editingType === "Domain";
+
         return text
             .replace(/{{project}}/g, isHtml ? '<span style="color: #6366f1; font-weight: bold;">Demo Project</span>' : "Demo Project")
-            .replace(/{{resource}}/g, isHtml ? '<span style="color: #6366f1; font-weight: bold;">Demo Server</span>' : "Demo Server")
-            .replace(/{{type}}/g, isHtml ? '<span style="color: #6366f1; font-weight: bold;">CPU</span>' : "CPU")
-            .replace(/{{value}}/g, isHtml ? '<span style="color: #ef4444; font-weight: bold;">86%</span>' : "86%")
-            .replace(/{{threshold}}/g, isHtml ? '<span style="color: #10b981; font-weight: bold;">80%</span>' : "80%")
+            .replace(/{{resource}}/g, isHtml ? `<span style="color: #6366f1; font-weight: bold;">${isDomain ? 'example.com' : 'Demo Server'}</span>` : (isDomain ? 'example.com' : 'Demo Server'))
+            .replace(/{{type}}/g, isHtml ? `<span style="color: #6366f1; font-weight: bold;">${isDomain ? 'Domain Expiry' : 'CPU'}</span>` : (isDomain ? 'Domain Expiry' : 'CPU'))
+            .replace(/{{value}}/g, isHtml ? `<span style="color: #ef4444; font-weight: bold;">${isDomain ? '15 days' : '86%'}</span>` : (isDomain ? '15 days' : '86%'))
+            .replace(/{{threshold}}/g, isHtml ? `<span style="color: #10b981; font-weight: bold;">${isDomain ? '30 days' : '80%'}</span>` : (isDomain ? '30 days' : '80%'))
+            .replace(/{{expiry_date}}/g, isHtml ? '<span style="color: #6366f1; font-weight: bold;">2024-12-31</span>' : "2024-12-31")
+            .replace(/{{days_left}}/g, isHtml ? '<span style="color: #ef4444; font-weight: bold;">15</span>' : "15")
             .replace(/{{company}}/g, brands.company)
             .replace(/{{company_name}}/g, brands.company)
             .replace(/{{logo}}/g, brands.logo)
@@ -1677,17 +1702,37 @@ function ProjectEmailTemplatesSection({ projectId }: { projectId: number }) {
     };
 
     const generateSimpleHtml = (config: typeof simpleConfig) => {
+        const isDomain = editingType === "Domain";
+        const primaryColor = isDomain ? "#f59e0b" : "#dc2626";
+        const badgeBg = isDomain ? "#fffbeb" : "#fef2f2";
+        const badgeBorder = isDomain ? "#fef3c7" : "#fee2e2";
+
+        const getUnit = (label: string) => {
+            if (isDomain) {
+                if (label.includes("Days") || label.includes("Value") || label.includes("Threshold")) return " days";
+                return "";
+            }
+            if (label.toLowerCase().includes("cpu") || label.toLowerCase().includes("memory") || label.toLowerCase().includes("usage") || label.toLowerCase().includes("threshold") || label.toLowerCase().includes("value")) {
+                return "%";
+            }
+            if (editingType === "Web") return " (Status)";
+            return "";
+        };
+
         const rows = [
             config.showProject && `<tr><td style="padding: 10px 0; border-bottom: 1px solid #eee;"><strong>Project:</strong></td><td style="padding: 10px 0; border-bottom: 1px solid #eee; text-align: right;">{{project}}</td></tr>`,
-            config.showResource && `<tr><td style="padding: 10px 0; border-bottom: 1px solid #eee;"><strong>Resource:</strong></td><td style="padding: 10px 0; border-bottom: 1px solid #eee; text-align: right;">{{resource}}</td></tr>`,
-            config.showMetric && `<tr><td style="padding: 10px 0; border-bottom: 1px solid #eee;"><strong>Metric:</strong></td><td style="padding: 10px 0; border-bottom: 1px solid #eee; text-align: right;">{{type}}</td></tr>`,
-            config.showValue && `<tr><td style="padding: 10px 0; border-bottom: 1px solid #eee;"><strong>Current Value:</strong></td><td style="padding: 10px 0; border-bottom: 1px solid #eee; text-align: right; color: #ef4444; font-weight: bold;">{{value}}</td></tr>`,
-            config.showThreshold && `<tr><td style="padding: 10px 0; border-bottom: 1px solid #eee;"><strong>Threshold:</strong></td><td style="padding: 10px 0; border-bottom: 1px solid #eee; text-align: right; color: #10b981; font-weight: bold;">{{threshold}}</td></tr>`,
+            config.showResource && `<tr><td style="padding: 10px 0; border-bottom: 1px solid #eee;"><strong>${isDomain ? 'Domain' : 'Resource'}:</strong></td><td style="padding: 10px 0; border-bottom: 1px solid #eee; text-align: right;">{{resource}}</td></tr>`,
+            config.showMetric && `<tr><td style="padding: 10px 0; border-bottom: 1px solid #eee;"><strong>${isDomain ? 'Status' : 'Metric'}:</strong></td><td style="padding: 10px 0; border-bottom: 1px solid #eee; text-align: right;">${isDomain ? 'Expiring Soon' : '{{type}}'}</td></tr>`,
+            isDomain && `<tr><td style="padding: 10px 0; border-bottom: 1px solid #eee;"><strong>Expiry Date:</strong></td><td style="padding: 10px 0; border-bottom: 1px solid #eee; text-align: right; color: #ef4444; font-weight: bold;">{{expiry_date}}</td></tr>`,
+            config.showValue && `<tr><td style="padding: 10px 0; border-bottom: 1px solid #eee;"><strong>${isDomain ? 'Days Remaining' : 'Current Value'}:</strong></td><td style="padding: 10px 0; border-bottom: 1px solid #eee; text-align: right; color: #ef4444; font-weight: bold;">${isDomain ? '{{days_left}}' : '{{value}}'}${getUnit("Value")}</td></tr>`,
+            config.showThreshold && !isDomain && `<tr><td style="padding: 10px 0; border-bottom: 1px solid #eee;"><strong>Threshold:</strong></td><td style="padding: 10px 0; border-bottom: 1px solid #eee; text-align: right; color: #10b981; font-weight: bold;">{{threshold}}${getUnit("Threshold")}</td></tr>`,
         ].filter(Boolean).join('');
+
+        const brandingEnabled = config.showHeaderFooter;
 
         return `
 <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 40px 20px; background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 16px;">
-    ${(config.showLogo || config.showCompany) ? `
+    ${(brandingEnabled && (config.showLogo || config.showCompany)) ? `
     <table style="width: 100%; border-collapse: collapse; margin-bottom: 32px;">
         <tr>
             <td style="text-align: left; vertical-align: middle;">
@@ -1699,18 +1744,19 @@ function ProjectEmailTemplatesSection({ projectId }: { projectId: number }) {
         </tr>
     </table>` : ''}
     <div style="text-align: center; margin-bottom: 32px;">
-        <div style="display: inline-block; padding: 8px 16px; background-color: #fef2f2; border: 1px solid #fee2e2; border-radius: 99px; color: #dc2626; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em;">
-            Critical Alert
-        </div>
-        <h1 style="margin: 16px 0 8px; color: #0f172a; font-size: 24px; font-weight: 800; letter-spacing: -0.02em;">High usage detected</h1>
-        <p style="margin: 0; color: #64748b; font-size: 16px;">Your infrastructure requires immediate attention.</p>
+        ${config.showBadge ? `
+        <div style="display: inline-block; padding: 8px 16px; background-color: ${badgeBg}; border: 1px solid ${badgeBorder}; border-radius: 99px; color: ${primaryColor}; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em;">
+            ${config.badgeText}
+        </div>` : ''}
+        ${config.showTitle ? `<h1 style="margin: 16px 0 8px; color: #0f172a; font-size: 24px; font-weight: 800; letter-spacing: -0.02em;">${config.titleText}</h1>` : ''}
+        ${config.showSubtitle ? `<p style="margin: 0; color: #64748b; font-size: 16px;">${config.subtitleText}</p>` : ''}
     </div>
     <div style="padding: 24px; background-color: #f8fafc; border-radius: 12px; border: 1px solid #f1f5f9;">
         <table style="width: 100%; border-collapse: collapse; font-size: 14px; color: #334155;">
             ${rows}
         </table>
     </div>
-    ${config.showCompany ? `<div style="margin-top: 32px; padding-top: 24px; border-top: 1px solid #f1f5f9; text-align: center; color: #94a3b8; font-size: 12px;">Sent via <strong>{{company}}</strong> Infrastructure Monitoring</div>` : ''}
+    ${brandingEnabled && config.showFooter ? `<div style="margin-top: 32px; padding-top: 24px; border-top: 1px solid #f1f5f9; text-align: center; color: #94a3b8; font-size: 12px;">${config.footerText}</div>` : ''}
 </div>
 <!-- SIMPLE_CONFIG: ${JSON.stringify(config)} -->`.trim();
     };
@@ -1739,13 +1785,22 @@ function ProjectEmailTemplatesSection({ projectId }: { projectId: number }) {
         } else {
             setIsSimpleMode(!body); // New templates start in simple mode
             if (!body) setSimpleConfig({
+                showHeaderFooter: true,
                 showLogo: true,
+                showCompany: true,
+                showFooter: true,
+                showBadge: true,
+                showTitle: true,
+                showSubtitle: true,
                 showProject: true,
                 showResource: true,
                 showMetric: true,
                 showValue: true,
                 showThreshold: true,
-                showCompany: true,
+                badgeText: type === "Domain" ? "Expiry Warning" : "Critical Alert",
+                titleText: type === "Domain" ? "Domain Expiry Alert" : "High usage detected",
+                subtitleText: type === "Domain" ? "One of your domains is about to expire." : "Your infrastructure requires immediate attention.",
+                footerText: "Sent via {{company}} Infrastructure Monitoring",
             });
         }
 
@@ -1812,7 +1867,7 @@ function ProjectEmailTemplatesSection({ projectId }: { projectId: number }) {
             </Card>
 
             <Dialog open={!!editingType} onOpenChange={(open) => !open && setEditingType(null)}>
-                <DialogContent className="sm:max-w-[800px] border-border/40 bg-card/95 backdrop-blur-xl rounded-3xl overflow-hidden p-0">
+                <DialogContent className="sm:max-w-[1200px] border-border/40 bg-card/95 backdrop-blur-xl rounded-3xl overflow-hidden p-0">
                     <DialogHeader className="pt-8 px-8">
                         <div className="flex items-center justify-between w-full mb-2">
                             <div className="flex items-center gap-3">
@@ -1885,13 +1940,9 @@ function ProjectEmailTemplatesSection({ projectId }: { projectId: number }) {
                         </DialogDescription>
                     </DialogHeader>
                     <div className="px-8 pb-4">
-                        <Tabs value={viewMode} onValueChange={(v: any) => setViewMode(v)} className="w-full">
-                            <TabsList className="grid w-full grid-cols-2 bg-muted/20 p-1.5 rounded-2xl mb-2">
-                                <TabsTrigger value="edit" className="rounded-xl font-black text-[10px] uppercase tracking-widest h-10 data-[state=active]:bg-background data-[state=active]:shadow-lg transition-all border-none">Edit Template</TabsTrigger>
-                                <TabsTrigger value="preview" className="rounded-xl font-black text-[10px] uppercase tracking-widest h-10 data-[state=active]:bg-background data-[state=active]:shadow-lg transition-all border-none">Live Preview</TabsTrigger>
-                            </TabsList>
-
-                            <TabsContent value="edit" className="space-y-6 py-4 animate-in fade-in slide-in-from-left-2 duration-300">
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mt-4 h-[600px]">
+                            {/* LEFT COLUMN: EDITOR */}
+                            <div className="space-y-6 h-full overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-muted-foreground/10">
                                 {/* MODE TOGGLE */}
                                 <div className="flex items-center justify-between px-5 py-3.5 bg-primary/5 rounded-2xl border border-primary/10">
                                     <div className="space-y-0.5">
@@ -1920,47 +1971,222 @@ function ProjectEmailTemplatesSection({ projectId }: { projectId: number }) {
                                     </div>
 
                                     {isSimpleMode ? (
-                                        <div className="space-y-3">
-                                            <div className="flex items-center justify-between ml-1">
-                                                <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Information Checklist</Label>
-                                            </div>
-                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-muted/10 p-6 rounded-2xl border border-border/40">
-                                                {[
-                                                    { id: "showLogo", label: "Show Branding Logo", key: "showLogo", icon: <Layout className="h-3.5 w-3.5" /> },
-                                                    { id: "showProject", label: "Project Name", key: "showProject", icon: <Server className="h-3.5 w-3.5" /> },
-                                                    { id: "showResource", label: "Resource Name", key: "showResource", icon: <Globe className="h-3.5 w-3.5" /> },
-                                                    { id: "showMetric", label: "Metric Type (CPU/Memory)", key: "showMetric", icon: <Activity className="h-3.5 w-3.5" /> },
-                                                    { id: "showValue", label: "Current Value", key: "showValue", icon: <Terminal className="h-3.5 w-3.5" /> },
-                                                    { id: "showThreshold", label: "Threshold Value", key: "showThreshold", icon: <Shield className="h-3.5 w-3.5" /> },
-                                                    { id: "showCompany", label: "Show Company Footer", key: "showCompany", icon: <Info className="h-3.5 w-3.5" /> },
-                                                ].map((item) => (
-                                                    <div
-                                                        key={item.id}
-                                                        className="flex items-center space-x-3 group cursor-pointer p-2 rounded-xl hover:bg-background/50 transition-all border border-transparent hover:border-primary/10"
-                                                        onClick={(e) => {
-                                                            e.preventDefault();
-                                                            setSimpleConfig(prev => ({ ...prev, [item.key]: !prev[item.key as keyof typeof simpleConfig] }));
-                                                        }}
-                                                    >
-                                                        <Checkbox
-                                                            id={item.id}
-                                                            checked={simpleConfig[item.key as keyof typeof simpleConfig]}
-                                                            onCheckedChange={(v) => {
-                                                                setSimpleConfig(prev => ({ ...prev, [item.key]: !!v }));
-                                                            }}
-                                                            className="h-5 w-5 rounded-lg border-primary/20 data-[state=checked]:bg-primary data-[state=checked]:border-primary"
-                                                            onClick={(e) => e.stopPropagation()}
-                                                        />
-                                                        <div className="flex items-center gap-2">
-                                                            <div className="p-1.5 rounded-lg bg-background shadow-sm text-muted-foreground group-hover:text-primary transition-colors">
-                                                                {item.icon}
-                                                            </div>
-                                                            <Label htmlFor={item.id} className="text-xs font-black text-foreground/70 group-hover:text-primary transition-colors cursor-pointer tracking-tight uppercase">
-                                                                {item.label}
-                                                            </Label>
+                                        <div className="space-y-4 pb-10 mt-2">
+                                            {/* OPTION 1: HEADER & FOOTER (BRANDING) */}
+                                            <div className="border border-border/40 rounded-2xl overflow-hidden bg-muted/5 transition-all">
+                                                <div 
+                                                    className="flex items-center justify-between p-4 cursor-pointer hover:bg-muted/10"
+                                                    onClick={() => toggleSection("branding")}
+                                                >
+                                                    <div className="flex items-center gap-3">
+                                                        <div className={`p-1.5 rounded-lg ${simpleConfig.showHeaderFooter ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'}`}>
+                                                            <Layout className="h-4 w-4" />
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-[10px] font-black uppercase tracking-widest text-foreground/80">1. Header & Footer</p>
+                                                            <p className="text-[9px] text-muted-foreground font-bold uppercase tracking-tighter">Branding Layer Control</p>
                                                         </div>
                                                     </div>
-                                                ))}
+                                                    <div className="flex items-center gap-3">
+                                                        <Switch
+                                                            checked={simpleConfig.showHeaderFooter}
+                                                            onCheckedChange={(v) => setSimpleConfig(prev => ({ ...prev, showHeaderFooter: v }))}
+                                                            onClick={(e) => e.stopPropagation()}
+                                                            className="scale-75"
+                                                        />
+                                                        <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform duration-300 ${expandedSections.includes("branding") ? "rotate-180" : ""}`} />
+                                                    </div>
+                                                </div>
+                                                
+                                                {expandedSections.includes("branding") && (
+                                                    <div className="p-4 pt-0 border-t border-border/20 space-y-4 animate-in slide-in-from-top-2 duration-300">
+                                                        <div className="grid grid-cols-1 gap-4 mt-4">
+                                                            <div className="flex items-center justify-between p-2 rounded-xl bg-background border border-border/20">
+                                                                <div className="flex items-center gap-2">
+                                                                    <Layout className="h-3.5 w-3.5 text-muted-foreground" />
+                                                                    <Label className="text-[9px] font-black uppercase tracking-tight text-foreground/70">Show Branding Logo</Label>
+                                                                </div>
+                                                                <Switch 
+                                                                    checked={simpleConfig.showLogo} 
+                                                                    onCheckedChange={(v) => setSimpleConfig(prev => ({ ...prev, showLogo: v }))}
+                                                                    className="scale-75"
+                                                                />
+                                                            </div>
+                                                            <div className="flex items-center justify-between p-2 rounded-xl bg-background border border-border/20">
+                                                                <div className="flex items-center gap-2">
+                                                                    <Info className="h-3.5 w-3.5 text-muted-foreground" />
+                                                                    <Label className="text-[9px] font-black uppercase tracking-tight text-foreground/70">Show Company Name</Label>
+                                                                </div>
+                                                                <Switch 
+                                                                    checked={simpleConfig.showCompany} 
+                                                                    onCheckedChange={(v) => setSimpleConfig(prev => ({ ...prev, showCompany: v }))}
+                                                                    className="scale-75"
+                                                                />
+                                                            </div>
+                                                            <div className="space-y-2 border-t border-dashed border-border/40 pt-4">
+                                                                <div className="flex items-center justify-between">
+                                                                    <div className="flex items-center gap-2">
+                                                                        <MessageSquare className="h-3.5 w-3.5 text-muted-foreground" />
+                                                                        <Label className="text-[9px] font-black uppercase tracking-tight text-foreground/70">Enable Footer</Label>
+                                                                    </div>
+                                                                    <Switch 
+                                                                        checked={simpleConfig.showFooter} 
+                                                                        onCheckedChange={(v) => setSimpleConfig(prev => ({ ...prev, showFooter: v }))}
+                                                                        className="scale-75"
+                                                                    />
+                                                                </div>
+                                                                {simpleConfig.showFooter && (
+                                                                    <Input 
+                                                                        value={simpleConfig.footerText} 
+                                                                        onChange={(e) => setSimpleConfig(prev => ({ ...prev, footerText: e.target.value }))}
+                                                                        className="h-9 bg-background/50 border-border/40 text-[10px] rounded-lg mt-2"
+                                                                        placeholder="Footer Text..."
+                                                                    />
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {/* OPTION 2: ALERT CONTENT */}
+                                            <div className="border border-border/40 rounded-2xl overflow-hidden bg-muted/5 transition-all">
+                                                <div 
+                                                    className="flex items-center justify-between p-4 cursor-pointer hover:bg-muted/10"
+                                                    onClick={() => toggleSection("content")}
+                                                >
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="p-1.5 rounded-lg bg-primary/10 text-primary">
+                                                            <Type className="h-4 w-4" />
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-[10px] font-black uppercase tracking-widest text-foreground/80">2. Alert Content</p>
+                                                            <p className="text-[9px] text-muted-foreground font-bold uppercase tracking-tighter">Text Elements & Toggles</p>
+                                                        </div>
+                                                    </div>
+                                                    <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform duration-300 ${expandedSections.includes("content") ? "rotate-180" : ""}`} />
+                                                </div>
+
+                                                {expandedSections.includes("content") && (
+                                                    <div className="p-4 pt-0 border-t border-border/20 space-y-4 animate-in slide-in-from-top-2 duration-300">
+                                                        <div className="space-y-4 mt-4">
+                                                            {/* BADGE */}
+                                                            <div className="space-y-2 bg-background p-3 rounded-xl border border-border/20">
+                                                                <div className="flex items-center justify-between mb-1">
+                                                                    <Label className="text-[9px] font-black uppercase tracking-tight text-foreground/70">Badge (e.g. Critical Alert)</Label>
+                                                                    <Switch 
+                                                                        checked={simpleConfig.showBadge} 
+                                                                        onCheckedChange={(v) => setSimpleConfig(prev => ({ ...prev, showBadge: v }))}
+                                                                        className="scale-75"
+                                                                    />
+                                                                </div>
+                                                                {simpleConfig.showBadge && (
+                                                                    <Input 
+                                                                        value={simpleConfig.badgeText} 
+                                                                        onChange={(e) => setSimpleConfig(prev => ({ ...prev, badgeText: e.target.value }))}
+                                                                        className="h-9 bg-muted/20 border-border/40 text-[10px] rounded-lg"
+                                                                        placeholder="Critical Alert..."
+                                                                    />
+                                                                )}
+                                                            </div>
+
+                                                            {/* TITLE */}
+                                                            <div className="space-y-2 bg-background p-3 rounded-xl border border-border/20">
+                                                                <div className="flex items-center justify-between mb-1">
+                                                                    <Label className="text-[9px] font-black uppercase tracking-tight text-foreground/70">Main Title</Label>
+                                                                    <Switch 
+                                                                        checked={simpleConfig.showTitle} 
+                                                                        onCheckedChange={(v) => setSimpleConfig(prev => ({ ...prev, showTitle: v }))}
+                                                                        className="scale-75"
+                                                                    />
+                                                                </div>
+                                                                {simpleConfig.showTitle && (
+                                                                    <Input 
+                                                                        value={simpleConfig.titleText} 
+                                                                        onChange={(e) => setSimpleConfig(prev => ({ ...prev, titleText: e.target.value }))}
+                                                                        className="h-9 bg-muted/20 border-border/40 text-[10px] rounded-lg font-bold"
+                                                                        placeholder="High usage detected..."
+                                                                    />
+                                                                )}
+                                                            </div>
+
+                                                            {/* SUBTITLE */}
+                                                            <div className="space-y-2 bg-background p-3 rounded-xl border border-border/20">
+                                                                <div className="flex items-center justify-between mb-1">
+                                                                    <Label className="text-[9px] font-black uppercase tracking-tight text-foreground/70">Description / Subtitle</Label>
+                                                                    <Switch 
+                                                                        checked={simpleConfig.showSubtitle} 
+                                                                        onCheckedChange={(v) => setSimpleConfig(prev => ({ ...prev, showSubtitle: v }))}
+                                                                        className="scale-75"
+                                                                    />
+                                                                </div>
+                                                                {simpleConfig.showSubtitle && (
+                                                                    <Textarea 
+                                                                        value={simpleConfig.subtitleText} 
+                                                                        onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setSimpleConfig(prev => ({ ...prev, subtitleText: e.target.value }))}
+                                                                        className="min-h-[60px] bg-muted/20 border-border/40 text-[10px] rounded-lg resize-none"
+                                                                        placeholder="Description..."
+                                                                    />
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {/* OPTION 3: ALERT METRICS */}
+                                            <div className="border border-border/40 rounded-2xl overflow-hidden bg-muted/5 transition-all">
+                                                <div 
+                                                    className="flex items-center justify-between p-4 cursor-pointer hover:bg-muted/10"
+                                                    onClick={() => toggleSection("metrics")}
+                                                >
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="p-1.5 rounded-lg bg-primary/10 text-primary">
+                                                            <Activity className="h-4 w-4" />
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-[10px] font-black uppercase tracking-widest text-foreground/80">3. Alert Metrics Table</p>
+                                                            <p className="text-[9px] text-muted-foreground font-bold uppercase tracking-tighter">Resource Property Mapping</p>
+                                                        </div>
+                                                    </div>
+                                                    <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform duration-300 ${expandedSections.includes("metrics") ? "rotate-180" : ""}`} />
+                                                </div>
+
+                                                {expandedSections.includes("metrics") && (
+                                                    <div className="p-4 pt-0 border-t border-border/20 space-y-4 animate-in slide-in-from-top-2 duration-300">
+                                                        <div className="grid grid-cols-1 gap-1.5 mt-4 px-1">
+                                                            {[
+                                                                { id: "showProject", label: "Project Name", key: "showProject", icon: <Server className="h-3.5 w-3.5" /> },
+                                                                { id: "showResource", label: editingType === "Domain" ? "Domain Name" : "Resource Name", key: "showResource", icon: <Globe className="h-3.5 w-3.5" /> },
+                                                                { id: "showMetric", label: editingType === "Domain" ? "Expiry Status" : "Metric Type", key: "showMetric", icon: <Activity className="h-3.5 w-3.5" /> },
+                                                                { id: "showValue", label: editingType === "Domain" ? "Days Remaining" : "Current Value", key: "showValue", icon: <Terminal className="h-3.5 w-3.5" /> },
+                                                                { id: "showThreshold", label: "Threshold Value", key: "showThreshold", icon: <Shield className="h-3.5 w-3.5" />, disabled: editingType === "Domain" },
+                                                            ].filter(item => !item.disabled).map((item) => (
+                                                                <div
+                                                                    key={item.id}
+                                                                    className="flex items-center space-x-3 group cursor-pointer p-2 rounded-xl hover:bg-background/50 transition-all"
+                                                                    onClick={() => setSimpleConfig(prev => ({ ...prev, [item.key]: !prev[item.key as keyof typeof simpleConfig] }))}
+                                                                >
+                                                                    <Checkbox
+                                                                        id={item.id}
+                                                                        checked={!!simpleConfig[item.key as keyof typeof simpleConfig]}
+                                                                        onCheckedChange={(v) => setSimpleConfig(prev => ({ ...prev, [item.key]: !!v }))}
+                                                                        className="h-4 w-4 rounded-md border-primary/20"
+                                                                        onClick={(e) => e.stopPropagation()}
+                                                                    />
+                                                                    <div className="flex items-center gap-2">
+                                                                        <div className="p-1 rounded-lg bg-background text-muted-foreground group-hover:text-primary transition-colors">
+                                                                            {item.icon}
+                                                                        </div>
+                                                                        <Label htmlFor={item.id} className="text-[9px] font-black text-foreground/70 cursor-pointer uppercase tracking-tight">
+                                                                            {item.label}
+                                                                        </Label>
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
                                     ) : (
@@ -1969,30 +2195,20 @@ function ProjectEmailTemplatesSection({ projectId }: { projectId: number }) {
                                                 <div className="flex items-center justify-between ml-1">
                                                     <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Variable Reference</Label>
                                                 </div>
-                                                <div className="grid grid-cols-2 gap-3 p-4 bg-muted/5 rounded-2xl border border-border/40">
+                                                <div className="grid grid-cols-1 gap-3 p-4 bg-muted/5 rounded-2xl border border-border/40">
                                                     <div className="space-y-2">
-                                                        <p className="text-[9px] font-black uppercase tracking-widest text-primary/60 px-1">Alert Info</p>
+                                                        <p className="text-[9px] font-black uppercase tracking-widest text-primary/60 px-1">Available Variables</p>
                                                         {[
                                                             { v: "project", d: "Project Name" },
-                                                            { v: "resource", d: "Resource Name" },
-                                                            { v: "type", d: "Metric Type" },
+                                                            { v: "resource", d: "Resource/Domain Name" },
+                                                            { v: "type", d: "Metric/Alert Type" },
                                                             { v: "value", d: "Current Value" },
-                                                            { v: "threshold", d: "Threshold" },
-                                                        ].map(v => (
-                                                            <div key={v.v} className="flex items-center justify-between gap-2 p-1.5 rounded-lg hover:bg-primary/5 group transition-all">
-                                                                <code className="text-[10px] font-black text-primary/80">{"{{"}{v.v}{"}}"}</code>
-                                                                <span className="text-[9px] text-muted-foreground font-bold uppercase tracking-tighter opacity-0 group-hover:opacity-100 transition-opacity">{v.d}</span>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                    <div className="space-y-2 border-l border-border/40 pl-4">
-                                                        <p className="text-[9px] font-black uppercase tracking-widest text-primary/60 px-1">Branding</p>
-                                                        {[
+                                                            { v: "threshold", d: "Alert Threshold" },
+                                                            { v: "expiry_date", d: "Domain Expiry Date", domain: true },
+                                                            { v: "days_left", d: "Days until expiry", domain: true },
                                                             { v: "company", d: "Company Name" },
-                                                            { v: "company_name", d: "Company Name (Alias)" },
-                                                            { v: "logo", d: "Full Logo Image" },
-                                                            { v: "logo_url", d: "Raw Logo URL" },
-                                                        ].map(v => (
+                                                            { v: "logo", d: "Full Logo Image Tag" },
+                                                        ].filter(v => !v.domain || editingType === "Domain").map(v => (
                                                             <div key={v.v} className="flex items-center justify-between gap-2 p-1.5 rounded-lg hover:bg-primary/5 group transition-all">
                                                                 <code className="text-[10px] font-black text-primary/80">{"{{"}{v.v}{"}}"}</code>
                                                                 <span className="text-[9px] text-muted-foreground font-bold uppercase tracking-tighter opacity-0 group-hover:opacity-100 transition-opacity">{v.d}</span>
@@ -2007,46 +2223,56 @@ function ProjectEmailTemplatesSection({ projectId }: { projectId: number }) {
                                                 <textarea
                                                     value={editBody}
                                                     onChange={(e) => setEditBody(e.target.value)}
-                                                    className="w-full min-h-[300px] p-4 bg-muted/20 border border-border/40 rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all"
+                                                    className="w-full min-h-[300px] p-4 bg-muted/20 border border-border/40 rounded-xl text-xs font-mono focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all leading-relaxed"
                                                     placeholder="Enter custom HTML here..."
                                                 />
                                             </div>
                                         </div>
                                     )}
                                 </div>
-                            </TabsContent>
+                            </div>
 
-                            <TabsContent value="preview" className="animate-in fade-in slide-in-from-right-2 duration-300 outline-none">
-                                <div className="rounded-2xl border border-border/40 overflow-hidden bg-white shadow-xl shadow-black/5">
+                            {/* RIGHT COLUMN: PREVIEW */}
+                            <div className="flex flex-col h-full">
+                                <div className="flex items-center justify-between mb-2 ml-1 shrink-0">
+                                    <Label className="text-[10px] font-black uppercase tracking-widest text-primary flex items-center gap-2">
+                                        <Activity className="h-3.5 w-3.5" />
+                                        Dynamic Live Preview
+                                    </Label>
+                                    <span className="text-[9px] font-bold text-muted-foreground bg-muted/30 px-2 py-0.5 rounded-full uppercase tracking-tighter">Desktop View</span>
+                                </div>
+                                <div className="flex-1 rounded-2xl border border-border/40 overflow-hidden bg-white shadow-2xl shadow-black/5 flex flex-col min-h-0">
                                     <div className="bg-slate-50 px-6 py-3 border-b border-border/40 text-[11px] font-mono text-muted-foreground flex items-center gap-3">
                                         <span className="shrink-0 font-black uppercase text-foreground/40 text-[9px] tracking-tighter">Subject:</span>
-                                        <span className="truncate">
+                                        <span className="truncate font-bold text-slate-700">
                                             {replaceVariables(editSubject)}
                                         </span>
                                     </div>
-                                    <div
-                                        className="p-8 overflow-auto max-h-[500px] bg-[#f8fafc] scrollbar-thin scrollbar-thumb-muted-foreground/20"
-                                        dangerouslySetInnerHTML={{
-                                            __html: replaceVariables(editBody || `
-                                                <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 10px; background: white;">
-                                                    <div style="text-align: center; margin-bottom: 20px;">
-                                                        <h2 style="color: #333;">InfraWatch</h2>
+                                    <div className="flex-1 overflow-y-auto bg-[#f8fafc] p-2 flex justify-center scrollbar-thin scrollbar-thumb-muted-foreground/20">
+                                        <div
+                                            className="w-full scale-[0.9] origin-top transition-transform duration-300"
+                                            dangerouslySetInnerHTML={{
+                                                __html: replaceVariables(editBody || `
+                                                    <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 10px; background: white;">
+                                                        <div style="text-align: center; margin-bottom: 20px;">
+                                                            <h2 style="color: #333;">InfraWatch</h2>
+                                                        </div>
+                                                        <div style="background: #f8d7da; color: #721c24; padding: 15px; border-radius: 5px; margin-bottom: 20px; text-align: center;">
+                                                            <strong>Critical Alert!</strong> High usage detected.
+                                                        </div>
+                                                        <table style="width: 100%; border-collapse: collapse;">
+                                                            <tr><td style="padding: 10px 0; border-bottom: 1px solid #eee;"><strong>Project:</strong></td><td style="padding: 10px 0; border-bottom: 1px solid #eee; text-align: right;">Demo Project</td></tr>
+                                                            <tr><td style="padding: 10px 0; border-bottom: 1px solid #eee;"><strong>Resource:</strong></td><td style="padding: 10px 0; border-bottom: 1px solid #eee; text-align: right;">Demo Server</td></tr>
+                                                            <tr><td style="padding: 10px 0; border-bottom: 1px solid #eee;"><strong>Metric:</strong></td><td style="padding: 10px 0; border-bottom: 1px solid #eee; text-align: right;">CPU Usage</td></tr>
+                                                        </table>
                                                     </div>
-                                                    <div style="background: #f8d7da; color: #721c24; padding: 15px; border-radius: 5px; margin-bottom: 20px; text-align: center;">
-                                                        <strong>Critical Alert!</strong> High usage detected.
-                                                    </div>
-                                                    <table style="width: 100%; border-collapse: collapse;">
-                                                        <tr><td style="padding: 10px 0; border-bottom: 1px solid #eee;"><strong>Project:</strong></td><td style="padding: 10px 0; border-bottom: 1px solid #eee; text-align: right;">Demo Project</td></tr>
-                                                        <tr><td style="padding: 10px 0; border-bottom: 1px solid #eee;"><strong>Resource:</strong></td><td style="padding: 10px 0; border-bottom: 1px solid #eee; text-align: right;">Demo Server</td></tr>
-                                                        <tr><td style="padding: 10px 0; border-bottom: 1px solid #eee;"><strong>Metric:</strong></td><td style="padding: 10px 0; border-bottom: 1px solid #eee; text-align: right;">CPU Usage</td></tr>
-                                                    </table>
-                                                </div>
-                                            `, true)
-                                        }}
-                                    />
+                                                `, true)
+                                            }}
+                                        />
+                                    </div>
                                 </div>
-                            </TabsContent>
-                        </Tabs>
+                            </div>
+                        </div>
                     </div>
 
                     <DialogFooter className="px-8 pb-8 pt-0 bg-background/50 backdrop-blur-sm border-t border-border/20 mt-4">

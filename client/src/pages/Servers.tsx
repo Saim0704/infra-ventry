@@ -423,13 +423,13 @@ export default function ServersPage() {
                           <TableCell className="py-4">
                             <UsageBar
                               value={lastMetric?.memoryUsage || 0}
-                              label={`${server.totalRam} GB`}
+                              label={`${Math.round(((lastMetric?.memoryUsage || 0) / 100) * (server.totalRam || 0))} / ${Math.round(server.totalRam || 0)} GB`}
                             />
                           </TableCell>
                           <TableCell className="py-4">
                             <UsageBar
                               value={lastMetric?.diskUsage || 0}
-                              label={`${server.totalDisk} GB`}
+                              label={`${Math.round(((lastMetric?.diskUsage || 0) / 100) * (server.totalDisk || 0))} / ${Math.round(server.totalDisk || 0)} GB`}
                             />
                           </TableCell>
                           <TableCell className="py-4">
