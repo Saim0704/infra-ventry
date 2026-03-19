@@ -19,7 +19,7 @@ import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Globe, Server, Database, Cloud, Edit, Edit2, Trash2, ChevronLeft, Plus, ChevronDown, Shield, Bell, Activity, Layout, Eye, Terminal, Mail, Save, Key, Send, ExternalLink, Settings, AlertTriangle, Check, X, Info, MessageSquare, Type, Clock, VolumeX, Volume2, CheckCircle2, Cpu, Zap, HardDrive, AlertCircle, Timer, ShieldCheck } from "lucide-react";
+import { Globe, Server, Database, Cloud, Edit, Edit2, Trash2, ChevronLeft, Plus, ChevronDown, Shield, Bell, Activity, Layout, Eye, Terminal, Mail, Save, Key, Send, ExternalLink, Settings, AlertTriangle, Check, X, Info, MessageSquare, Type, Clock, VolumeX, Volume2, CheckCircle2, Cpu, Zap, HardDrive, AlertCircle, Timer, ShieldCheck, Copy } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useQueryClient } from "@tanstack/react-query";
@@ -1159,14 +1159,32 @@ function VisibilityToggle({ control, name, label, icon: Icon, description }: any
     );
 }
 
+const LATEST_AGENT_VERSION = "v3";
+
 function ProjectSettings({ projectId }: { projectId: number }) {
+    const { data: resources } = useProjectResources(projectId);
+    const servers = resources?.servers || [];
     const { data: settings, isLoading } = useProjectAlertSettings(projectId);
     const updateSettings = useUpdateProjectAlertSettings(projectId);
     const { toast } = useToast();
     const [newRecipient, setNewRecipient] = useState("");
     const [testEmailRecipient, setTestEmailRecipient] = useState("");
     const [isSendingTest, setIsSendingTest] = useState(false);
-    const [subTab, setSubTab] = useState(() => localStorage.getItem(`project_${projectId}_subtab`) || "alerts");
+    const [isRollingOut, setIsRollingOut] = useState(false);
+    const [subTab, setSubTab] = useState(() => localStorage.getItem(`project_${projectId}_subtab`) || "thresholds");
+
+    const handleRollout = async () => {
+        setIsRollingOut(true);
+        try {
+            const res = await fetch(`/api/projects/${projectId}/rollout`, { method: 'POST' });
+            if (!res.ok) throw new Error("Failed to trigger rollout");
+            toast({ title: "Rollout Triggered", description: "All linked servers will be marked for update on their next check-in." });
+        } catch (err: any) {
+            toast({ title: "Error", description: err.message, variant: "destructive" });
+        } finally {
+            setIsRollingOut(false);
+        }
+    };
 
     useEffect(() => {
         localStorage.setItem(`project_${projectId}_subtab`, subTab);
@@ -1284,7 +1302,7 @@ function ProjectSettings({ projectId }: { projectId: number }) {
         <Form {...form}>
             <div className="space-y-6">
                 <Tabs value={subTab} onValueChange={setSubTab} className="w-full">
-                    <TabsList className="grid w-full grid-cols-2 md:grid-cols-7 bg-muted/30 p-1 rounded-xl h-auto md:h-11 border border-border/20 mb-8 gap-1 md:gap-0">
+                    <TabsList className="grid w-full grid-cols-2 md:grid-cols-8 bg-muted/30 p-1 rounded-xl h-auto md:h-11 border border-border/20 mb-8 gap-1 md:gap-0">
                         <TabsTrigger value="thresholds" className="rounded-lg h-9 data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-primary font-bold tracking-tight relative group transition-all">
                             <Activity className="w-3.5 h-3.5 mr-2" /> Alert Threshold
                             <div className="absolute bottom-0.5 left-1/2 -translate-x-1/2 w-6 h-0.5 bg-primary rounded-full opacity-0 data-[state=active]:group-data-[state=active]:opacity-100 transition-all" />
@@ -1311,6 +1329,10 @@ function ProjectSettings({ projectId }: { projectId: number }) {
                         </TabsTrigger>
                         <TabsTrigger value="alert-muting" className="rounded-lg h-9 data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-primary font-bold tracking-tight relative group transition-all">
                             <VolumeX className="w-3.5 h-3.5 mr-2" /> Alert Muting
+                            <div className="absolute bottom-0.5 left-1/2 -translate-x-1/2 w-6 h-0.5 bg-primary rounded-full opacity-0 data-[state=active]:group-data-[state=active]:opacity-100 transition-all" />
+                        </TabsTrigger>
+                        <TabsTrigger value="agent-rollout" className="rounded-lg h-9 data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-primary font-bold tracking-tight relative group transition-all">
+                            <Zap className="w-3.5 h-3.5 mr-2" /> Agent Rollout
                             <div className="absolute bottom-0.5 left-1/2 -translate-x-1/2 w-6 h-0.5 bg-primary rounded-full opacity-0 data-[state=active]:group-data-[state=active]:opacity-100 transition-all" />
                         </TabsTrigger>
                     </TabsList>
@@ -1725,6 +1747,207 @@ function ProjectSettings({ projectId }: { projectId: number }) {
 
                     <TabsContent value="alert-muting" className="animate-in fade-in slide-in-from-bottom-2 duration-300">
                         <AlertMutingTab projectId={projectId} settings={settings} />
+                    </TabsContent>
+
+                    <TabsContent value="agent-rollout" className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+                        <Card className="border-border/40 shadow-sm bg-card/50 backdrop-blur-sm mt-2">
+                            <CardHeader>
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-3">
+                                        <div className="h-10 w-10 rounded-xl bg-orange-500/10 flex items-center justify-center text-orange-500">
+                                            <Zap className="h-5 w-5" />
+                                        </div>
+                                        <div className="flex flex-col">
+                                            <div className="flex items-center gap-2">
+                                                <CardTitle className="text-xl font-bold">Agent Rollout Management</CardTitle>
+                                                <Popover>
+                                                    <PopoverTrigger asChild>
+                                                        <Button variant="ghost" size="icon" className="h-6 w-6 rounded-full hover:bg-orange-500/10 hover:text-orange-500 transition-colors">
+                                                            <Info className="h-3.5 w-3.5" />
+                                                        </Button>
+                                                    </PopoverTrigger>
+                                                    <PopoverContent align="start" className="w-96 p-4 rounded-2xl border-border/40 bg-card/95 backdrop-blur-md shadow-2xl z-50">
+                                                        <div className="space-y-3">
+                                                            <div className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-orange-500">
+                                                                <Terminal className="h-3 w-3" /> Manual Installation Command
+                                                            </div>
+                                                            <div className="relative group">
+                                                                <pre className="p-3 rounded-xl bg-background/50 border border-border/30 font-mono text-[10px] whitespace-pre-wrap break-all pr-10 leading-normal text-muted-foreground">
+                                                                    {`curl -s -L "${window.location.origin}/get/install-agent.sh" | bash -s -- ${window.location.origin} ${resources?.tokens?.[0]?.token || 'YOUR_TOKEN'}`}
+                                                                </pre>
+                                                                <Button 
+                                                                    size="icon" 
+                                                                    variant="ghost" 
+                                                                    className="absolute top-1.5 right-1.5 h-7 w-7 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-background/80 transition-all"
+                                                                    onClick={() => {
+                                                                        const cmd = `curl -s -L "${window.location.origin}/get/install-agent.sh" | bash -s -- ${window.location.origin} ${resources?.tokens?.[0]?.token || 'YOUR_TOKEN'}`;
+                                                                        navigator.clipboard.writeText(cmd);
+                                                                        toast({ title: "Command Copied", description: "Manual installation command ready to be pasted." });
+                                                                    }}
+                                                                >
+                                                                    <Copy className="h-3.5 w-3.5" />
+                                                                </Button>
+                                                            </div>
+                                                            <p className="text-[10px] text-muted-foreground leading-relaxed">
+                                                                Run this command on your server to manually bootstrap the agent or force an immediate re-installation of the latest version.
+                                                            </p>
+                                                        </div>
+                                                    </PopoverContent>
+                                                </Popover>
+                                            </div>
+                                            <CardDescription>Update all linked servers to the latest agent version.</CardDescription>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-2 bg-emerald-500/10 text-emerald-500 px-4 py-2 rounded-xl border border-emerald-500/20">
+                                        <ShieldCheck className="h-4 w-4" />
+                                        <span className="text-xs font-black uppercase tracking-widest">Latest: {LATEST_AGENT_VERSION}</span>
+                                    </div>
+                                </div>
+                            </CardHeader>
+                            <CardContent className="space-y-6">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div className="p-6 rounded-2xl border border-orange-500/20 bg-orange-500/5">
+                                        <div className="flex items-start gap-4">
+                                            <div className="p-2 rounded-full bg-orange-500/10 text-orange-500">
+                                                <Info className="h-5 w-5" />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <p className="text-sm font-bold text-foreground">Staged Update Mechanism</p>
+                                                <p className="text-xs text-muted-foreground leading-relaxed">
+                                                    Clicking the button below will tag every server associated with this project for an update. 
+                                                    The next time each agent reports its metrics (usually every 1-5 minutes), it will receive an update instruction, 
+                                                    download the latest script/binary, and restart the systemd service.
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="p-6 rounded-2xl border border-border/40 bg-background/30 backdrop-blur-sm">
+                                        <h4 className="text-xs font-black uppercase tracking-widest text-muted-foreground mb-4">Version Distribution</h4>
+                                        <div className="space-y-3">
+                                            {Object.entries(servers.reduce((acc: any, s: any) => {
+                                                const v = s.agentVersion || "v1";
+                                                acc[v] = (acc[v] || 0) + 1;
+                                                return acc;
+                                            }, {})).map(([version, count]: [string, any]) => (
+                                                <div key={version} className="flex items-center justify-between">
+                                                    <div className="flex items-center gap-2">
+                                                        <div className={cn("h-2 w-2 rounded-full", version === LATEST_AGENT_VERSION ? "bg-emerald-500" : "bg-orange-500")} />
+                                                        <span className="text-sm font-bold font-mono">{version}</span>
+                                                    </div>
+                                                    <span className="text-xs font-medium text-muted-foreground">{count} {count === 1 ? 'server' : 'servers'}</span>
+                                                </div>
+                                            ))}
+                                            {servers.length === 0 && <p className="text-xs text-muted-foreground italic">No servers linked to this project.</p>}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="rounded-2xl border border-border/40 overflow-hidden bg-background/30 backdrop-blur-sm">
+                                    <Table>
+                                        <TableHeader>
+                                            <TableRow className="hover:bg-transparent border-border/40">
+                                                <TableHead className="text-[10px] font-black uppercase tracking-widest py-4">Server Name</TableHead>
+                                                <TableHead className="text-[10px] font-black uppercase tracking-widest py-4">Current Version</TableHead>
+                                                <TableHead className="text-[10px] font-black uppercase tracking-widest py-4">Status</TableHead>
+                                                <TableHead className="text-[10px] font-black uppercase tracking-widest py-4 text-right">Pending Update</TableHead>
+                                            </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {servers.map((server: any) => (
+                                                <TableRow key={server.id} className="group border-border/40 hover:bg-muted/30 transition-colors">
+                                                    <TableCell className="py-3 font-bold text-sm">
+                                                        <div className="flex items-center gap-2">
+                                                            <Server className="h-3.5 w-3.5 text-muted-foreground" />
+                                                            {server.hostname}
+                                                        </div>
+                                                    </TableCell>
+                                                    <TableCell className="py-3">
+                                                        <span className={cn(
+                                                            "px-2 py-0.5 rounded-lg text-[10px] font-black font-mono tracking-tighter",
+                                                            (server.agentVersion || "v1") === LATEST_AGENT_VERSION ? "bg-emerald-500/10 text-emerald-500" : "bg-orange-500/10 text-orange-500"
+                                                        )}>
+                                                            {server.agentVersion || "v1"}
+                                                        </span>
+                                                    </TableCell>
+                                                    <TableCell className="py-3">
+                                                        {(server.agentVersion || "v1") === LATEST_AGENT_VERSION ? (
+                                                            <div className="flex items-center gap-1.5 text-emerald-500">
+                                                                <CheckCircle2 className="h-3 w-3" />
+                                                                <span className="text-[10px] font-bold uppercase tracking-tight">Up to date</span>
+                                                            </div>
+                                                        ) : (
+                                                            <div className="flex items-center gap-1.5 text-orange-500">
+                                                                <AlertCircle className="h-3 w-3" />
+                                                                <span className="text-[10px] font-bold uppercase tracking-tight">Needs Update</span>
+                                                            </div>
+                                                        )}
+                                                    </TableCell>
+                                                    <TableCell className="py-3 text-right">
+                                                        {server.pendingUpdate ? (
+                                                            <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-indigo-500/10 text-indigo-500 border border-indigo-500/20 text-[9px] font-black uppercase tracking-widest animate-pulse">
+                                                                <Timer className="h-2.5 w-2.5" /> Queued
+                                                            </span>
+                                                        ) : (
+                                                            <span className="text-[9px] font-black uppercase tracking-widest text-muted-foreground opacity-30">Idle</span>
+                                                        )}
+                                                    </TableCell>
+                                                </TableRow>
+                                            ))}
+                                            {servers.length === 0 && (
+                                                <TableRow>
+                                                    <TableCell colSpan={4} className="py-8 text-center text-xs text-muted-foreground italic">
+                                                        Add servers to this project to manage rollouts.
+                                                    </TableCell>
+                                                </TableRow>
+                                            )}
+                                        </TableBody>
+                                    </Table>
+                                </div>
+
+                                <div className="flex justify-center py-8">
+                                    {servers.length > 0 && servers.every((s: any) => (s.agentVersion || "v1") === LATEST_AGENT_VERSION) && !isRollingOut ? (
+                                        <div className="flex flex-col items-center gap-3">
+                                            <Button 
+                                                size="lg"
+                                                disabled={true}
+                                                className="h-14 px-10 rounded-2xl bg-muted text-muted-foreground border-2 border-dashed border-border/40 font-black uppercase tracking-widest text-sm cursor-not-allowed opacity-50"
+                                            >
+                                                <div className="flex items-center gap-3">
+                                                    <ShieldCheck className="h-5 w-5" />
+                                                    All Agents Up to Date
+                                                </div>
+                                            </Button>
+                                            <p className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/20">
+                                                Fleet synchronized on {LATEST_AGENT_VERSION}
+                                            </p>
+                                        </div>
+                                    ) : (
+                                        <Button 
+                                            size="lg"
+                                            onClick={handleRollout}
+                                            disabled={isRollingOut || servers.length === 0}
+                                            className="h-14 px-10 rounded-2xl bg-orange-500 hover:bg-orange-600 shadow-xl shadow-orange-500/20 font-black uppercase tracking-widest text-sm relative group overflow-hidden"
+                                        >
+                                            <div className="absolute inset-0 bg-white/10 translate-y-full group-hover:translate-y-0 transition-transform duration-300" />
+                                            <div className="relative z-10 flex items-center gap-3">
+                                                {isRollingOut ? (
+                                                    <>
+                                                        <div className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                                        Triggering...
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <Zap className="h-5 w-5 fill-current" />
+                                                        Trigger Rollout to {LATEST_AGENT_VERSION}
+                                                    </>
+                                                )}
+                                            </div>
+                                        </Button>
+                                    )}
+                                </div>
+                            </CardContent>
+                        </Card>
                     </TabsContent>
                 </Tabs>
             </div>

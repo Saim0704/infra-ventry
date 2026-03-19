@@ -21,6 +21,7 @@ var (
 	ServerURL  = getEnv("SERVER_URL", "http://localhost:3000")
 	AgentToken = getEnv("AGENT_TOKEN", "infra_inventory_agent_secret_2026")
 	Interval   = getEnvDuration("INTERVAL", 60*time.Second)
+	AgentVersion = "v3"
 )
 
 type MetricPayload struct {
@@ -36,6 +37,7 @@ type SystemStats struct {
 	TotalRAM        float64           `json:"totalRam"`
 	TotalDisk       float64           `json:"totalDisk"`
 	IPAddress       string            `json:"ipAddress"`
+	AgentVersion    string            `json:"agentVersion,omitempty"`
 	Metrics         Metrics           `json:"metrics"`
 	ServiceVersions map[string]string `json:"serviceVersions,omitempty"`
 }
@@ -55,9 +57,10 @@ type Process struct {
 }
 
 type ServerResponse struct {
-	Success     bool `json:"success"`
-	Interval    int  `json:"interval"`
-	ShouldAudit bool `json:"shouldAudit"`
+	Success      bool `json:"success"`
+	Interval     int  `json:"interval"`
+	ShouldAudit  bool `json:"shouldAudit"`
+	ShouldUpdate bool `json:"shouldUpdate"`
 }
 
 func main() {
@@ -103,6 +106,10 @@ func report() {
 				log.Printf("[%s] Server requested monthly audit. Running audit tool...", time.Now().Format(time.RFC3339))
 				runAudit()
 			}
+			if srvResp.ShouldUpdate {
+				log.Printf("[%s] Server requested agent update. Re-installing latest version...", time.Now().Format(time.RFC3339))
+				runUpdate()
+			}
 		}
 		log.Printf("[%s] Reported metrics for %s", time.Now().Format(time.RFC3339), stats.Hostname)
 	} else {
@@ -123,19 +130,32 @@ func runAudit() {
 	}
 }
 
+func runUpdate() {
+	// Call the installer script which will download latest binary and restart service
+	cmdStr := fmt.Sprintf("curl -s -L %s/get/install-agent.sh | bash -s -- %s %s", ServerURL, ServerURL, AgentToken)
+	cmd := exec.Command("sh", "-c", cmdStr)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		log.Printf("Update Error: %v. Output: %s", err, string(out))
+	} else {
+		log.Printf("Update completed successfully.")
+	}
+}
+
 func collectStats() SystemStats {
 	hostname, _ := os.Hostname()
 	totalDisk, diskUsage := getDiskStats()
 	osName, osVer := getOSInfo()
 
 	return SystemStats{
-		Hostname:  hostname,
-		OS:        osName,
-		OSVersion: osVer,
-		CPUCores:  runtime.NumCPU(),
-		TotalRAM:  getTotalRAM(),
-		TotalDisk: totalDisk,
-		IPAddress: getIPAddress(),
+		Hostname:     hostname,
+		OS:           osName,
+		OSVersion:    osVer,
+		CPUCores:     runtime.NumCPU(),
+		TotalRAM:     getTotalRAM(),
+		TotalDisk:    totalDisk,
+		IPAddress:    getIPAddress(),
+		AgentVersion: AgentVersion,
 		Metrics: Metrics{
 			CPUUsage:     getCPUUsage(),
 			MemoryUsage:  getMemoryUsage(),
@@ -200,15 +220,25 @@ func getOSInfo() (string, string) {
 
 func getMemoryUsage() float64 {
 	if runtime.GOOS == "linux" {
-		out, _ := exec.Command("free").Output()
-		lines := strings.Split(string(out), "\n")
-		if len(lines) >= 2 {
-			fields := strings.Fields(lines[1])
-			if len(fields) >= 3 {
-				total, _ := strconv.ParseFloat(fields[1], 64)
-				used, _ := strconv.ParseFloat(fields[2], 64)
-				if total > 0 {
-					return (used / total) * 100.0
+		// More robust memory usage calculation using /proc/meminfo or free
+		// We want (Total - Available) / Total to reflect actual pressure
+		out, err := exec.Command("free", "-k").Output()
+		if err == nil {
+			lines := strings.Split(string(out), "\n")
+			if len(lines) >= 2 {
+				fields := strings.Fields(lines[1])
+				if len(fields) >= 7 { // modern free has 'available' at index 6
+					total, _ := strconv.ParseFloat(fields[1], 64)
+					available, _ := strconv.ParseFloat(fields[6], 64)
+					if total > 0 {
+						return ((total - available) / total) * 100.0
+					}
+				} else if len(fields) >= 3 { // fallback for older free
+					total, _ := strconv.ParseFloat(fields[1], 64)
+					used, _ := strconv.ParseFloat(fields[2], 64)
+					if total > 0 {
+						return (used / total) * 100.0
+					}
 				}
 			}
 		}
@@ -218,20 +248,48 @@ func getMemoryUsage() float64 {
 
 func getCPUUsage() float64 {
 	if runtime.GOOS == "linux" {
-		// Use a quick sample from top
-		out, _ := exec.Command("top", "-bn1").Output()
-		lines := strings.Split(string(out), "\n")
-		for _, line := range lines {
-			if strings.Contains(line, "%Cpu(s)") {
+		// Using /proc/stat with 2 samples to get accurate current usage
+		// This avoids the 'average since boot' issue with top -bn1
+		
+		readStat := func() (idle, total uint64) {
+			data, err := os.ReadFile("/proc/stat")
+			if err != nil {
+				return 0, 0
+			}
+			lines := strings.Split(string(data), "\n")
+			for _, line := range lines {
 				fields := strings.Fields(line)
-				for i, field := range fields {
-					if strings.Contains(field, "id") { // matches "id," or "id"
-						idle, _ := strconv.ParseFloat(fields[i-1], 64)
-						return 100.0 - idle
+				if len(fields) >= 5 && fields[0] == "cpu" {
+					var sum uint64
+					// fields: cpu user nice system idle iowait irq softirq steal guest guest_nice
+					for i := 1; i < len(fields); i++ {
+						val, _ := strconv.ParseUint(fields[i], 10, 64)
+						sum += val
+						if i == 4 { // idle is index 4 (0-based: 1,2,3,4)
+							idle = val
+						}
 					}
+					return idle, sum
 				}
 			}
+			return 0, 0
 		}
+
+		idle1, total1 := readStat()
+		if total1 == 0 { return 10.5 }
+		
+		time.Sleep(500 * time.Millisecond)
+		
+		idle2, total2 := readStat()
+		if total2 == 0 || total2 <= total1 { return 10.5 }
+
+		idleDelta := idle2 - idle1
+		totalDelta := total2 - total1
+		
+		if totalDelta == 0 { return 0.0 }
+		
+		usage := (float64(totalDelta-idleDelta) / float64(totalDelta)) * 100.0
+		return usage
 	}
 	return 10.5 // Default fallback
 }

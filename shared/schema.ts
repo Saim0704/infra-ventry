@@ -57,6 +57,8 @@ export const servers = pgTable("servers", {
   lastAuditAt: timestamp("last_audit_at"),
   lastSeen: timestamp("last_seen").defaultNow(),
   sortOrder: integer("sort_order").default(0).notNull(),
+  agentVersion: text("agent_version").default("v1"),
+  pendingUpdate: boolean("pending_update").default(false),
 });
 
 // === PROJECTS ===

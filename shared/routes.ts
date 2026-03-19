@@ -181,6 +181,14 @@ export const api = {
         },
       },
     },
+    rollout: {
+      method: 'POST' as const,
+      path: '/api/projects/:id/rollout' as const,
+      responses: {
+        200: z.object({ success: z.boolean() }),
+        404: errorSchemas.notFound,
+      },
+    },
   },
 
   // === DASHBOARD DATA ===
@@ -422,9 +430,10 @@ export const api = {
           os: z.string().optional(),
           osVersion: z.string().optional(),
           cpuCores: z.number().optional(),
-          totalRam: z.number().optional(),
-          totalDisk: z.number().optional(),
-          ipAddress: z.string().optional(),
+          totalRam: z.number(),
+          totalDisk: z.number(),
+          ipAddress: z.string(),
+          agentVersion: z.string().optional(),
           metrics: z.object({
             cpuUsage: z.number(),
             memoryUsage: z.number(),
@@ -440,7 +449,12 @@ export const api = {
         }),
       }),
       responses: {
-        200: z.object({ success: z.boolean() }),
+        200: z.object({ 
+          success: z.boolean(),
+          interval: z.number().optional(),
+          shouldAudit: z.boolean().optional(),
+          shouldUpdate: z.boolean().optional(),
+        }),
         401: errorSchemas.unauthorized,
       },
     },

@@ -85,6 +85,30 @@ function getTopProcesses(): any[] {
 }
 
 /**
+ * Get accurate CPU Usage % by comparing ticks
+ */
+function getCpuUsage(): Promise<number> {
+  return new Promise((resolve) => {
+    const startMeasure = os.cpus().map(cpu => cpu.times);
+    setTimeout(() => {
+      const endMeasure = os.cpus().map(cpu => cpu.times);
+      let totalDiff = 0;
+      let idleDiff = 0;
+      for (let i = 0; i < startMeasure.length; i++) {
+        const start = startMeasure[i];
+        const end = endMeasure[i];
+        const totalStart = Object.values(start).reduce((a, b) => a + b, 0);
+        const totalEnd = Object.values(end).reduce((a, b) => a + b, 0);
+        totalDiff += (totalEnd - totalStart);
+        idleDiff += (end.idle - start.idle);
+      }
+      const usage = totalDiff === 0 ? 0 : (1 - idleDiff / totalDiff) * 100;
+      resolve(usage);
+    }, 500);
+  });
+}
+
+/**
  * Collect all metrics
  */
 async function collectStats() {
@@ -92,11 +116,7 @@ async function collectStats() {
   const totalMem = os.totalmem();
   const freeMem = os.freemem();
   const disk = getDiskStats();
-  
-  // CPU Usage: loadavg is a 1, 5, 15 min average. 
-  // For a more immediate but rough measure:
-  const load = os.loadavg();
-  const cpuUsage = Math.min(100, (load[0] / cpus.length) * 100);
+  const cpuUsage = await getCpuUsage();
 
   return {
     hostname: os.hostname(),

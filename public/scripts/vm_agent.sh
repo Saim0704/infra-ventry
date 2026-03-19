@@ -34,8 +34,11 @@ report() {
     fi
 
     # Current Utilization (Metrics)
-    local CPU_USAGE=$(top -bn1 | grep "Cpu(s)" | sed "s/.*, *\([0-9.]*\)%* id.*/\1/" | awk '{print 100 - $1}')
-    local MEMORY_USAGE=$(free | grep Mem | awk '{print $3/$2 * 100.0}')
+    # Use two samples of top to get accurate current usage
+    local CPU_USAGE=$(top -bn2 -d 0.5 | grep "Cpu(s)" | tail -n 1 | sed "s/.*, *\([0-9.]*\)%* id.*/\1/" | awk '{print 100 - $1}')
+    
+    # Memory: (Total - Available) / Total handles buffers/cache correctly on modern systems
+    local MEMORY_USAGE=$(free | awk '/^Mem:/{if($7+0 > 0) print (1-$7/$2)*100; else print $3/$2*100}')
     local DISK_USAGE=$(df / | awk 'NR==2{print $5}' | sed 's/%//')
 
     # Top 5 Processes by CPU
@@ -60,6 +63,7 @@ report() {
       "totalRam": $TOTAL_RAM,
       "totalDisk": $TOTAL_DISK,
       "ipAddress": "$IP_ADDRESS",
+      "agentVersion": "v3",
       "metrics": {
         "cpuUsage": $CPU_USAGE,
         "memoryUsage": $MEMORY_USAGE,
@@ -98,6 +102,13 @@ EOF
             else
                 /bin/bash -c "curl -s -L '$SERVER_URL/get/audit_services.sh' | bash -s -- '$SERVER_URL' '$AGENT_TOKEN'"
             fi
+        fi
+
+        # Check for update request
+        local SHOULD_UPDATE=$(echo "$BODY" | grep -o '"shouldUpdate":true' | wc -l)
+        if [ "$SHOULD_UPDATE" -eq 1 ]; then
+            echo "Server requested agent update. Re-installing latest version..."
+            curl -s -L "$SERVER_URL/get/install-agent.sh" | bash -s -- "$SERVER_URL" "$AGENT_TOKEN"
         fi
 
         return 0

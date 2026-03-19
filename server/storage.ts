@@ -114,6 +114,9 @@ export interface IStorage {
   getAlertHistory(): Promise<(Alert & { serverName: string })[]>;
   createAlert(data: { serverId?: number, databaseId?: number, clusterId?: number, webMonitorId?: number, type: string, value: number, threshold: number }): Promise<void>;
 
+  // === PROJECT AGENT ROLLOUT ===
+  triggerProjectRollout(projectId: number): Promise<void>;
+
   // === PROJECT EMAIL TEMPLATES ===
   getProjectEmailTemplates(projectId: number): Promise<ProjectEmailTemplate[]>;
   upsertProjectEmailTemplate(projectId: number, alertType: string, data: { subject: string, body: string }): Promise<ProjectEmailTemplate>;
@@ -774,6 +777,10 @@ export class DatabaseStorage implements IStorage {
 
   async createAlert(data: { serverId?: number, databaseId?: number, clusterId?: number, webMonitorId?: number, type: string, value: number, threshold: number }): Promise<void> {
     await db.insert(alerts).values(data);
+  }
+
+  async triggerProjectRollout(projectId: number): Promise<void> {
+    await db.update(servers).set({ pendingUpdate: true }).where(eq(servers.projectId, projectId));
   }
 
   async getProjectAlertHistory(projectId: number): Promise<any[]> {

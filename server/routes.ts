@@ -75,18 +75,24 @@ export async function registerRoutes(
       // Process metrics
       const projectId = tokenData?.projectId || null;
 
-      // Upsert server with project association
+      // Upsert server with project association and agent version
       const server = await storage.upsertServer({ ...serverInfo, projectId });
       await storage.addServerMetric({ ...metrics, serverId: server.id });
 
       const oneMonthAgo = new Date();
       oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
       const shouldAudit = !server.lastAuditAt || server.lastAuditAt < oneMonthAgo;
+      
+      const shouldUpdate = (server as any).pendingUpdate;
+      if (shouldUpdate) {
+        await storage.updateServer(server.id, { pendingUpdate: false } as any);
+      }
 
       res.json({ 
         success: true, 
         interval: server.checkInterval,
-        shouldAudit 
+        shouldAudit,
+        shouldUpdate
       });
     } catch (err) {
       error(err);
@@ -253,6 +259,13 @@ export async function registerRoutes(
     const status = await storage.getProjectStatusBySlug(req.params.slug);
     if (!status) return res.status(404).json({ message: "Project status page not found" });
     res.json(status);
+  });
+  
+  app.post(api.projects.rollout.path, isAuthenticated, async (req, res) => {
+    const id = Number(req.params.id);
+    if (isNaN(id)) return res.status(400).json({ message: "Invalid project ID" });
+    await storage.triggerProjectRollout(id);
+    res.json({ success: true });
   });
 
   // Project Email Templates
