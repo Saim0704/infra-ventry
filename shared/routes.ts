@@ -615,6 +615,29 @@ export const api = {
         200: z.array(z.custom<any>()), // Alert[] with server info
       },
     },
+    projectHistory: {
+      method: 'GET' as const,
+      path: '/api/projects/:id/alerts/history' as const,
+      responses: {
+        200: z.array(z.custom<any>()),
+      },
+    },
+    updateMuted: {
+      method: 'PATCH' as const,
+      path: '/api/projects/:id/alert-muting' as const,
+      input: z.object({
+        alertMutedResources: z.object({
+          servers: z.array(z.number()).optional(),
+          databases: z.array(z.number()).optional(),
+          clusters: z.array(z.number()).optional(),
+          webMonitors: z.array(z.number()).optional(),
+          domainMonitors: z.array(z.number()).optional(),
+        }),
+      }),
+      responses: {
+        200: z.custom<any>(),
+      },
+    },
   },
 };
 

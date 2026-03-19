@@ -19,9 +19,12 @@ import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Globe, Server, Database, Cloud, Edit, Edit2, Trash2, ChevronLeft, Plus, ChevronDown, Shield, Bell, Activity, Layout, Eye, Terminal, Mail, Save, Key, Send, ExternalLink, Settings, AlertTriangle, Check, X, Info, MessageSquare, Type } from "lucide-react";
+import { Globe, Server, Database, Cloud, Edit, Edit2, Trash2, ChevronLeft, Plus, ChevronDown, Shield, Bell, Activity, Layout, Eye, Terminal, Mail, Save, Key, Send, ExternalLink, Settings, AlertTriangle, Check, X, Info, MessageSquare, Type, Clock, VolumeX, Volume2, CheckCircle2, Cpu, Zap, HardDrive, AlertCircle, Timer, ShieldCheck } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { useQueryClient } from "@tanstack/react-query";
+import { api } from "@shared/routes";
+import { queryClient } from "@/lib/queryClient";
 import { ServerDetailView } from "@/components/ServerDetailView";
 import { DatabaseDetailView } from "@/components/DatabaseDetailView";
 import { ClusterDetailView } from "@/components/ClusterDetailView";
@@ -1065,31 +1068,64 @@ function ProcessList({ processes }: { processes: any[] }) {
     );
 }
 
-function ThresholdField({ control, name, label, min = 0, max = 100, step = 1, unit = "%" }: any) {
+function ThresholdField({ control, name, label, icon: Icon, enabledName, min = 0, max = 100, step = 1, unit = "%", isToggleOnly = false, showSeparator = false }: any) {
+    const finalEnabledName = enabledName || name.replace('Threshold', 'AlertEnabled');
+
     return (
-        <FormField
-            control={control}
-            name={name}
-            render={({ field }) => (
-                <FormItem>
-                    <div className="flex justify-between items-center mb-1">
-                        <FormLabel className="text-[10px] font-bold uppercase tracking-widest text-foreground/70">{label}</FormLabel>
-                        <span className="font-bold text-primary text-xs">{field.value}{unit}</span>
-                    </div>
-                    <FormControl>
-                        <Input
-                            type="range"
-                            min={min}
-                            max={max}
-                            step={step}
-                            className="accent-primary h-1.5 cursor-pointer"
-                            {...field}
-                            onChange={e => field.onChange(parseInt(e.target.value))}
+        <div className={cn("space-y-1.5 py-1.5", showSeparator && "border-b border-border/20 last:border-0 pb-3 mb-2")}>
+            <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                    {Icon && <Icon className="h-3 w-3 text-primary/60" />}
+                    <p className="text-[10px] font-black uppercase tracking-widest text-foreground/60 leading-none">{label}</p>
+                </div>
+                <FormField
+                    control={control}
+                    name={finalEnabledName}
+                    render={({ field }) => (
+                        <Switch 
+                            checked={field.value} 
+                            onCheckedChange={field.onChange} 
+                            className="data-[state=checked]:bg-primary scale-[0.8] origin-right"
                         />
-                    </FormControl>
-                </FormItem>
+                    )}
+                />
+            </div>
+            {!isToggleOnly && (
+                <FormField
+                    control={control}
+                    name={finalEnabledName}
+                    render={({ field: enField }) => (
+                        <FormField
+                            control={control}
+                            name={name}
+                            render={({ field }) => (
+                                <FormItem className={cn("transition-opacity", !enField.value && "opacity-30 pointer-events-none")}>
+                                    <div className="flex justify-between items-center mb-0.5">
+                                        <span className={cn("font-bold text-[10px] font-mono", enField.value ? "text-primary" : "text-muted-foreground")}>
+                                            {field.value}{unit}
+                                        </span>
+                                        <span className="text-[8px] text-muted-foreground font-black uppercase tracking-widest opacity-40 italic">threshold</span>
+                                    </div>
+                                    <FormControl>
+                                        <div className="h-2 flex items-center">
+                                            <Input
+                                                type="range"
+                                                min={min}
+                                                max={max}
+                                                step={step}
+                                                className="accent-primary h-1 cursor-pointer w-full"
+                                                {...field}
+                                                onChange={e => field.onChange(parseInt(e.target.value))}
+                                            />
+                                        </div>
+                                    </FormControl>
+                                </FormItem>
+                            )}
+                        />
+                    )}
+                />
             )}
-        />
+        </div>
     );
 }
 
@@ -1161,12 +1197,42 @@ function ProjectSettings({ projectId }: { projectId: number }) {
             smtpPass: "",
             smtpSenderName: "",
             smtpSenderEmail: "",
+            cpuAlertEnabled: true,
+            memoryAlertEnabled: true,
+            storageAlertEnabled: true,
+            dbStorageAlertEnabled: true,
+            dbConnectionAlertEnabled: true,
+            clusterCpuAlertEnabled: true,
+            clusterMemoryAlertEnabled: true,
+            webResponseAlertEnabled: true,
+            webStatusAlertEnabled: true,
+            webSslAlertEnabled: true,
+            domainExpiryAlertEnabled: true,
         },
         values: settings ? {
             ...settings,
             alertRecipients: (settings.alertRecipients || []).map((email: string) => ({ email }))
         } : undefined
     });
+
+    const handleSaveSection = (fields: string[]) => {
+        const values = form.getValues();
+        const dataToSave: any = {};
+        fields.forEach(f => {
+            if (f === 'alertRecipients') {
+                dataToSave[f] = (values[f] || []).map((r: any) => r.email);
+            } else {
+                dataToSave[f] = values[f];
+            }
+        });
+
+        updateSettings.mutate(dataToSave, {
+            onSuccess: () => {
+                toast({ title: "Section Updated", description: "Changes have been saved successfully." });
+                window.location.reload(); // Quick refresh to update data correctly across hooks
+            }
+        });
+    };
 
     const { fields, append, remove } = useFieldArray({
         control: form.control,
@@ -1216,19 +1282,9 @@ function ProjectSettings({ projectId }: { projectId: number }) {
 
     return (
         <Form {...form}>
-            <form onSubmit={form.handleSubmit((data) => {
-                const submissionData = {
-                    ...data,
-                    alertRecipients: (data.alertRecipients || []).map((r: any) => r.email)
-                };
-                updateSettings.mutate(submissionData, {
-                    onSuccess: () => {
-                        toast({ title: "Success", description: "Project settings updated successfully." });
-                    }
-                });
-            })} className="space-y-6">
+            <div className="space-y-6">
                 <Tabs value={subTab} onValueChange={setSubTab} className="w-full">
-                    <TabsList className="grid w-full grid-cols-2 md:grid-cols-5 bg-muted/30 p-1 rounded-xl h-auto md:h-11 border border-border/20 mb-8 gap-1 md:gap-0">
+                    <TabsList className="grid w-full grid-cols-2 md:grid-cols-7 bg-muted/30 p-1 rounded-xl h-auto md:h-11 border border-border/20 mb-8 gap-1 md:gap-0">
                         <TabsTrigger value="thresholds" className="rounded-lg h-9 data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-primary font-bold tracking-tight relative group transition-all">
                             <Activity className="w-3.5 h-3.5 mr-2" /> Alert Threshold
                             <div className="absolute bottom-0.5 left-1/2 -translate-x-1/2 w-6 h-0.5 bg-primary rounded-full opacity-0 data-[state=active]:group-data-[state=active]:opacity-100 transition-all" />
@@ -1249,6 +1305,14 @@ function ProjectSettings({ projectId }: { projectId: number }) {
                             <Layout className="w-3.5 h-3.5 mr-2" /> Status Page Setting
                             <div className="absolute bottom-0.5 left-1/2 -translate-x-1/2 w-6 h-0.5 bg-primary rounded-full opacity-0 data-[state=active]:group-data-[state=active]:opacity-100 transition-all" />
                         </TabsTrigger>
+                        <TabsTrigger value="alert-history" className="rounded-lg h-9 data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-primary font-bold tracking-tight relative group transition-all">
+                            <Clock className="w-3.5 h-3.5 mr-2" /> Alert History
+                            <div className="absolute bottom-0.5 left-1/2 -translate-x-1/2 w-6 h-0.5 bg-primary rounded-full opacity-0 data-[state=active]:group-data-[state=active]:opacity-100 transition-all" />
+                        </TabsTrigger>
+                        <TabsTrigger value="alert-muting" className="rounded-lg h-9 data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-primary font-bold tracking-tight relative group transition-all">
+                            <VolumeX className="w-3.5 h-3.5 mr-2" /> Alert Muting
+                            <div className="absolute bottom-0.5 left-1/2 -translate-x-1/2 w-6 h-0.5 bg-primary rounded-full opacity-0 data-[state=active]:group-data-[state=active]:opacity-100 transition-all" />
+                        </TabsTrigger>
                     </TabsList>
 
                     <TabsContent value="thresholds" className="animate-in fade-in slide-in-from-bottom-2 duration-300">
@@ -1265,10 +1329,10 @@ function ProjectSettings({ projectId }: { projectId: number }) {
                                         </div>
                                     </div>
                                 </CardHeader>
-                                <CardContent className="space-y-5">
-                                    <ThresholdField control={form.control} name="cpuThreshold" label="CPU Load" />
-                                    <ThresholdField control={form.control} name="memoryThreshold" label="Memory" />
-                                    <ThresholdField control={form.control} name="storageThreshold" label="Storage" />
+                                <CardContent className="space-y-2 py-3">
+                                    <ThresholdField control={form.control} name="cpuThreshold" label="CPU Load" icon={Cpu} showSeparator />
+                                    <ThresholdField control={form.control} name="memoryThreshold" label="Memory" icon={Zap} showSeparator />
+                                    <ThresholdField control={form.control} name="storageThreshold" label="Storage" icon={HardDrive} />
                                 </CardContent>
                             </Card>
 
@@ -1284,9 +1348,9 @@ function ProjectSettings({ projectId }: { projectId: number }) {
                                         </div>
                                     </div>
                                 </CardHeader>
-                                <CardContent className="space-y-5">
-                                    <ThresholdField control={form.control} name="dbStorageThreshold" label="Disk Usage" />
-                                    <ThresholdField control={form.control} name="dbConnectionThreshold" label="Connections" max={500} unit="" />
+                                <CardContent className="space-y-2 py-3">
+                                    <ThresholdField control={form.control} name="dbStorageThreshold" label="Disk Usage" icon={Database} showSeparator />
+                                    <ThresholdField control={form.control} name="dbConnectionThreshold" label="Connections" icon={Activity} max={500} unit="" />
                                 </CardContent>
                             </Card>
 
@@ -1302,9 +1366,9 @@ function ProjectSettings({ projectId }: { projectId: number }) {
                                         </div>
                                     </div>
                                 </CardHeader>
-                                <CardContent className="space-y-5">
-                                    <ThresholdField control={form.control} name="clusterCpuThreshold" label="CPU Overload" />
-                                    <ThresholdField control={form.control} name="clusterMemoryThreshold" label="Memory High" />
+                                <CardContent className="space-y-2 py-3">
+                                    <ThresholdField control={form.control} name="clusterCpuThreshold" label="CPU Overload" icon={Cpu} showSeparator />
+                                    <ThresholdField control={form.control} name="clusterMemoryThreshold" label="Memory High" icon={Zap} />
                                 </CardContent>
                             </Card>
 
@@ -1320,10 +1384,11 @@ function ProjectSettings({ projectId }: { projectId: number }) {
                                         </div>
                                     </div>
                                 </CardHeader>
-                                <CardContent className="space-y-5">
-                                    <ThresholdField control={form.control} name="webResponseThreshold" label="Latency" max={10000} step={100} unit="ms" />
-                                    <ThresholdField control={form.control} name="webSslExpiryThreshold" label="SSL Expiry" max={90} step={1} unit=" days" />
-                                </CardContent>
+                                 <CardContent className="space-y-2 py-3">
+                                     <ThresholdField control={form.control} name="webStatusAlertEnabled" label="Down Alert" icon={AlertCircle} isToggleOnly showSeparator />
+                                     <ThresholdField control={form.control} name="webResponseThreshold" label="Latency" icon={Timer} max={10000} step={100} unit="ms" showSeparator />
+                                     <ThresholdField control={form.control} name="webSslExpiryThreshold" label="SSL Expiry" icon={ShieldCheck} max={90} step={1} unit=" days" />
+                                 </CardContent>
                             </Card>
 
                             {/* Domain Thresholds */}
@@ -1338,10 +1403,19 @@ function ProjectSettings({ projectId }: { projectId: number }) {
                                         </div>
                                     </div>
                                 </CardHeader>
-                                <CardContent className="space-y-5">
-                                    <ThresholdField control={form.control} name="domainExpiryThreshold" label="Domain Expiry" max={90} step={1} unit=" days" />
+                                <CardContent className="space-y-2 py-3">
+                                    <ThresholdField control={form.control} name="domainExpiryThreshold" label="Domain Expiry" icon={Globe} max={90} step={1} unit=" days" />
                                 </CardContent>
                             </Card>
+                        </div>
+                        <div className="mt-8 flex justify-end">
+                            <Button 
+                                onClick={() => handleSaveSection(['cpuThreshold', 'memoryThreshold', 'storageThreshold', 'dbStorageThreshold', 'dbConnectionThreshold', 'clusterCpuThreshold', 'clusterMemoryThreshold', 'webResponseThreshold', 'webSslExpiryThreshold', 'domainExpiryThreshold', 'cpuAlertEnabled', 'memoryAlertEnabled', 'storageAlertEnabled', 'dbStorageAlertEnabled', 'dbConnectionAlertEnabled', 'clusterCpuAlertEnabled', 'clusterMemoryAlertEnabled', 'webResponseAlertEnabled', 'webStatusAlertEnabled', 'webSslAlertEnabled', 'domainExpiryAlertEnabled'])}
+                                className="h-11 px-8 rounded-xl bg-primary shadow-lg shadow-primary/20 font-bold uppercase tracking-wider"
+                                disabled={updateSettings.isPending}
+                            >
+                                <Save className="h-4 w-4 mr-2" /> Save Thresholds
+                            </Button>
                         </div>
                     </TabsContent>
 
@@ -1410,6 +1484,15 @@ function ProjectSettings({ projectId }: { projectId: number }) {
                                             </TableBody>
                                         </Table>
                                     </div>
+                                </div>
+                                <div className="pt-6 border-t border-border/30 flex justify-end">
+                                    <Button 
+                                        onClick={() => handleSaveSection(['alertRecipients'])}
+                                        className="h-11 px-8 rounded-xl bg-primary shadow-lg shadow-primary/20 font-bold uppercase tracking-wider"
+                                        disabled={updateSettings.isPending}
+                                    >
+                                        <Save className="h-4 w-4 mr-2" /> Save Recipients
+                                    </Button>
                                 </div>
                             </CardContent>
                         </Card>
@@ -1537,6 +1620,15 @@ function ProjectSettings({ projectId }: { projectId: number }) {
                                         </Button>
                                     </div>
                                 </div>
+                                <div className="pt-4 border-t border-border/30 mt-6 flex justify-end">
+                                    <Button 
+                                        onClick={() => handleSaveSection(['smtpHost', 'smtpPort', 'smtpUser', 'smtpPass', 'smtpSenderName', 'smtpSenderEmail'])}
+                                        className="h-11 px-8 rounded-xl bg-primary shadow-lg shadow-primary/20 font-bold uppercase tracking-wider"
+                                        disabled={updateSettings.isPending}
+                                    >
+                                        <Save className="h-4 w-4 mr-2" /> Save SMTP Settings
+                                    </Button>
+                                </div>
                             </CardContent>
                         </Card>
                     </TabsContent>
@@ -1615,19 +1707,27 @@ function ProjectSettings({ projectId }: { projectId: number }) {
                                         />
                                     </div>
                                 </div>
+                                <div className="pt-6 border-t border-border/30 mt-6 flex justify-end">
+                                    <Button 
+                                        onClick={() => handleSaveSection(['showWebMonitors', 'showServers', 'showDatabases', 'showClusters', 'companyName', 'logoUrl'])}
+                                        className="h-11 px-8 rounded-xl bg-primary shadow-lg shadow-primary/20 font-bold uppercase tracking-wider"
+                                        disabled={updateSettings.isPending}
+                                    >
+                                        <Save className="h-4 w-4 mr-2" /> Save Status Settings
+                                    </Button>
+                                </div>
                             </CardContent>
                         </Card>
                     </TabsContent>
-                </Tabs>
+                    <TabsContent value="alert-history" className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+                        <AlertHistoryTab projectId={projectId} />
+                    </TabsContent>
 
-                <Button type="submit" className="w-full h-12 rounded-xl bg-primary shadow-lg shadow-primary/10 font-bold uppercase tracking-wider" disabled={updateSettings.isPending}>
-                    {updateSettings.isPending ? "Saving..." : (
-                        <>
-                            <Save className="mr-2 h-4 w-4" /> Save Project Settings
-                        </>
-                    )}
-                </Button>
-            </form>
+                    <TabsContent value="alert-muting" className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+                        <AlertMutingTab projectId={projectId} settings={settings} />
+                    </TabsContent>
+                </Tabs>
+            </div>
         </Form>
     );
 }
@@ -2283,6 +2383,419 @@ function ProjectEmailTemplatesSection({ projectId }: { projectId: number }) {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+        </div>
+    );
+}
+
+// ============================================================
+// ALERT HISTORY TAB
+// ============================================================
+function AlertHistoryTab({ projectId }: { projectId: number }) {
+    const [alertHistory, setAlertHistory] = useState<any[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'resolved'>('all');
+    const [typeFilter, setTypeFilter] = useState<'all' | 'server' | 'database' | 'cluster' | 'web' | 'domain'>('all');
+
+    useEffect(() => {
+        setIsLoading(true);
+        fetch(`/api/projects/${projectId}/alerts/history`)
+            .then(r => r.json())
+            .then(data => { setAlertHistory(Array.isArray(data) ? data : []); setIsLoading(false); })
+            .catch(() => setIsLoading(false));
+    }, [projectId]);
+
+    const typeColors: Record<string, string> = {
+        cpu: 'text-blue-500 bg-blue-500/10 border-blue-500/20',
+        memory: 'text-purple-500 bg-purple-500/10 border-purple-500/20',
+        storage: 'text-amber-500 bg-amber-500/10 border-amber-500/20',
+        db_storage: 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20',
+        db_connections: 'text-teal-500 bg-teal-500/10 border-teal-500/20',
+        web_status: 'text-red-500 bg-red-500/10 border-red-500/20',
+        web_response: 'text-orange-500 bg-orange-500/10 border-orange-500/20',
+        web_ssl: 'text-indigo-500 bg-indigo-500/10 border-indigo-500/20',
+        cluster_cpu: 'text-cyan-500 bg-cyan-500/10 border-cyan-500/20',
+        cluster_memory: 'text-indigo-500 bg-indigo-500/10 border-indigo-500/20',
+        domain_expiry: 'text-rose-500 bg-rose-500/10 border-rose-500/20',
+    };
+
+    const resourceTypeIcon: Record<string, any> = {
+        server: Server, database: Database, cluster: Cloud, web: Globe, domain: Globe
+    };
+
+    const filtered = alertHistory.filter(a => {
+        // Status filter
+        if (statusFilter === 'active' && !!a.resolvedAt) return false;
+        if (statusFilter === 'resolved' && !a.resolvedAt) return false;
+        
+        // Type filter
+        if (typeFilter !== 'all' && a.resourceType !== typeFilter) return false;
+        
+        return true;
+    });
+
+    if (isLoading) return (
+        <div className="flex items-center justify-center h-40 text-muted-foreground animate-pulse">
+            Loading alert history...
+        </div>
+    );
+
+    return (
+        <div className="space-y-6">
+            <div className="flex flex-col gap-4">
+                <div className="flex items-center justify-between flex-wrap gap-3">
+                    <div>
+                        <h3 className="text-xl font-black tracking-tight">Alert History</h3>
+                        <p className="text-sm text-muted-foreground mt-0.5">Filter by status and resource type to track your infrastructure health.</p>
+                    </div>
+                </div>
+
+                <div className="flex items-center justify-between p-3 px-4 bg-muted/20 border border-border/40 rounded-2xl gap-8 overflow-x-auto no-scrollbar">
+                    <div className="flex items-center gap-4 shrink-0">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Filter Type</span>
+                        <div className="flex gap-1.5">
+                            {(['all', 'server', 'database', 'cluster', 'web', 'domain'] as const).map(f => (
+                                <button
+                                    key={f}
+                                    onClick={() => setTypeFilter(f)}
+                                    className={cn(
+                                        "px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest border transition-all whitespace-nowrap",
+                                        typeFilter === f
+                                            ? "bg-emerald-500 text-white border-emerald-500 shadow-sm shadow-emerald-500/20"
+                                            : "bg-background text-muted-foreground border-border/40 hover:bg-muted/60"
+                                    )}
+                                >
+                                    {f}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                    
+                    <div className="flex items-center gap-4 shrink-0">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Status</span>
+                        <div className="flex gap-1.5">
+                            {(['all', 'active', 'resolved'] as const).map(f => (
+                                <button
+                                    key={f}
+                                    onClick={() => setStatusFilter(f)}
+                                    className={cn(
+                                        "px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest border transition-all whitespace-nowrap",
+                                        statusFilter === f
+                                            ? "bg-primary text-primary-foreground border-primary shadow-sm shadow-primary/20"
+                                            : "bg-background text-muted-foreground border-border/40 hover:bg-muted/60"
+                                    )}
+                                >
+                                    {f}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {filtered.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-48 border border-dashed border-border/40 rounded-3xl text-muted-foreground bg-muted/10">
+                    <CheckCircle2 className="h-10 w-10 mb-3 opacity-20" />
+                    <p className="font-bold tracking-tight">No alerts found</p>
+                    <p className="text-xs mt-1 opacity-70">All systems are healthy!</p>
+                </div>
+            ) : (
+                <div className="rounded-3xl border border-border/40 bg-card/50 backdrop-blur-sm shadow-xl overflow-hidden">
+                    <Table>
+                        <TableHeader className="bg-muted/40 border-b border-border/40">
+                            <TableRow className="hover:bg-transparent border-none">
+                                <TableHead className="py-4 text-[10px] uppercase tracking-[0.2em] font-black text-muted-foreground/60 pl-6">Resource</TableHead>
+                                <TableHead className="py-4 text-[10px] uppercase tracking-[0.2em] font-black text-muted-foreground/60">Type</TableHead>
+                                <TableHead className="py-4 text-[10px] uppercase tracking-[0.2em] font-black text-muted-foreground/60">Value / Threshold</TableHead>
+                                <TableHead className="py-4 text-[10px] uppercase tracking-[0.2em] font-black text-muted-foreground/60">Alerted At</TableHead>
+                                <TableHead className="py-4 text-[10px] uppercase tracking-[0.2em] font-black text-muted-foreground/60">Resolved At</TableHead>
+                                <TableHead className="py-4 text-[10px] uppercase tracking-[0.2em] font-black text-muted-foreground/60">Status</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {filtered.map((alert: any) => {
+                                const Icon = resourceTypeIcon[alert.resourceType] || Server;
+                                const typeColor = typeColors[alert.type] || 'text-foreground bg-muted border-border';
+                                const isResolved = !!alert.resolvedAt;
+                                return (
+                                    <TableRow key={alert.id} className="group hover:bg-muted/20 border-b border-border/40 transition-colors">
+                                        <TableCell className="pl-6 py-3">
+                                            <div className="flex items-center gap-2.5">
+                                                <div className="h-7 w-7 rounded-lg bg-primary/10 flex items-center justify-center">
+                                                    <Icon className="h-3.5 w-3.5 text-primary" />
+                                                </div>
+                                                <div>
+                                                    <p className="font-bold text-sm">{alert.resourceName}</p>
+                                                    <p className="text-[9px] uppercase tracking-widest text-muted-foreground font-medium">{alert.resourceType}</p>
+                                                </div>
+                                            </div>
+                                        </TableCell>
+                                        <TableCell className="py-3">
+                                            <span className={cn(
+                                                "inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider border",
+                                                typeColor
+                                            )}>
+                                                {alert.type.replace(/_/g, ' ')}
+                                            </span>
+                                        </TableCell>
+                                        <TableCell className="py-3 font-mono text-sm">
+                                            {(() => {
+                                                const val = Math.round(alert.value);
+                                                const thr = Math.round(alert.threshold);
+                                                if (alert.type === 'web_status') {
+                                                    return (
+                                                        <>
+                                                            <span className={cn("font-bold", val === 0 ? "text-destructive" : "text-emerald-500")}>
+                                                                {val === 0 ? "DOWN" : "UP"}
+                                                            </span>
+                                                            <span className="text-muted-foreground mx-1">/</span>
+                                                            <span className="text-muted-foreground">UP</span>
+                                                        </>
+                                                    );
+                                                }
+                                                const unit = alert.type.includes('response') ? 'ms' : 
+                                                            alert.type.includes('expiry') || alert.type.includes('ssl') ? 'd' : 
+                                                            alert.type.includes('connections') ? '' : '%';
+                                                
+                                                return (
+                                                    <>
+                                                        <span className="text-destructive font-bold">{val}{unit}</span>
+                                                        <span className="text-muted-foreground mx-1">/</span>
+                                                        <span className="text-muted-foreground">{thr}{unit}</span>
+                                                    </>
+                                                );
+                                            })()}
+                                        </TableCell>
+                                        <TableCell className="py-3 text-xs text-muted-foreground">
+                                            {alert.sentAt ? format(new Date(alert.sentAt), "MMM dd, HH:mm:ss") : "—"}
+                                        </TableCell>
+                                        <TableCell className="py-3 text-xs">
+                                            {isResolved ? (
+                                                <span className="text-emerald-500 font-medium">{format(new Date(alert.resolvedAt), "MMM dd, HH:mm:ss")}</span>
+                                            ) : (
+                                                <span className="text-muted-foreground italic">Still active</span>
+                                            )}
+                                        </TableCell>
+                                        <TableCell className="py-3">
+                                            {isResolved ? (
+                                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border bg-emerald-500/10 text-emerald-500 border-emerald-500/20">
+                                                    <CheckCircle2 className="h-2.5 w-2.5" /> Resolved
+                                                </span>
+                                            ) : (
+                                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border bg-red-500/10 text-red-500 border-red-500/20">
+                                                    <Bell className="h-2.5 w-2.5" /> Active
+                                                </span>
+                                            )}
+                                        </TableCell>
+                                    </TableRow>
+                                );
+                            })}
+                        </TableBody>
+                    </Table>
+                </div>
+            )}
+        </div>
+    );
+}
+
+// ============================================================
+// ALERT MUTING TAB
+// ============================================================
+function AlertMutingTab({ projectId, settings }: { projectId: number; settings: any }) {
+    const { data: resources } = useProjectResources(projectId);
+    const { toast } = useToast();
+    const [muted, setMuted] = useState<Record<string, number[]>>({});
+    const [isSaving, setIsSaving] = useState(false);
+    const [expandedSections, setExpandedSections] = useState<string[]>([]);
+
+    useEffect(() => {
+        if (settings?.alertMutedResources) {
+            setMuted(settings.alertMutedResources as any || {});
+        }
+    }, [settings]);
+
+    const toggleMute = (category: string, id: number) => {
+        setMuted(prev => {
+            const current = prev[category] || [];
+            const next = current.includes(id) ? current.filter(x => x !== id) : [...current, id];
+            return { ...prev, [category]: next };
+        });
+    };
+
+    const isMuted = (category: string, id: number) => (muted[category] || []).includes(id);
+
+    const toggleSection = (key: string) => {
+        setExpandedSections(prev => 
+            prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]
+        );
+    };
+
+    const handleSave = async () => {
+        setIsSaving(true);
+        try {
+            const res = await fetch(`/api/projects/${projectId}/alert-muting`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ alertMutedResources: muted }),
+            });
+            if (!res.ok) throw new Error('Failed');
+            queryClient.invalidateQueries({ queryKey: [`/api/projects/${projectId}/alert-settings`] });
+            toast({ title: "Alert muting saved", description: "Changes will take effect on the next metric check." });
+        } catch {
+            toast({ title: "Failed to save", variant: "destructive" });
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const sections = [
+        { key: 'servers', label: 'Servers', icon: Server, color: 'text-blue-500 bg-blue-500/10', items: resources?.servers || [] },
+        { key: 'databases', label: 'Databases', icon: Database, color: 'text-emerald-500 bg-emerald-500/10', items: resources?.databases || [] },
+        { key: 'clusters', label: 'Clusters', icon: Cloud, color: 'text-amber-500 bg-amber-500/10', items: resources?.clusters || [] },
+        { key: 'webMonitors', label: 'Web Monitors', icon: Globe, color: 'text-purple-500 bg-purple-500/10', items: resources?.webMonitors || [] },
+        { key: 'domainMonitors', label: 'Domain Monitors', icon: Globe, color: 'text-indigo-500 bg-indigo-500/10', items: resources?.domainMonitors || [] },
+    ];
+
+    const totalResources = sections.reduce((acc, s) => acc + s.items.length, 0);
+    const totalMuted = Object.values(muted).flat().length;
+
+    return (
+        <div className="space-y-6">
+            <div className="flex items-center justify-between flex-wrap gap-4">
+                <div>
+                    <h3 className="text-xl font-black tracking-tight">Alert Muting</h3>
+                    <p className="text-sm text-muted-foreground mt-0.5">
+                        Expand categories to toggle alerting on/off per resource.
+                        {totalMuted > 0 && <span className="ml-2 text-amber-500 font-bold">{totalMuted} resource{totalMuted !== 1 ? 's' : ''} muted</span>}
+                    </p>
+                </div>
+                <Button
+                    onClick={handleSave}
+                    disabled={isSaving}
+                    className="rounded-xl font-bold px-6 bg-primary shadow-lg shadow-primary/20"
+                >
+                    <Save className="mr-2 h-4 w-4" />
+                    {isSaving ? "Saving..." : "Save Changes"}
+                </Button>
+            </div>
+
+            {totalResources === 0 ? (
+                <div className="flex flex-col items-center justify-center h-48 border border-dashed border-border/40 rounded-3xl text-muted-foreground bg-muted/10">
+                    <Server className="h-10 w-10 mb-3 opacity-20" />
+                    <p className="font-bold tracking-tight">No resources found</p>
+                    <p className="text-xs mt-1 opacity-70">Add resources to this project first.</p>
+                </div>
+            ) : (
+                <div className="grid grid-cols-1 gap-2">
+                    {sections.map(section => {
+                        if (section.items.length === 0) return null;
+                        const Icon = section.icon;
+                        const sectionMuted = (muted[section.key] || []).length;
+                        const isExpanded = expandedSections.includes(section.key);
+
+                        return (
+                            <div key={section.key} className="group border border-border/40 bg-card/50 backdrop-blur-sm rounded-2xl overflow-hidden transition-all duration-300">
+                                <div 
+                                    className={cn(
+                                        "flex items-center justify-between p-4 cursor-pointer hover:bg-muted/30 transition-colors select-none",
+                                        isExpanded && "bg-muted/20 border-b border-border/40"
+                                    )}
+                                    onClick={() => toggleSection(section.key)}
+                                >
+                                    <div className="flex items-center gap-4">
+                                        <div className={cn(
+                                            "h-10 w-10 rounded-xl flex items-center justify-center transition-all duration-300 shadow-sm",
+                                            isExpanded ? section.color : "bg-muted/50 text-muted-foreground"
+                                        )}>
+                                            <Icon className="h-5 w-5" />
+                                        </div>
+                                        <div>
+                                            <div className="flex items-center gap-2">
+                                                <CardTitle className="text-sm font-black uppercase tracking-widest">{section.label}</CardTitle>
+                                                <span className="text-[10px] font-bold bg-muted/80 text-muted-foreground px-2 py-0.5 rounded-full border border-border/40">
+                                                    {section.items.length}
+                                                </span>
+                                            </div>
+                                            <p className="text-[10px] text-muted-foreground font-medium mt-0.5">
+                                                {sectionMuted > 0 ? (
+                                                    <span className="text-amber-500 font-bold">{sectionMuted} muted resources</span>
+                                                ) : (
+                                                    "All alerts enabled"
+                                                )}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-4">
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            className="text-[10px] font-bold uppercase tracking-widest h-7 px-3 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                const allMuted = section.items.every((item: any) => isMuted(section.key, item.id));
+                                                setMuted(prev => ({
+                                                    ...prev,
+                                                    [section.key]: allMuted ? [] : section.items.map((item: any) => item.id)
+                                                }));
+                                            }}
+                                        >
+                                            {section.items.every((item: any) => isMuted(section.key, item.id)) ? "Unmute All" : "Mute All"}
+                                        </Button>
+                                        <div className={cn("transition-transform duration-300", isExpanded ? "rotate-180" : "")}>
+                                            <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {isExpanded && (
+                                    <div className="p-4 bg-muted/10 divide-y divide-border/30 animate-in fade-in slide-in-from-top-2 duration-300">
+                                        {section.items.map((item: any) => {
+                                            const name = item.name || item.hostname || item.domain || `ID ${item.id}`;
+                                            const resourceIsMuted = isMuted(section.key, item.id);
+                                            return (
+                                                <div key={item.id} className="flex items-center justify-between py-3 px-2 rounded-xl hover:bg-background/40 transition-colors">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className={cn(
+                                                            "h-8 w-8 rounded-lg flex items-center justify-center transition-all shadow-sm",
+                                                            resourceIsMuted ? "bg-muted text-muted-foreground shadow-none" : section.color
+                                                        )}>
+                                                            <Icon className="h-4 w-4" />
+                                                        </div>
+                                                        <div>
+                                                            <div className="flex items-center gap-2">
+                                                                <p className={cn("font-bold text-sm transition-all", resourceIsMuted && "text-muted-foreground line-through opacity-70")}>{name}</p>
+                                                                {resourceIsMuted && (
+                                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-amber-500/10 text-amber-500 border border-amber-500/20">
+                                                                        <VolumeX className="h-2 w-2" /> Muted
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                            {(item.hostname || item.url || item.domain) && (
+                                                                <p className="text-[10px] font-mono text-muted-foreground opacity-60 truncate max-w-[200px]">
+                                                                    {item.hostname || item.url || item.domain}
+                                                                </p>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-center gap-3">
+                                                        <span className={cn("text-[10px] font-black uppercase tracking-wider transition-colors", resourceIsMuted ? "text-muted-foreground" : "text-emerald-500")}>
+                                                            {resourceIsMuted ? "Muted" : "Active"}
+                                                        </span>
+                                                        <Switch
+                                                            checked={!resourceIsMuted}
+                                                            onCheckedChange={() => toggleMute(section.key, item.id)}
+                                                            className="data-[state=checked]:bg-emerald-500"
+                                                        />
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
         </div>
     );
 }

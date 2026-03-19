@@ -647,6 +647,25 @@ export async function registerRoutes(
     res.json(alerts);
   });
 
+  app.get(api.alerts.projectHistory.path, isAuthenticated, async (req, res) => {
+    const projectId = Number(req.params.id);
+    if (isNaN(projectId)) return res.status(400).json({ message: "Invalid project ID" });
+    const history = await (storage as any).getProjectAlertHistory(projectId);
+    res.json(history);
+  });
+
+  app.patch(api.alerts.updateMuted.path, isAuthenticated, async (req, res) => {
+    try {
+      const projectId = Number(req.params.id);
+      if (isNaN(projectId)) return res.status(400).json({ message: "Invalid project ID" });
+      const { alertMutedResources } = api.alerts.updateMuted.input.parse(req.body);
+      const updated = await storage.upsertProjectAlertSettings(projectId, { alertMutedResources } as any);
+      res.json(updated);
+    } catch (err: any) {
+      res.status(400).json({ message: err.message || "Failed to update alert muting" });
+    }
+  });
+
   // === BACKGROUND SERVICES ===
   WebMonitorService.start();
   DomainMonitorService.start();

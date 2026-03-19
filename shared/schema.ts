@@ -114,6 +114,27 @@ export const projectAlertSettings = pgTable("project_alert_settings", {
   smtpSenderName: text("smtp_sender_name"),
   smtpSenderEmail: text("smtp_sender_email"),
 
+  // Per-resource alert muting: { servers: [id,...], databases: [id,...], clusters: [id,...], webMonitors: [id,...], domainMonitors: [id,...] }
+  alertMutedResources: jsonb("alert_muted_resources").$type<{
+    servers?: number[];
+    databases?: number[];
+    clusters?: number[];
+    webMonitors?: number[];
+    domainMonitors?: number[];
+  }>().default({}),
+
+  // Individual Alert Toggles
+  cpuAlertEnabled: boolean("cpu_alert_enabled").default(true).notNull(),
+  memoryAlertEnabled: boolean("memory_alert_enabled").default(true).notNull(),
+  storageAlertEnabled: boolean("storage_alert_enabled").default(true).notNull(),
+  dbStorageAlertEnabled: boolean("db_storage_alert_enabled").default(true).notNull(),
+  dbConnectionAlertEnabled: boolean("db_connection_alert_enabled").default(true).notNull(),
+  clusterCpuAlertEnabled: boolean("cluster_cpu_alert_enabled").default(true).notNull(),
+  clusterMemoryAlertEnabled: boolean("cluster_memory_alert_enabled").default(true).notNull(),
+  webResponseAlertEnabled: boolean("web_response_alert_enabled").default(true).notNull(),
+  webStatusAlertEnabled: boolean("web_status_alert_enabled").default(true).notNull(),
+  webSslAlertEnabled: boolean("web_ssl_alert_enabled").default(true).notNull(),
+  domainExpiryAlertEnabled: boolean("domain_expiry_alert_enabled").default(true).notNull(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
@@ -163,6 +184,7 @@ export const alerts = pgTable("alerts", {
   value: real("value").notNull(),
   threshold: real("threshold").notNull(),
   sentAt: timestamp("sent_at").defaultNow(),
+  resolvedAt: timestamp("resolved_at"),
 });
 
 // === DATABASE AGENT ===
@@ -391,7 +413,7 @@ export const insertServerMetricSchema = createInsertSchema(serverMetrics).omit({
 
 export const insertSmtpSettingsSchema = createInsertSchema(smtpSettings).omit({ id: true, updatedAt: true });
 export const insertProjectAlertSettingsSchema = createInsertSchema(projectAlertSettings).omit({ id: true, updatedAt: true });
-export const insertAlertSchema = createInsertSchema(alerts).omit({ id: true, sentAt: true });
+export const insertAlertSchema = createInsertSchema(alerts).omit({ id: true, sentAt: true, resolvedAt: true });
 
 export const insertDatabaseSchema = createInsertSchema(databases).omit({ id: true, lastSeen: true });
 export const insertDatabaseMetricSchema = createInsertSchema(databaseMetrics).omit({ id: true, createdAt: true });

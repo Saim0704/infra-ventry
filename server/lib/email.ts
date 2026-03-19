@@ -38,7 +38,8 @@ export class EmailService {
     threshold: number,
     settings: SmtpSettings & { senderName?: string },
     branding?: { companyName?: string | null; logoUrl?: string | null },
-    template?: { subject: string, body: string }
+    template?: { subject: string, body: string },
+    isRecovery: boolean = false
   ) {
     const transporter = await this.getTransporter(settings);
 
@@ -50,7 +51,11 @@ export class EmailService {
 
     const logoImg = logoUrl ? `<img src="${logoUrl}" alt="${companyName}" style="max-height: 40px; width: auto; vertical-align: middle;">` : "";
 
-    let subject = template?.subject || `Alert: High ${displayType} usage on ${resourceName}`;
+    let defaultSubject = isRecovery 
+      ? `Recovery: ${displayType} stabilized on ${resourceName}`
+      : `Alert: High ${displayType} usage on ${resourceName}`;
+
+    let subject = template?.subject || defaultSubject;
     // Simple variable replacement
     subject = subject
       .replace(/{{project}}/g, projectName)
@@ -63,7 +68,7 @@ export class EmailService {
       .replace(/{{company_name}}/g, companyName)
       .replace(/{{logo_url}}/g, logoUrl || "");
 
-    let html = template?.body || `
+    let defaultBody = `
       <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 40px 20px; border: 1px solid #e2e8f0; border-radius: 16px; background: white;">
         <table style="width: 100%; margin-bottom: 32px; border-collapse: collapse;">
           <tr>
@@ -76,8 +81,8 @@ export class EmailService {
           </tr>
         </table>
         
-        <div style="background: #f8d7da; color: #721c24; padding: 15px; border-radius: 5px; margin-bottom: 20px;">
-          <strong>Critical Alert!</strong> High ${type.toUpperCase()} usage detected on ${projectName}.
+        <div style="background: ${isRecovery ? '#d4edda' : '#f8d7da'}; color: ${isRecovery ? '#155724' : '#721c24'}; padding: 15px; border-radius: 5px; margin-bottom: 20px;">
+          <strong>${isRecovery ? 'Recovery' : 'Critical Alert!'}</strong> ${isRecovery ? `${displayType} is now stable on ${resourceName}.` : `High ${displayType} usage detected on ${projectName}.`}
         </div>
 
         <table style="width: 100%; border-collapse: collapse;">
@@ -95,7 +100,7 @@ export class EmailService {
           </tr>
           <tr>
             <td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Current Value:</strong></td>
-            <td style="padding: 8px; border-bottom: 1px solid #eee; color: #dc3545;"><strong>${Math.round(value)}%</strong></td>
+            <td style="padding: 8px; border-bottom: 1px solid #eee; color: ${isRecovery ? '#28a745' : '#dc3545'};"><strong>${Math.round(value)}%</strong></td>
           </tr>
           <tr>
             <td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Threshold:</strong></td>
@@ -108,6 +113,8 @@ export class EmailService {
         </div>
       </div>
     `;
+
+    let html = template?.body || defaultBody;
 
     html = html
       .replace(/{{project}}/g, projectName)

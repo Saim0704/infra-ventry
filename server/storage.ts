@@ -497,81 +497,156 @@ export class DatabaseStorage implements IStorage {
         db_connections: projectAlertConfig.dbConnectionThreshold,
         cluster_cpu: projectAlertConfig.clusterCpuThreshold,
         cluster_memory: projectAlertConfig.clusterMemoryThreshold,
-        web_status: 1, // 1 means UP, so if current is 0 it's breached (if <)
+        web_status: 1, // 0 is DOWN, 1 is UP. Alert if <= 1? No, logic below: val <= threshold is breach. so if val=0 and thr=1, it's breach.
         web_response: projectAlertConfig.webResponseThreshold,
         web_ssl: projectAlertConfig.webSslExpiryThreshold,
         domain_expiry: projectAlertConfig.domainExpiryThreshold,
       };
 
+      const enabledSettings = {
+        cpu: projectAlertConfig.cpuAlertEnabled,
+        memory: projectAlertConfig.memoryAlertEnabled,
+        storage: projectAlertConfig.storageAlertEnabled,
+        db_storage: projectAlertConfig.dbStorageAlertEnabled,
+        db_connections: projectAlertConfig.dbConnectionAlertEnabled,
+        cluster_cpu: projectAlertConfig.clusterCpuAlertEnabled,
+        cluster_memory: projectAlertConfig.clusterMemoryAlertEnabled,
+        web_status: projectAlertConfig.webStatusAlertEnabled,
+        web_response: projectAlertConfig.webResponseAlertEnabled,
+        web_ssl: projectAlertConfig.webSslAlertEnabled,
+        domain_expiry: projectAlertConfig.domainExpiryAlertEnabled,
+      };
+
+      const recipients = projectAlertConfig.alertRecipients && projectAlertConfig.alertRecipients.length > 0
+        ? projectAlertConfig.alertRecipients
+        : [smtpSettings.fromEmail];
+
+      const branding = {
+        companyName: projectAlertConfig.companyName,
+        logoUrl: projectAlertConfig.logoUrl,
+      };
+
+      const emailSettings = {
+        host: projectAlertConfig.smtpHost || smtpSettings.host,
+        port: projectAlertConfig.smtpPort || smtpSettings.port,
+        user: projectAlertConfig.smtpUser || smtpSettings.user,
+        pass: projectAlertConfig.smtpPass || smtpSettings.pass,
+        fromEmail: projectAlertConfig.smtpSenderEmail || smtpSettings.fromEmail,
+        senderName: projectAlertConfig.smtpSenderName || projectAlertConfig.companyName || (smtpSettings as any).senderName || "InfraWatch Alert",
+      };
+
+      const typeToCategory: Record<string, string> = {
+        'cpu': 'Server', 'memory': 'Server', 'storage': 'Server',
+        'db_storage': 'Database', 'db_connections': 'Database',
+        'web_status': 'Web', 'web_response': 'Web', 'web_ssl': 'Web',
+        'cluster_cpu': 'Cluster', 'cluster_memory': 'Cluster',
+        'domain_expiry': 'Domain'
+      };
+
+      const [project] = await db.select().from(projects).where(eq(projects.id, projectId));
+      const projectName = project?.name || "Unknown Project";
+
+      // Check if alerting is muted for this specific resource
+      const muted = projectAlertConfig.alertMutedResources as any || {};
+      const isMuted =
+        (type === 'server'   && (muted.servers      || []).includes(resourceId)) ||
+        (type === 'database' && (muted.databases    || []).includes(resourceId)) ||
+        (type === 'cluster'  && (muted.clusters     || []).includes(resourceId)) ||
+        (type === 'web'      && (muted.webMonitors  || []).includes(resourceId)) ||
+        (type === 'domain'   && (muted.domainMonitors|| []).includes(resourceId));
+
+      if (isMuted) {
+        safeLog(`[${new Date().toISOString()}] Alerting MUTED for ${resourceName} (${type} ID: ${resourceId})\n`);
+        return;
+      }
+
       for (const m of currentMetrics) {
         const threshold = (thresholds as any)[m.type];
-        // If threshold is null, the alert type is disabled for this project
+        const isEnabled = (enabledSettings as any)[m.type] ?? true;
+
+        if (!isEnabled) {
+          safeLog(`[${new Date().toISOString()}] Alerting DISABLED for ${resourceName} ${m.type} in project settings\n`);
+          continue;
+        }
+
         if (m.value === null || m.value === undefined || threshold === null || threshold === undefined) continue;
 
         const isBreached = m.operator === '>' ? m.value > threshold : m.value <= threshold;
 
-        if (isBreached) {
-          safeLog(`[${new Date().toISOString()}] BREACH DETECTED for ${resourceName} ${m.type}. Value: ${m.value}, Threshold: ${threshold}\n`);
-          // Check if alert was already sent recently (within 1 hour)
-          const [lastAlert] = await db.select().from(alerts)
-            .where(sql`${alerts.type} = ${m.type} AND ${alerts.sentAt} > NOW() - INTERVAL '1 hour' AND (
+        // Look for an ACTIVE (unresolved) alert for this resource + metric type
+        const [activeAlert] = await db.select().from(alerts)
+          .where(
+            sql`${alerts.type} = ${m.type} AND ${alerts.resolvedAt} IS NULL AND (
               (${alerts.serverId} IS NOT NULL AND ${alerts.serverId} = ${idFields.serverId || 0}) OR
               (${alerts.databaseId} IS NOT NULL AND ${alerts.databaseId} = ${idFields.databaseId || 0}) OR
               (${alerts.clusterId} IS NOT NULL AND ${alerts.clusterId} = ${idFields.clusterId || 0}) OR
               (${alerts.webMonitorId} IS NOT NULL AND ${alerts.webMonitorId} = ${idFields.webMonitorId || 0}) OR
               (${alerts.domainMonitorId} IS NOT NULL AND ${alerts.domainMonitorId} = ${idFields.domainMonitorId || 0})
-            )`)
+            )`
+          )
+          .orderBy(desc(alerts.sentAt))
+          .limit(1);
+
+        if (isBreached) {
+          safeLog(`[${new Date().toISOString()}] BREACH DETECTED for ${resourceName} ${m.type}. Value: ${m.value}, Threshold: ${threshold}\n`);
+
+          if (activeAlert) {
+            // Already sent an alert and it's not yet resolved — do NOT spam
+            safeLog(`[${new Date().toISOString()}] Alert SKIPPED (already active, waiting for recovery) for ${resourceName} ${m.type}\n`);
+            info(`[ALERTS] Active alert already exists for ${resourceName} ${m.type}. Skipping duplicate.`, "storage");
+            continue;
+          }
+
+          // No active alert — fire a fresh one
+          info(`[ALERTS] Triggering alert for ${resourceName}: ${m.type} value ${m.value} (threshold ${threshold})`, "storage");
+          await this.createAlert({
+            ...idFields,
+            type: m.type,
+            value: m.value,
+            threshold: threshold,
+          });
+
+          const category = typeToCategory[m.type];
+          let [customTemplate] = await db.select().from(projectEmailTemplates)
+            .where(sql`${projectEmailTemplates.projectId} = ${projectId} AND ${projectEmailTemplates.alertType} = ${m.type}`)
             .limit(1);
 
-          if (!lastAlert) {
-            info(`[ALERTS] Triggering alert for ${resourceName}: ${m.type} value ${m.value} (threshold ${threshold})`, "storage");
-            await this.createAlert({
-              ...idFields,
-              type: m.type,
-              value: m.value,
-              threshold: threshold,
-            });
+          if (!customTemplate && category) {
+            [customTemplate] = await db.select().from(projectEmailTemplates)
+              .where(sql`${projectEmailTemplates.projectId} = ${projectId} AND ${projectEmailTemplates.alertType} = ${category}`)
+              .limit(1);
+          }
 
-            // Send to project-specific recipients
-            const recipients = projectAlertConfig.alertRecipients && projectAlertConfig.alertRecipients.length > 0
-              ? projectAlertConfig.alertRecipients
-              : [smtpSettings.fromEmail];
+          for (const recipient of recipients) {
+            await EmailService.sendAlertEmail(
+              recipient,
+              resourceName,
+              projectName,
+              m.type,
+              m.value,
+              threshold,
+              emailSettings as any,
+              branding,
+              customTemplate,
+              false
+            );
+          }
+          safeLog(`[${new Date().toISOString()}] Alert emails SENT to ${recipients.join(', ')}\n`);
+          info(`[ALERTS] Alert emails sent to ${recipients.join(', ')}`, "storage");
 
-            // Use project-specific branding
-            const branding = {
-              companyName: projectAlertConfig.companyName,
-              logoUrl: projectAlertConfig.logoUrl,
-            };
+        } else {
+          // Metric is below threshold — send recovery if there's an active alert
+          if (activeAlert) {
+            safeLog(`[${new Date().toISOString()}] RECOVERY DETECTED for ${resourceName} ${m.type}. Value: ${m.value} now below threshold ${threshold}\n`);
 
-            // Use project-specific SMTP if available, else fallback to global
-            const emailSettings = {
-              host: projectAlertConfig.smtpHost || smtpSettings.host,
-              port: projectAlertConfig.smtpPort || smtpSettings.port,
-              user: projectAlertConfig.smtpUser || smtpSettings.user,
-              pass: projectAlertConfig.smtpPass || smtpSettings.pass,
-              fromEmail: projectAlertConfig.smtpSenderEmail || smtpSettings.fromEmail,
-              senderName: projectAlertConfig.smtpSenderName || projectAlertConfig.companyName || (smtpSettings as any).senderName || "InfraWatch Alert",
-            };
+            // Mark the alert as resolved so the cycle can restart on next breach
+            await db.update(alerts)
+              .set({ resolvedAt: new Date() })
+              .where(eq(alerts.id, activeAlert.id));
 
-            // Define alert categories
-            const typeToCategory: Record<string, string> = {
-              'cpu': 'Server',
-              'memory': 'Server',
-              'storage': 'Server',
-              'db_storage': 'Database',
-              'db_connections': 'Database',
-              'web_status': 'Web',
-              'web_response': 'Web',
-              'web_ssl': 'Web',
-              'cluster_cpu': 'Cluster',
-              'cluster_memory': 'Cluster',
-              'domain_expiry': 'Domain'
-            };
+            info(`[ALERTS] Sending recovery email for ${resourceName}: ${m.type} value ${m.value}`, "storage");
 
             const category = typeToCategory[m.type];
-
-            // Use project-specific template if available
-            // Check for specific alert type first, then for category fallback
             let [customTemplate] = await db.select().from(projectEmailTemplates)
               .where(sql`${projectEmailTemplates.projectId} = ${projectId} AND ${projectEmailTemplates.alertType} = ${m.type}`)
               .limit(1);
@@ -581,10 +656,6 @@ export class DatabaseStorage implements IStorage {
                 .where(sql`${projectEmailTemplates.projectId} = ${projectId} AND ${projectEmailTemplates.alertType} = ${category}`)
                 .limit(1);
             }
-
-            // Fetch project name
-            const [project] = await db.select().from(projects).where(eq(projects.id, projectId));
-            const projectName = project?.name || "Unknown Project";
 
             for (const recipient of recipients) {
               await EmailService.sendAlertEmail(
@@ -596,14 +667,14 @@ export class DatabaseStorage implements IStorage {
                 threshold,
                 emailSettings as any,
                 branding,
-                customTemplate
+                customTemplate,
+                true
               );
             }
-            safeLog(`[${new Date().toISOString()}] Alert emails SENT to ${recipients.join(', ')}\n`);
-            info(`[ALERTS] Alert emails sent to ${recipients.join(', ')}`, "storage");
+            safeLog(`[${new Date().toISOString()}] Recovery emails SENT to ${recipients.join(', ')}\n`);
+            info(`[ALERTS] Recovery emails sent to ${recipients.join(', ')}`, "storage");
           } else {
-            safeLog(`[${new Date().toISOString()}] Alert SKIPPED (spam protection) for ${resourceName} ${m.type}\n`);
-            info(`[ALERTS] Alert for ${resourceName} ${m.type} already sent within the last hour. Skipping.`, "storage");
+            safeLog(`[${new Date().toISOString()}] ${resourceName} ${m.type} is healthy (${m.value} within threshold ${threshold}). No action needed.\n`);
           }
         }
       }
@@ -703,6 +774,46 @@ export class DatabaseStorage implements IStorage {
 
   async createAlert(data: { serverId?: number, databaseId?: number, clusterId?: number, webMonitorId?: number, type: string, value: number, threshold: number }): Promise<void> {
     await db.insert(alerts).values(data);
+  }
+
+  async getProjectAlertHistory(projectId: number): Promise<any[]> {
+    const results = await db.select({
+      alert: alerts,
+      serverName: servers.name,
+      hostname: servers.hostname,
+      dbName: databases.name,
+      clusterName: clusters.name,
+      webName: webMonitors.name,
+      domainName: domainMonitors.domain,
+    })
+      .from(alerts)
+      .leftJoin(servers, eq(alerts.serverId, servers.id))
+      .leftJoin(databases, eq(alerts.databaseId, databases.id))
+      .leftJoin(clusters, eq(alerts.clusterId, clusters.id))
+      .leftJoin(webMonitors, eq(alerts.webMonitorId, webMonitors.id))
+      .leftJoin(domainMonitors, eq(alerts.domainMonitorId, domainMonitors.id))
+      .where(
+        sql`(
+          (${alerts.serverId} IS NOT NULL AND ${servers.projectId} = ${projectId}) OR
+          (${alerts.databaseId} IS NOT NULL AND ${databases.projectId} = ${projectId}) OR
+          (${alerts.clusterId} IS NOT NULL AND ${clusters.projectId} = ${projectId}) OR
+          (${alerts.webMonitorId} IS NOT NULL AND ${webMonitors.projectId} = ${projectId}) OR
+          (${alerts.domainMonitorId} IS NOT NULL AND ${domainMonitors.projectId} = ${projectId})
+        )`
+      )
+      .orderBy(desc(alerts.sentAt))
+      .limit(200);
+
+    return results.map(r => ({
+      ...r.alert,
+      resourceName: r.serverName || r.hostname || r.dbName || r.clusterName || r.webName || r.domainName || "Unknown",
+      resourceType: r.alert.serverId ? 'server'
+        : r.alert.databaseId ? 'database'
+        : r.alert.clusterId ? 'cluster'
+        : r.alert.webMonitorId ? 'web'
+        : r.alert.domainMonitorId ? 'domain'
+        : 'unknown',
+    }));
   }
 
   // === PROJECT EMAIL TEMPLATES ===
@@ -969,6 +1080,11 @@ export class DatabaseStorage implements IStorage {
     if (!data.isUp) {
       await this.checkAndTriggerAlert(data.monitorId, 'web', [
         { type: 'web_status', value: 0, operator: '<=' }, // 0 means down, threshold is 1 (UP)
+      ]);
+    } else {
+      // Trigger recovery alert if it was down
+      await this.checkAndTriggerAlert(data.monitorId, 'web', [
+        { type: 'web_status', value: 1, operator: '>' }, // 1 means UP, so value=1 > threshold=0? No, let's fix the logic.
       ]);
     }
 
