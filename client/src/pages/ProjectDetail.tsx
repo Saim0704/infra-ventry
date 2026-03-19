@@ -1387,7 +1387,7 @@ function ProjectSettings({ projectId }: { projectId: number }) {
                                  <CardContent className="space-y-2 py-3">
                                      <ThresholdField control={form.control} name="webStatusAlertEnabled" label="Down Alert" icon={AlertCircle} isToggleOnly showSeparator />
                                      <ThresholdField control={form.control} name="webResponseThreshold" label="Latency" icon={Timer} max={10000} step={100} unit="ms" showSeparator />
-                                     <ThresholdField control={form.control} name="webSslExpiryThreshold" label="SSL Expiry" icon={ShieldCheck} max={90} step={1} unit=" days" />
+                                     <ThresholdField control={form.control} name="webSslExpiryThreshold" label="SSL Expiry" icon={ShieldCheck} enabledName="webSslAlertEnabled" max={90} step={1} unit=" days" />
                                  </CardContent>
                             </Card>
 
@@ -2278,7 +2278,7 @@ function ProjectEmailTemplatesSection({ projectId }: { projectId: number }) {
                                                                         <div className="p-1 rounded-lg bg-background text-muted-foreground group-hover:text-primary transition-colors">
                                                                             {item.icon}
                                                                         </div>
-                                                                        <Label htmlFor={item.id} className="text-[9px] font-black text-foreground/70 cursor-pointer uppercase tracking-tight">
+                                                                        <Label className="text-[9px] font-black text-foreground/70 cursor-pointer uppercase tracking-tight">
                                                                             {item.label}
                                                                         </Label>
                                                                     </div>
