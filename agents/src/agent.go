@@ -21,7 +21,7 @@ var (
 	ServerURL  = getEnv("SERVER_URL", "http://localhost:3000")
 	AgentToken = getEnv("AGENT_TOKEN", "infra_inventory_agent_secret_2026")
 	Interval   = getEnvDuration("INTERVAL", 60*time.Second)
-	AgentVersion = "v3"
+	AgentVersion = "v4"
 )
 
 type MetricPayload struct {

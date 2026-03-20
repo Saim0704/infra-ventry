@@ -63,7 +63,7 @@ report() {
       "totalRam": $TOTAL_RAM,
       "totalDisk": $TOTAL_DISK,
       "ipAddress": "$IP_ADDRESS",
-      "agentVersion": "v3",
+      "agentVersion": "v4",
       "metrics": {
         "cpuUsage": $CPU_USAGE,
         "memoryUsage": $MEMORY_USAGE,

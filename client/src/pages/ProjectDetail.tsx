@@ -1159,7 +1159,7 @@ function VisibilityToggle({ control, name, label, icon: Icon, description }: any
     );
 }
 
-const LATEST_AGENT_VERSION = "v3";
+const LATEST_AGENT_VERSION = "v4";
 
 function ProjectSettings({ projectId }: { projectId: number }) {
     const { data: resources } = useProjectResources(projectId);
