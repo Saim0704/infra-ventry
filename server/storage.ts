@@ -574,7 +574,10 @@ export class DatabaseStorage implements IStorage {
 
         if (m.value === null || m.value === undefined || threshold === null || threshold === undefined) continue;
 
-        const isBreached = m.operator === '>' ? m.value > threshold : m.value <= threshold;
+        // Ensure we are comparing numbers to avoid lexicographical string comparisons if types are loose
+        const val = Number(m.value);
+        const limit = Number(threshold);
+        const isBreached = m.operator === '>' ? val > limit : val <= limit;
 
         // Look for an ACTIVE (unresolved) alert for this resource + metric type
         const [activeAlert] = await db.select().from(alerts)
@@ -590,13 +593,12 @@ export class DatabaseStorage implements IStorage {
           .orderBy(desc(alerts.sentAt))
           .limit(1);
 
-        if (isBreached) {
-          safeLog(`[${new Date().toISOString()}] BREACH DETECTED for ${resourceName} ${m.type}. Value: ${m.value}, Threshold: ${threshold}\n`);
+        safeLog(`[${new Date().toISOString()}] ALERT EVALUATION for ${resourceName} ${m.type}. Value: ${val}, Threshold: ${limit}, Operator: ${m.operator}, Breached: ${isBreached}\n`);
 
+        if (isBreached) {
           if (activeAlert) {
             // Already sent an alert and it's not yet resolved — do NOT spam
-            safeLog(`[${new Date().toISOString()}] Alert SKIPPED (already active, waiting for recovery) for ${resourceName} ${m.type}\n`);
-            info(`[ALERTS] Active alert already exists for ${resourceName} ${m.type}. Skipping duplicate.`, "storage");
+            safeLog(`[${new Date().toISOString()}] Alert SKIPPED (already active) for ${resourceName} ${m.type}\n`);
             continue;
           }
 
