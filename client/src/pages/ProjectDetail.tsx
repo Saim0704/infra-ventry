@@ -19,7 +19,7 @@ import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Globe, Server, Database, Cloud, Edit, Edit2, Trash2, ChevronLeft, Plus, ChevronDown, Shield, Bell, Activity, Layout, Eye, Terminal, Mail, Save, Key, Send, ExternalLink, Settings, AlertTriangle, Check, X, Info, MessageSquare, Type, Clock, VolumeX, Volume2, CheckCircle2, Cpu, Zap, HardDrive, AlertCircle, Timer, ShieldCheck, Copy } from "lucide-react";
+import { Globe, Server, Database, Cloud, Edit, Edit2, Trash2, ChevronLeft, Plus, ChevronDown, Shield, Bell, Activity, Layout, Eye, Terminal, Mail, Save, Key, Send, ExternalLink, Settings, AlertTriangle, Check, X, Info, MessageSquare, Type, Clock, VolumeX, Volume2, CheckCircle2, Cpu, Zap, HardDrive, AlertCircle, Timer, ShieldCheck, Copy, ImageIcon, Building2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useQueryClient } from "@tanstack/react-query";
@@ -1082,9 +1082,9 @@ function ThresholdField({ control, name, label, icon: Icon, enabledName, min = 0
                     control={control}
                     name={finalEnabledName}
                     render={({ field }) => (
-                        <Switch 
-                            checked={field.value} 
-                            onCheckedChange={field.onChange} 
+                        <Switch
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
                             className="data-[state=checked]:bg-primary scale-[0.8] origin-right"
                         />
                     )}
@@ -1406,11 +1406,11 @@ function ProjectSettings({ projectId }: { projectId: number }) {
                                         </div>
                                     </div>
                                 </CardHeader>
-                                 <CardContent className="space-y-2 py-3">
-                                     <ThresholdField control={form.control} name="webStatusAlertEnabled" label="Down Alert" icon={AlertCircle} isToggleOnly showSeparator />
-                                     <ThresholdField control={form.control} name="webResponseThreshold" label="Latency" icon={Timer} max={10000} step={100} unit="ms" showSeparator />
-                                     <ThresholdField control={form.control} name="webSslExpiryThreshold" label="SSL Expiry" icon={ShieldCheck} enabledName="webSslAlertEnabled" max={90} step={1} unit=" days" />
-                                 </CardContent>
+                                <CardContent className="space-y-2 py-3">
+                                    <ThresholdField control={form.control} name="webStatusAlertEnabled" label="Down Alert" icon={AlertCircle} isToggleOnly showSeparator />
+                                    <ThresholdField control={form.control} name="webResponseThreshold" label="Latency" icon={Timer} max={10000} step={100} unit="ms" showSeparator />
+                                    <ThresholdField control={form.control} name="webSslExpiryThreshold" label="SSL Expiry" icon={ShieldCheck} enabledName="webSslAlertEnabled" max={90} step={1} unit=" days" />
+                                </CardContent>
                             </Card>
 
                             {/* Domain Thresholds */}
@@ -1431,7 +1431,7 @@ function ProjectSettings({ projectId }: { projectId: number }) {
                             </Card>
                         </div>
                         <div className="mt-8 flex justify-end">
-                            <Button 
+                            <Button
                                 onClick={() => handleSaveSection(['cpuThreshold', 'memoryThreshold', 'storageThreshold', 'dbStorageThreshold', 'dbConnectionThreshold', 'clusterCpuThreshold', 'clusterMemoryThreshold', 'webResponseThreshold', 'webSslExpiryThreshold', 'domainExpiryThreshold', 'cpuAlertEnabled', 'memoryAlertEnabled', 'storageAlertEnabled', 'dbStorageAlertEnabled', 'dbConnectionAlertEnabled', 'clusterCpuAlertEnabled', 'clusterMemoryAlertEnabled', 'webResponseAlertEnabled', 'webStatusAlertEnabled', 'webSslAlertEnabled', 'domainExpiryAlertEnabled'])}
                                 className="h-11 px-8 rounded-xl bg-primary shadow-lg shadow-primary/20 font-bold uppercase tracking-wider"
                                 disabled={updateSettings.isPending}
@@ -1508,7 +1508,7 @@ function ProjectSettings({ projectId }: { projectId: number }) {
                                     </div>
                                 </div>
                                 <div className="pt-6 border-t border-border/30 flex justify-end">
-                                    <Button 
+                                    <Button
                                         onClick={() => handleSaveSection(['alertRecipients'])}
                                         className="h-11 px-8 rounded-xl bg-primary shadow-lg shadow-primary/20 font-bold uppercase tracking-wider"
                                         disabled={updateSettings.isPending}
@@ -1643,7 +1643,7 @@ function ProjectSettings({ projectId }: { projectId: number }) {
                                     </div>
                                 </div>
                                 <div className="pt-4 border-t border-border/30 mt-6 flex justify-end">
-                                    <Button 
+                                    <Button
                                         onClick={() => handleSaveSection(['smtpHost', 'smtpPort', 'smtpUser', 'smtpPass', 'smtpSenderName', 'smtpSenderEmail'])}
                                         className="h-11 px-8 rounded-xl bg-primary shadow-lg shadow-primary/20 font-bold uppercase tracking-wider"
                                         disabled={updateSettings.isPending}
@@ -1730,7 +1730,7 @@ function ProjectSettings({ projectId }: { projectId: number }) {
                                     </div>
                                 </div>
                                 <div className="pt-6 border-t border-border/30 mt-6 flex justify-end">
-                                    <Button 
+                                    <Button
                                         onClick={() => handleSaveSection(['showWebMonitors', 'showServers', 'showDatabases', 'showClusters', 'companyName', 'logoUrl'])}
                                         className="h-11 px-8 rounded-xl bg-primary shadow-lg shadow-primary/20 font-bold uppercase tracking-wider"
                                         disabled={updateSettings.isPending}
@@ -1775,9 +1775,9 @@ function ProjectSettings({ projectId }: { projectId: number }) {
                                                                 <pre className="p-3 rounded-xl bg-background/50 border border-border/30 font-mono text-[10px] whitespace-pre-wrap break-all pr-10 leading-normal text-muted-foreground">
                                                                     {`curl -s -L "${window.location.origin}/get/install-agent.sh" | bash -s -- ${window.location.origin} ${resources?.tokens?.[0]?.token || 'YOUR_TOKEN'}`}
                                                                 </pre>
-                                                                <Button 
-                                                                    size="icon" 
-                                                                    variant="ghost" 
+                                                                <Button
+                                                                    size="icon"
+                                                                    variant="ghost"
                                                                     className="absolute top-1.5 right-1.5 h-7 w-7 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-background/80 transition-all"
                                                                     onClick={() => {
                                                                         const cmd = `curl -s -L "${window.location.origin}/get/install-agent.sh" | bash -s -- ${window.location.origin} ${resources?.tokens?.[0]?.token || 'YOUR_TOKEN'}`;
@@ -1814,8 +1814,8 @@ function ProjectSettings({ projectId }: { projectId: number }) {
                                             <div className="space-y-1">
                                                 <p className="text-sm font-bold text-foreground">Staged Update Mechanism</p>
                                                 <p className="text-xs text-muted-foreground leading-relaxed">
-                                                    Clicking the button below will tag every server associated with this project for an update. 
-                                                    The next time each agent reports its metrics (usually every 1-5 minutes), it will receive an update instruction, 
+                                                    Clicking the button below will tag every server associated with this project for an update.
+                                                    The next time each agent reports its metrics (usually every 1-5 minutes), it will receive an update instruction,
                                                     download the latest script/binary, and restart the systemd service.
                                                 </p>
                                             </div>
@@ -1908,7 +1908,7 @@ function ProjectSettings({ projectId }: { projectId: number }) {
                                 <div className="flex justify-center py-8">
                                     {servers.length > 0 && servers.every((s: any) => (s.agentVersion || "v1") === LATEST_AGENT_VERSION) && !isRollingOut ? (
                                         <div className="flex flex-col items-center gap-3">
-                                            <Button 
+                                            <Button
                                                 size="lg"
                                                 disabled={true}
                                                 className="h-14 px-10 rounded-2xl bg-muted text-muted-foreground border-2 border-dashed border-border/40 font-black uppercase tracking-widest text-sm cursor-not-allowed opacity-50"
@@ -1923,7 +1923,7 @@ function ProjectSettings({ projectId }: { projectId: number }) {
                                             </p>
                                         </div>
                                     ) : (
-                                        <Button 
+                                        <Button
                                             size="lg"
                                             onClick={handleRollout}
                                             disabled={isRollingOut || servers.length === 0}
@@ -1961,35 +1961,49 @@ function ProjectEmailTemplatesSection({ projectId }: { projectId: number }) {
     const deleteTemplate = useDeleteProjectEmailTemplate(projectId);
     const { toast } = useToast();
     const [editingType, setEditingType] = useState<string | null>(null);
-    const [editSubject, setEditSubject] = useState("");
+    const [alertSubject, setAlertSubject] = useState("");
+    const [recoverySubject, setRecoverySubject] = useState("");
     const [editBody, setEditBody] = useState("");
     const [viewMode, setViewMode] = useState<"edit" | "preview">("edit");
     const [isSimpleMode, setIsSimpleMode] = useState(true);
-    const [simpleConfig, setSimpleConfig] = useState({
-        // Branding Layer
+    const [simpleConfig, setSimpleConfig] = useState<any>({
+        // Branding Layer (Shared for simplicity, or can be split if needed)
         showHeaderFooter: true,
         showLogo: true,
         showCompany: true,
         showFooter: true,
-        // Content Section
+        // Alert State
         showBadge: true,
         showTitle: true,
         showSubtitle: true,
-        // Data Table
         showProject: true,
         showResource: true,
         showMetric: true,
         showValue: true,
         showThreshold: true,
-        // Style
         themeColor: "#6366f1",
-        // Text Content
         badgeText: editingType === "Domain" ? "Expiry Warning" : "Critical Alert",
         titleText: editingType === "Domain" ? "Domain Expiry Alert" : "High usage detected",
         subtitleText: editingType === "Domain" ? "One of your domains is about to expire." : "Your infrastructure requires immediate attention.",
+        // Recovery State
+        recoveryShowBadge: true,
+        recoveryShowTitle: true,
+        recoveryShowSubtitle: true,
+        recoveryShowProject: true,
+        recoveryShowResource: true,
+        recoveryShowMetric: true,
+        recoveryShowValue: true,
+        recoveryShowThreshold: false,
+        recoveryThemeColor: "#22c55e",
+        recoveryBadgeText: "RECOVERY",
+        recoveryTitleText: editingType === "Domain" ? "Domain Active" : "Resource Stabilized",
+        recoverySubtitleText: "The resource has returned to a normal state.",
+        // Shared
+        companyName: "InfraWatch",
+        logoUrl: "https://antigravity-demo.s3.amazonaws.com/logo-placeholder.png",
         footerText: "Sent via {{company}} Infrastructure Monitoring",
     });
-    
+
     const [previewStatus, setPreviewStatus] = useState<"ALERT" | "RECOVERY">("ALERT");
 
     const alertTypes = [
@@ -2002,40 +2016,61 @@ function ProjectEmailTemplatesSection({ projectId }: { projectId: number }) {
 
     const [expandedSections, setExpandedSections] = useState<string[]>(["content", "metrics"]);
     const toggleSection = (section: string) => {
-        setExpandedSections(prev => 
-            prev.includes(section) ? prev.filter(s => s !== section) : [...prev, section]
+        setExpandedSections((prev: string[]) =>
+            prev.includes(section) ? prev.filter((s: string) => s !== section) : [...prev, section]
         );
+    };
+
+    const getC = (key: string) => {
+        const isRecovery = previewStatus === "RECOVERY";
+        const recoveryKeys = ["showBadge", "showTitle", "showSubtitle", "showProject", "showResource", "showMetric", "showValue", "showThreshold", "themeColor", "badgeText", "titleText", "subtitleText"];
+        const fullKey = (isRecovery && recoveryKeys.includes(key)) ? `recovery${key.charAt(0).toUpperCase()}${key.slice(1)}` : key;
+        return simpleConfig[fullKey] !== undefined ? simpleConfig[fullKey] : simpleConfig[key];
+    };
+
+    const updateConfig = (key: string, v: any) => {
+        const isRecovery = previewStatus === "RECOVERY";
+        const recoveryKeys = ["showBadge", "showTitle", "showSubtitle", "showProject", "showResource", "showMetric", "showValue", "showThreshold", "themeColor", "badgeText", "titleText", "subtitleText"];
+        const fullKey = (isRecovery && recoveryKeys.includes(key)) ? `recovery${key.charAt(0).toUpperCase()}${key.slice(1)}` : key;
+        setSimpleConfig((prev: any) => ({ ...prev, [fullKey]: v }));
     };
 
     const replaceVariables = (text: string, isHtml: boolean = false) => {
         const isRecovery = previewStatus === "RECOVERY";
         const isDomain = editingType === "Domain";
-        const primaryColor = isRecovery ? "#22c55e" : (isDomain ? "#f59e0b" : simpleConfig.themeColor || "#dc2626");
+        const primaryColor = isRecovery ? simpleConfig.recoveryThemeColor : (isDomain ? "#f59e0b" : simpleConfig.themeColor || "#dc2626");
 
         const brands = {
-            company: isHtml ? `<span style="color: ${primaryColor}; font-weight: 800; letter-spacing: -0.02em;">InfraWatch</span>` : "InfraWatch",
-            logo: isHtml ? '<img src="https://antigravity-demo.s3.amazonaws.com/logo-placeholder.png" alt="Logo" style="max-height: 40px; width: auto; vertical-align: middle;">' : ""
+            company: isHtml ? `<span style="color: ${primaryColor}; font-weight: 800; letter-spacing: -0.02em;">${simpleConfig.companyName || "InfraWatch"}</span>` : (simpleConfig.companyName || "InfraWatch"),
+            logo: isHtml ? `<img src="${simpleConfig.logoUrl || "https://antigravity-demo.s3.amazonaws.com/logo-placeholder.png"}" alt="Logo" style="max-height: 40px; width: auto; vertical-align: middle;">` : ""
         };
 
         return text
             .replace(/{{project}}/g, isHtml ? `<span style="color: ${primaryColor}; font-weight: bold;">Demo Project</span>` : "Demo Project")
             .replace(/{{resource}}/g, isHtml ? `<span style="color: ${primaryColor}; font-weight: bold;">${isDomain ? 'example.com' : 'Demo Server'}</span>` : (isDomain ? 'example.com' : 'Demo Server'))
             .replace(/{{type}}/g, isHtml ? `<span style="color: ${primaryColor}; font-weight: bold;">${isDomain ? 'Domain Expiry' : 'CPU Usage'}</span>` : (isDomain ? 'Domain Expiry' : 'CPU Usage'))
-            .replace(/{{value}}/g, isHtml ? `<span style="color: ${isRecovery ? '#22c55e' : '#ef4444'}; font-weight: bold;">${isDomain ? (isRecovery ? '365 days' : '15 days') : (isRecovery ? '12%' : '86%')}</span>` : (isDomain ? (isRecovery ? '365 days' : '15 days') : (isRecovery ? '12%' : '86%')))
-            .replace(/{{threshold}}/g, isHtml ? `<span style="color: #64748b; font-weight: bold;">${isDomain ? '30 days' : '80%'}</span>` : (isDomain ? '30 days' : '80%'))
+            .replace(/{{value}}/g, isHtml ? `<span style="color: ${isRecovery ? '#22c55e' : '#ef4444'}; font-weight: bold;">${isDomain ? (isRecovery ? '365' : '15') : (isRecovery ? '12' : '86')}</span>` : (isDomain ? (isRecovery ? '365' : '15') : (isRecovery ? '12' : '86')))
+            .replace(/{{threshold}}/g, isHtml ? `<span style="color: #64748b; font-weight: bold;">${isDomain ? '30' : '80'}</span>` : (isDomain ? '30' : '80'))
             .replace(/{{status}}/g, isHtml ? `<span style="color: ${isRecovery ? '#22c55e' : '#ef4444'}; font-weight: bold; text-transform: uppercase;">${previewStatus}</span>` : previewStatus)
             .replace(/{{expiry_date}}/g, isHtml ? `<span style="color: ${primaryColor}; font-weight: bold;">2024-12-31</span>` : "2024-12-31")
             .replace(/{{days_left}}/g, isHtml ? `<span style="color: ${isRecovery ? '#22c55e' : '#ef4444'}; font-weight: bold;">${isRecovery ? '365' : '15'}</span>` : (isRecovery ? '365' : '15'))
             .replace(/{{company_name}}/g, brands.company)
             .replace(/{{company}}/g, brands.company)
             .replace(/{{logo}}/g, brands.logo)
-            .replace(/{{logo_url}}/g, "https://antigravity-demo.s3.amazonaws.com/logo-placeholder.png");
+            .replace(/{{logo_url}}/g, simpleConfig.logoUrl || "https://antigravity-demo.s3.amazonaws.com/logo-placeholder.png");
     };
 
-    const generateSimpleHtml = (config: typeof simpleConfig) => {
+    const generateSimpleHtml = (config: any) => {
         const isDomain = editingType === "Domain";
         const isRecovery = previewStatus === "RECOVERY";
-        const primaryColor = isRecovery ? "#22c55e" : (isDomain ? "#f59e0b" : config.themeColor || "#dc2626");
+
+        // Helper to get mode-specific value
+        const getV = (key: string) => {
+            const fullKey = isRecovery ? `recovery${key.charAt(0).toUpperCase()}${key.slice(1)}` : key;
+            return config[fullKey] !== undefined ? config[fullKey] : config[key];
+        };
+
+        const primaryColor = isRecovery ? config.recoveryThemeColor : (isDomain ? "#f59e0b" : config.themeColor || "#dc2626");
         const badgeBg = isRecovery ? "#f0fdf4" : (isDomain ? "#fffbeb" : "#fef2f2");
         const badgeBorder = isRecovery ? "#dcfce7" : (isDomain ? "#fef3c7" : "#fee2e2");
 
@@ -2052,19 +2087,29 @@ function ProjectEmailTemplatesSection({ projectId }: { projectId: number }) {
         };
 
         const rows = [
-            config.showProject && `<tr><td style="padding: 10px 0; border-bottom: 1px solid #eee;"><strong>Project:</strong></td><td style="padding: 10px 0; border-bottom: 1px solid #eee; text-align: right;">{{project}}</td></tr>`,
-            config.showResource && `<tr><td style="padding: 10px 0; border-bottom: 1px solid #eee;"><strong>${isDomain ? 'Domain' : 'Resource'}:</strong></td><td style="padding: 10px 0; border-bottom: 1px solid #eee; text-align: right;">{{resource}}</td></tr>`,
-            config.showMetric && `<tr><td style="padding: 10px 0; border-bottom: 1px solid #eee;"><strong>${isDomain ? 'Status' : 'Metric'}:</strong></td><td style="padding: 10px 0; border-bottom: 1px solid #eee; text-align: right;">${isDomain ? 'Expiring Soon' : '{{type}}'}</td></tr>`,
+            getV('showProject') && `<tr><td style="padding: 10px 0; border-bottom: 1px solid #eee;"><strong>Project:</strong></td><td style="padding: 10px 0; border-bottom: 1px solid #eee; text-align: right;">{{project}}</td></tr>`,
+            getV('showResource') && `<tr><td style="padding: 10px 0; border-bottom: 1px solid #eee;"><strong>${isDomain ? 'Domain' : 'Resource'}:</strong></td><td style="padding: 10px 0; border-bottom: 1px solid #eee; text-align: right;">{{resource}}</td></tr>`,
+            getV('showMetric') && `<tr><td style="padding: 10px 0; border-bottom: 1px solid #eee;"><strong>${isDomain ? 'Status' : 'Metric'}:</strong></td><td style="padding: 10px 0; border-bottom: 1px solid #eee; text-align: right;">${isDomain ? 'Expiring Soon' : '{{type}}'}</td></tr>`,
             isDomain && `<tr><td style="padding: 10px 0; border-bottom: 1px solid #eee;"><strong>Expiry Date:</strong></td><td style="padding: 10px 0; border-bottom: 1px solid #eee; text-align: right; color: ${primaryColor}; font-weight: bold;">{{expiry_date}}</td></tr>`,
-            config.showValue && `<tr><td style="padding: 10px 0; border-bottom: 1px solid #eee;"><strong>${isDomain ? 'Days Remaining' : 'Current Value'}:</strong></td><td style="padding: 10px 0; border-bottom: 1px solid #eee; text-align: right; color: ${isRecovery ? '#22c55e' : '#ef4444'}; font-weight: bold;">${isDomain ? '{{days_left}}' : '{{value}}'}${getUnit("Value")}</td></tr>`,
-            config.showThreshold && !isDomain && `<tr><td style="padding: 10px 0; border-bottom: 1px solid #eee;"><strong>Threshold:</strong></td><td style="padding: 10px 0; border-bottom: 1px solid #eee; text-align: right; color: #64748b; font-weight: bold;">{{threshold}}${getUnit("Threshold")}</td></tr>`,
+            getV('showValue') && `<tr><td style="padding: 10px 0; border-bottom: 1px solid #eee;"><strong>${isDomain ? 'Days Remaining' : 'Current Value'}:</strong></td><td style="padding: 10px 0; border-bottom: 1px solid #eee; text-align: right; color: ${isRecovery ? config.recoveryThemeColor : '#ef4444'}; font-weight: bold;">${isDomain ? '{{days_left}}' : '{{value}}'}${getUnit("Value")}</td></tr>`,
+            getV('showThreshold') && !isDomain && `<tr><td style="padding: 10px 0; border-bottom: 1px solid #eee;"><strong>Threshold:</strong></td><td style="padding: 10px 0; border-bottom: 1px solid #eee; text-align: right; color: #64748b; font-weight: bold;">{{threshold}}${getUnit("Threshold")}</td></tr>`,
         ].filter(Boolean).join('');
 
         const brandingEnabled = config.showHeaderFooter;
-        
-        const badgeText = isRecovery ? "RECOVERY" : config.badgeText;
-        const titleText = isRecovery ? `${isDomain ? 'Domain Active' : (editingType || 'Server') + ' Stabilized'}` : config.titleText;
-        const subtitleText = isRecovery ? `The resource has returned to a normal state.` : config.subtitleText;
+        const showBadge = getV('showBadge');
+        const showTitle = getV('showTitle');
+        const showSubtitle = getV('showSubtitle');
+
+        const badgeText = isRecovery ? config.recoveryBadgeText : config.badgeText;
+        const titleText = isRecovery ? config.recoveryTitleText : config.titleText;
+        const subtitleText = isRecovery ? config.recoverySubtitleText : config.subtitleText;
+
+        // Persist BOTH subjects in the config
+        const persistentConfig = {
+            ...config,
+            alertSubject: (window as any)._alertSubject,
+            recoverySubject: (window as any)._recoverySubject
+        };
 
         return `
 <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 40px 20px; background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 16px;">
@@ -2080,12 +2125,12 @@ function ProjectEmailTemplatesSection({ projectId }: { projectId: number }) {
         </tr>
     </table>` : ''}
     <div style="text-align: center; margin-bottom: 32px;">
-        ${config.showBadge ? `
+        ${showBadge ? `
         <div style="display: inline-block; padding: 8px 16px; background-color: ${badgeBg}; border: 1px solid ${badgeBorder}; border-radius: 99px; color: ${primaryColor}; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em;">
             ${badgeText}
         </div>` : ''}
-        ${config.showTitle ? `<h1 style="margin: 16px 0 8px; color: #0f172a; font-size: 24px; font-weight: 800; letter-spacing: -0.02em;">${titleText}</h1>` : ''}
-        ${config.showSubtitle ? `<p style="margin: 0; color: #64748b; font-size: 16px;">${subtitleText}</p>` : ''}
+        ${showTitle ? `<h1 style="margin: 16px 0 8px; color: #0f172a; font-size: 24px; font-weight: 800; letter-spacing: -0.02em;">${titleText}</h1>` : ''}
+        ${showSubtitle ? `<p style="margin: 0; color: #64748b; font-size: 16px;">${subtitleText}</p>` : ''}
     </div>
     <div style="padding: 24px; background-color: #f8fafc; border-radius: 12px; border: 1px solid #f1f5f9;">
         <table style="width: 100%; border-collapse: collapse; font-size: 14px; color: #334155;">
@@ -2094,15 +2139,17 @@ function ProjectEmailTemplatesSection({ projectId }: { projectId: number }) {
     </div>
     ${brandingEnabled && config.showFooter ? `<div style="margin-top: 32px; padding-top: 24px; border-top: 1px solid #f1f5f9; text-align: center; color: #94a3b8; font-size: 12px;">${config.footerText}</div>` : ''}
 </div>
-<!-- SIMPLE_CONFIG: ${JSON.stringify(config)} -->`.trim();
+<!-- SIMPLE_CONFIG: ${JSON.stringify(persistentConfig)} -->`.trim();
     };
 
     // Auto-update body in simple mode
     useEffect(() => {
+        (window as any)._alertSubject = alertSubject;
+        (window as any)._recoverySubject = recoverySubject;
         if (isSimpleMode && editingType) {
             setEditBody(generateSimpleHtml(simpleConfig));
         }
-    }, [simpleConfig, isSimpleMode, editingType, previewStatus]);
+    }, [simpleConfig, isSimpleMode, editingType, previewStatus, alertSubject, recoverySubject]);
 
     const handleEdit = (type: string) => {
         const template = templates?.find(t => t.alertType === type);
@@ -2117,49 +2164,62 @@ function ProjectEmailTemplatesSection({ projectId }: { projectId: number }) {
                     themeColor: "#6366f1",
                     ...config
                 });
+                if (config.alertSubject) setAlertSubject(config.alertSubject);
+                if (config.recoverySubject) setRecoverySubject(config.recoverySubject);
                 setIsSimpleMode(true);
             } catch (e) {
                 setIsSimpleMode(false);
             }
         } else {
             setIsSimpleMode(!body); // New templates start in simple mode
-            if (!body) setSimpleConfig({
-                showHeaderFooter: true,
-                showLogo: true,
-                showCompany: true,
-                showFooter: true,
-                showBadge: true,
-                showTitle: true,
-                showSubtitle: true,
-                showProject: true,
-                showResource: true,
-                showMetric: true,
-                showValue: true,
-                showThreshold: true,
-                themeColor: "#6366f1",
-                badgeText: type === "Domain" ? "Expiry Warning" : "Critical Alert",
-                titleText: type === "Domain" ? "Domain Expiry Alert" : "High usage detected",
-                subtitleText: type === "Domain" ? "One of your domains is about to expire." : "Your infrastructure requires immediate attention.",
-                footerText: "Sent via {{company}} Infrastructure Monitoring",
-            });
+            if (!body) {
+                setSimpleConfig({
+                    showHeaderFooter: true,
+                    showLogo: true,
+                    showCompany: true,
+                    showFooter: true,
+                    showBadge: true,
+                    showTitle: true,
+                    showSubtitle: true,
+                    showProject: true,
+                    showResource: true,
+                    showMetric: true,
+                    showValue: true,
+                    showThreshold: true,
+                    themeColor: "#6366f1",
+                    badgeText: type === "Domain" ? "Expiry Warning" : "Critical Alert",
+                    titleText: type === "Domain" ? "Domain Expiry Alert" : "High usage detected",
+                    subtitleText: type === "Domain" ? "One of your domains is about to expire." : "Your infrastructure requires immediate attention.",
+                    footerText: "Sent via {{company}} Infrastructure Monitoring",
+                });
+                setAlertSubject(`Alert: High {{type}} on {{resource}}`);
+                setRecoverySubject(`Fixed: {{type}} on {{resource}} stabilized`);
+            } else {
+                setAlertSubject(template?.subject || `Alert: High {{type}} on {{resource}}`);
+                setRecoverySubject(`Fixed: {{type}} on {{resource}} stabilized`);
+            }
         }
 
         setEditingType(type);
-        setEditSubject(template?.subject || `Alert: High {{type}} on {{resource}}`);
         setEditBody(body);
         setViewMode("edit");
     };
 
-    const handleSave = () => {
+    const handleSave = (closeAfterSave: boolean = true) => {
         if (!editingType) return;
         updateTemplate.mutate({
             alertType: editingType,
-            data: { subject: editSubject, body: editBody }
+            data: {
+                subject: alertSubject, // Primary subject column is always the Alert subject
+                body: editBody
+            }
         }, {
             onSuccess: () => {
-                toast({ title: "Success", description: `${editingType} template updated.` });
-                setEditingType(null);
-                setViewMode("edit");
+                toast({ title: "Template Saved", description: "All design and content changes have been persisted." });
+                if (closeAfterSave) {
+                    setEditingType(null);
+                    setViewMode("edit");
+                }
             }
         });
     };
@@ -2291,84 +2351,91 @@ function ProjectEmailTemplatesSection({ projectId }: { projectId: number }) {
                                         {/* DESIGN TAB */}
                                         <TabsContent value="design" className="m-0 p-6 outline-none focus:outline-none flex-1 data-[state=active]:flex data-[state=active]:flex-col h-full overflow-hidden">
                                             <div className="flex flex-col h-full justify-between gap-4 overflow-y-auto scrollbar-none [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-                                                {/* SECTION 1: BRANDING */}
+                                                {/* SECTION 1: VISUAL IDENTITY */}
                                                 <div className="space-y-6">
                                                     <div className="flex items-center justify-between px-1">
-                                                        <Label className="text-[11px] font-black uppercase tracking-[0.2em] text-muted-foreground/50">Branding Identity</Label>
+                                                        <div className="flex items-center gap-3">
+                                                            <Label className="text-[11px] font-black uppercase tracking-[0.2em] text-muted-foreground/50">Branding & Layout</Label>
+                                                            {previewStatus === "RECOVERY" && <span className="text-[8px] px-1.5 py-0.5 bg-emerald-500/10 text-emerald-500 rounded-full font-bold uppercase tracking-widest border border-emerald-500/20">Recovery Mode</span>}
+                                                        </div>
                                                         <div className="h-[1px] flex-1 mx-4 bg-border/20" />
                                                     </div>
                                                     <div className="grid grid-cols-2 gap-4">
-                                                        <div className="flex flex-col justify-between p-5 rounded-2xl bg-background border border-border/40 hover:border-primary/30 transition-all shadow-sm group">
-                                                            <div className="flex items-center gap-3 mb-4">
-                                                                <div className="p-2 rounded-xl bg-primary/5 group-hover:bg-primary/10 transition-colors">
-                                                                    <Layout className="h-4 w-4 text-primary opacity-60 group-hover:opacity-100 transition-opacity" />
+                                                        {[
+                                                            { key: "showHeaderFooter", label: "Global Layout", icon: Layout },
+                                                            { key: "showFooter", label: "Footer Info", icon: Type },
+                                                            { key: "showLogo", label: "Logo Presence", icon: ImageIcon },
+                                                            { key: "showCompany", label: "Brand Label", icon: Building2 },
+                                                        ].map(item => (
+                                                            <div key={item.key} className="flex flex-col gap-3 p-5 rounded-2xl bg-background border border-border/40 hover:border-primary/30 transition-all shadow-sm group">
+                                                                <div className="flex items-center justify-between">
+                                                                    <div className="flex items-center gap-3">
+                                                                        <div className="p-2 rounded-xl bg-primary/5 group-hover:bg-primary/10 transition-colors">
+                                                                            <item.icon className="h-4 w-4 text-primary opacity-60 group-hover:opacity-100 transition-opacity" />
+                                                                        </div>
+                                                                        <Label className="text-[11px] font-bold uppercase tracking-tight">{item.label}</Label>
+                                                                    </div>
+                                                                    <Switch checked={getC(item.key)} onCheckedChange={(v) => updateConfig(item.key, v)} className="scale-90" />
                                                                 </div>
-                                                                <Label className="text-[11px] font-bold uppercase tracking-tight">Main Header</Label>
+                                                                {item.key === "showLogo" && getC("showLogo") && (
+                                                                    <div className="space-y-1.5 px-0.5 animate-in slide-in-from-top-2 duration-300">
+                                                                        <Label className="text-[9px] font-black uppercase text-muted-foreground/50 tracking-widest block">Logo URL</Label>
+                                                                        <Input 
+                                                                            value={simpleConfig.logoUrl} 
+                                                                            onChange={(e) => setSimpleConfig((prev: any) => ({ ...prev, logoUrl: e.target.value }))}
+                                                                            placeholder="https://..."
+                                                                            className="h-8 text-[10px] rounded-lg bg-muted/30 border-border/40 font-mono"
+                                                                        />
+                                                                    </div>
+                                                                )}
+                                                                {item.key === "showCompany" && getC("showCompany") && (
+                                                                    <div className="space-y-1.5 px-0.5 animate-in slide-in-from-top-2 duration-300">
+                                                                        <Label className="text-[9px] font-black uppercase text-muted-foreground/50 tracking-widest block">Brand Name</Label>
+                                                                        <Input 
+                                                                            value={simpleConfig.companyName} 
+                                                                            onChange={(e) => setSimpleConfig((prev: any) => ({ ...prev, companyName: e.target.value }))}
+                                                                            placeholder="Company Name"
+                                                                            className="h-8 text-[10px] rounded-lg bg-muted/30 border-border/40"
+                                                                        />
+                                                                    </div>
+                                                                )}
+                                                                {item.key === "showFooter" && getC("showFooter") && (
+                                                                    <div className="space-y-1.5 px-0.5 animate-in slide-in-from-top-2 duration-300">
+                                                                        <Label className="text-[9px] font-black uppercase text-muted-foreground/50 tracking-widest block">Footer Text</Label>
+                                                                        <Input 
+                                                                            value={simpleConfig.footerText} 
+                                                                            onChange={(e) => setSimpleConfig((prev: any) => ({ ...prev, footerText: e.target.value }))}
+                                                                            placeholder="Sent via..."
+                                                                            className="h-8 text-[10px] rounded-lg bg-muted/30 border-border/40"
+                                                                        />
+                                                                    </div>
+                                                                )}
                                                             </div>
-                                                            <div className="flex justify-end">
-                                                                <Switch checked={simpleConfig.showHeaderFooter} onCheckedChange={(v) => setSimpleConfig(prev => ({ ...prev, showHeaderFooter: v }))} className="scale-90" />
-                                                            </div>
-                                                        </div>
-                                                        <div className="flex flex-col justify-between p-5 rounded-2xl bg-background border border-border/40 hover:border-primary/30 transition-all shadow-sm group">
-                                                            <div className="flex items-center gap-3 mb-4">
-                                                                <div className="p-2 rounded-xl bg-primary/5 group-hover:bg-primary/10 transition-colors">
-                                                                    <Eye className="h-4 w-4 text-primary opacity-60 group-hover:opacity-100 transition-opacity" />
-                                                                </div>
-                                                                <Label className="text-[11px] font-bold uppercase tracking-tight">Visibility Presence</Label>
-                                                            </div>
-                                                            <div className="flex items-center justify-between gap-2.5 bg-muted/20 p-2 rounded-xl">
-                                                                <div className="flex items-center gap-2 px-1">
-                                                                    <Checkbox checked={simpleConfig.showLogo} onCheckedChange={(v) => setSimpleConfig(prev => ({ ...prev, showLogo: !!v }))} className="h-3.5 w-3.5 rounded-sm border-border/60" />
-                                                                    <span className="text-[8px] font-black uppercase tracking-widest text-muted-foreground">Logo</span>
-                                                                </div>
-                                                                <div className="flex items-center gap-2 px-1">
-                                                                    <Checkbox checked={simpleConfig.showCompany} onCheckedChange={(v) => setSimpleConfig(prev => ({ ...prev, showCompany: !!v }))} className="h-3.5 w-3.5 rounded-sm border-border/60" />
-                                                                    <span className="text-[8px] font-black uppercase tracking-widest text-muted-foreground">Brand</span>
-                                                                </div>
-                                                            </div>
-                                                        </div>
+                                                        ))}
                                                     </div>
                                                 </div>
 
                                                 {/* SECTION 3: THEME */}
                                                 <div className="space-y-6">
                                                     <div className="flex items-center justify-between px-1">
-                                                        <Label className="text-[11px] font-black uppercase tracking-[0.2em] text-muted-foreground/50">Theme Aesthetics</Label>
+                                                        <div className="flex items-center gap-3">
+                                                            <Label className="text-[11px] font-black uppercase tracking-[0.2em] text-muted-foreground/50">Theme Aesthetics</Label>
+                                                            {previewStatus === "RECOVERY" && <span className="text-[8px] px-1.5 py-0.5 bg-emerald-500/10 text-emerald-500 rounded-full font-bold uppercase tracking-widest border border-emerald-500/20">Recovery Mode</span>}
+                                                        </div>
                                                         <div className="h-[1px] flex-1 mx-4 bg-border/20" />
                                                     </div>
                                                     <div className="flex gap-5 px-4 items-center justify-center py-1">
                                                         {["#dc2626", "#2563eb", "#9333ea", "#16a34a", "#f59e0b", "#0f172a"].map(color => (
                                                             <button
                                                                 key={color}
-                                                                onClick={() => setSimpleConfig(prev => ({ ...prev, themeColor: color }))}
-                                                                className={`h-9 w-9 rounded-full border-2 transition-all hover:scale-125 active:scale-90 ${simpleConfig.themeColor === color ? 'border-primary ring-4 ring-primary/10 shadow-xl scale-110' : 'border-transparent shadow-sm hover:border-border/60'}`}
+                                                                onClick={() => updateConfig("themeColor", color)}
+                                                                className={`h-9 w-9 rounded-full border-2 transition-all hover:scale-125 active:scale-90 ${getC("themeColor") === color ? 'border-primary ring-4 ring-primary/10 shadow-xl scale-110' : 'border-transparent shadow-sm hover:border-border/60'}`}
                                                                 style={{ backgroundColor: color }}
                                                             />
                                                         ))}
                                                     </div>
                                                 </div>
 
-                                                {/* SECTION 4: DATA PRECISION */}
-                                                <div className="space-y-4 pt-2">
-                                                    <div className="flex items-center justify-between px-1">
-                                                        <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/50">Data Precision Settings</Label>
-                                                        <div className="h-[1px] flex-1 mx-4 bg-border/20" />
-                                                    </div>
-                                                    <div className="grid grid-cols-2 gap-2.5">
-                                                        {[
-                                                            { key: "showProject", label: "Project Identity" },
-                                                            { key: "showResource", label: editingType === "Domain" ? "Domain Source" : "Target Resource" },
-                                                            { key: "showMetric", label: "Metric Type" },
-                                                            { key: "showValue", label: "Live Metric Value" },
-                                                            { key: "showThreshold", label: "Alarm Threshold", disabled: editingType === "Domain" }
-                                                        ].filter(m => !m.disabled).map(item => (
-                                                            <div key={item.key} className="flex items-center justify-between p-4 bg-background border border-border/40 hover:border-primary/20 rounded-xl transition-all shadow-sm group">
-                                                                <Label className="text-[10px] font-bold uppercase text-foreground/50 group-hover:text-foreground/90 transition-colors tracking-tight">{item.label}</Label>
-                                                                <Switch checked={simpleConfig[item.key as keyof typeof simpleConfig] as boolean} onCheckedChange={(v) => setSimpleConfig(prev => ({ ...prev, [item.key]: v }))} className="scale-75" />
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                </div>
                                             </div>
                                         </TabsContent>
 
@@ -2376,23 +2443,71 @@ function ProjectEmailTemplatesSection({ projectId }: { projectId: number }) {
                                         <TabsContent value="content" className="m-0 p-8 outline-none focus:outline-none flex-1 overflow-y-auto">
                                             <div className="space-y-6">
                                                 <div className="space-y-2">
-                                                    <Label className="text-[11px] font-black uppercase tracking-widest text-muted-foreground/50 ml-1">Subject Header</Label>
-                                                    <Input value={editSubject} onChange={(e) => setEditSubject(e.target.value)} className="h-11 text-xs rounded-[1.25rem] bg-background border-border/60 font-medium px-4" />
+                                                    <div className="flex items-center gap-2 mb-1">
+                                                        <Label className="text-[11px] font-black uppercase tracking-widest text-muted-foreground/50 ml-1">Subject Header</Label>
+                                                        {previewStatus === "RECOVERY" && <span className="text-[8px] px-1.5 py-0.5 bg-emerald-500/10 text-emerald-500 rounded-full font-bold uppercase tracking-widest border border-emerald-500/20">Recovery Mode</span>}
+                                                    </div>
+                                                    <Input
+                                                        value={previewStatus === "RECOVERY" ? recoverySubject : alertSubject}
+                                                        onChange={(e) => previewStatus === "RECOVERY" ? setRecoverySubject(e.target.value) : setAlertSubject(e.target.value)}
+                                                        className="h-11 text-xs rounded-[1.25rem] bg-background border-border/60 font-medium px-4"
+                                                    />
                                                 </div>
                                                 <div className="grid gap-4">
                                                     <div className="grid gap-3 p-5 bg-background/50 rounded-[2rem] border border-border/40">
                                                         <div className="flex justify-between items-center px-1">
-                                                            <Label className="text-[11px] font-black uppercase tracking-tight">Badge Label</Label>
-                                                            <Switch checked={simpleConfig.showBadge} onCheckedChange={(v) => setSimpleConfig(prev => ({ ...prev, showBadge: v }))} />
+                                                            <div className="flex items-center gap-3">
+                                                                <Label className="text-[11px] font-black uppercase tracking-tight">Badge Label</Label>
+                                                                {previewStatus === "RECOVERY" && <span className="text-[8px] px-1.5 py-0.5 bg-emerald-500/10 text-emerald-500 rounded-full font-bold uppercase tracking-widest border border-emerald-500/20">Recovery Mode</span>}
+                                                            </div>
+                                                            <Switch checked={getC("showBadge")} onCheckedChange={(v) => updateConfig("showBadge", v)} />
                                                         </div>
-                                                        {simpleConfig.showBadge && <Input value={simpleConfig.badgeText} onChange={(e) => setSimpleConfig(prev => ({ ...prev, badgeText: e.target.value }))} className="h-10 text-xs rounded-xl bg-background border-border" />}
+                                                        {getC("showBadge") && <Input value={getC("badgeText")} onChange={(e) => updateConfig("badgeText", e.target.value)} className="h-10 text-xs rounded-xl bg-background border-border" />}
                                                     </div>
                                                     <div className="grid gap-3 p-5 bg-background/50 rounded-[2rem] border border-border/40">
                                                         <div className="flex justify-between items-center px-1">
-                                                            <Label className="text-[11px] font-black uppercase tracking-tight">Main Heading</Label>
-                                                            <Switch checked={simpleConfig.showTitle} onCheckedChange={(v) => setSimpleConfig(prev => ({ ...prev, showTitle: v }))} />
+                                                            <div className="flex items-center gap-3">
+                                                                <Label className="text-[11px] font-black uppercase tracking-tight">Main Heading</Label>
+                                                                {previewStatus === "RECOVERY" && <span className="text-[8px] px-1.5 py-0.5 bg-emerald-500/10 text-emerald-500 rounded-full font-bold uppercase tracking-widest border border-emerald-500/20">Recovery Mode</span>}
+                                                            </div>
+                                                            <Switch checked={getC("showTitle")} onCheckedChange={(v) => updateConfig("showTitle", v)} />
                                                         </div>
-                                                        {simpleConfig.showTitle && <Input value={simpleConfig.titleText} onChange={(e) => setSimpleConfig(prev => ({ ...prev, titleText: e.target.value }))} className="h-10 text-xs rounded-xl bg-background border-border font-bold" />}
+                                                        {getC("showTitle") && <Input value={getC("titleText")} onChange={(e) => updateConfig("titleText", e.target.value)} className="h-10 text-xs rounded-xl bg-background border-border font-bold" />}
+                                                    </div>
+                                                    <div className="grid gap-3 p-5 bg-background/50 rounded-[2rem] border border-border/40">
+                                                        <div className="flex justify-between items-center px-1">
+                                                            <div className="flex items-center gap-3">
+                                                                <Label className="text-[11px] font-black uppercase tracking-tight">Sub-Text Content</Label>
+                                                                {previewStatus === "RECOVERY" && <span className="text-[8px] px-1.5 py-0.5 bg-emerald-500/10 text-emerald-500 rounded-full font-bold uppercase tracking-widest border border-emerald-500/20">Recovery Mode</span>}
+                                                            </div>
+                                                            <Switch checked={getC("showSubtitle")} onCheckedChange={(v) => updateConfig("showSubtitle", v)} />
+                                                        </div>
+                                                        {getC("showSubtitle") && <Input value={getC("subtitleText")} onChange={(e) => updateConfig("subtitleText", e.target.value)} className="h-10 text-xs rounded-xl bg-background border-border font-medium text-muted-foreground" />}
+                                                    </div>
+                                                </div>
+
+                                                {/* SECTION 4: DATA PRECISION (MIGRATED) */}
+                                                <div className="space-y-4 pt-4 border-t border-border/10">
+                                                    <div className="flex items-center justify-between px-1">
+                                                        <div className="flex items-center gap-3">
+                                                            <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/30">Data Component Visibility</Label>
+                                                            {previewStatus === "RECOVERY" && <span className="text-[8px] px-1.5 py-0.5 bg-emerald-500/10 text-emerald-500 rounded-full font-bold uppercase tracking-widest border border-emerald-500/20">Recovery Mode</span>}
+                                                        </div>
+                                                        <div className="h-[1px] flex-1 mx-4 bg-border/20" />
+                                                    </div>
+                                                    <div className="grid grid-cols-2 gap-3">
+                                                        {[
+                                                            { key: "showProject", label: "Project ID" },
+                                                            { key: "showResource", label: "Resource" },
+                                                            { key: "showMetric", label: "Metric" },
+                                                            { key: "showValue", label: "Current Value" },
+                                                            { key: "showThreshold", label: "Threshold", disabled: editingType === "Domain" }
+                                                        ].filter(m => !m.disabled).map(item => (
+                                                            <div key={item.key} className="flex items-center justify-between p-3.5 bg-background/50 border border-border/40 hover:border-primary/20 rounded-xl transition-all group">
+                                                                <Label className="text-[9px] font-black uppercase text-muted-foreground group-hover:text-foreground/90 transition-colors tracking-widest">{item.label}</Label>
+                                                                <Switch checked={getC(item.key)} onCheckedChange={(v) => updateConfig(item.key, v)} className="scale-[0.7] origin-right" />
+                                                            </div>
+                                                        ))}
                                                     </div>
                                                 </div>
                                             </div>
@@ -2402,9 +2517,17 @@ function ProjectEmailTemplatesSection({ projectId }: { projectId: number }) {
 
                                     <div className="p-6 border-t border-border/10 bg-muted/20 shrink-0">
                                         <div className="flex gap-4">
-                                            <Button variant="outline" className="flex-1 rounded-[1.75rem] h-12 text-xs font-black uppercase tracking-widest border-border/60 hover:bg-muted transition-all" onClick={() => setEditingType(null)}>Cancel</Button>
-                                            <Button className="flex-1 rounded-[1.75rem] h-12 text-xs font-black uppercase tracking-widest shadow-xl shadow-primary/20 transition-all active:scale-95" onClick={handleSave} disabled={updateTemplate.isPending}>
-                                                {updateTemplate.isPending ? "Saving..." : "Apply Template"}
+                                            <Button variant="outline" className="flex-[0.5] rounded-[1.75rem] h-12 text-[10px] font-black uppercase tracking-widest border-border/40 hover:bg-muted transition-all" onClick={() => setEditingType(null)}>Discard</Button>
+                                            <Button
+                                                variant="secondary"
+                                                className="flex-1 rounded-[1.75rem] h-12 text-[10px] font-black uppercase tracking-widest bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 border-border/20 transition-all border"
+                                                onClick={() => handleSave(false)}
+                                                disabled={updateTemplate.isPending}
+                                            >
+                                                {updateTemplate.isPending ? "Saving..." : "Save Changes"}
+                                            </Button>
+                                            <Button className="flex-1 rounded-[1.75rem] h-12 text-[10px] font-black uppercase tracking-widest shadow-xl shadow-primary/20 transition-all active:scale-95" onClick={() => handleSave(true)} disabled={updateTemplate.isPending}>
+                                                {updateTemplate.isPending ? "Saving..." : "Submit & Finish"}
                                             </Button>
                                         </div>
                                     </div>
@@ -2423,14 +2546,14 @@ function ProjectEmailTemplatesSection({ projectId }: { projectId: number }) {
                                         </div>
                                     </div>
                                     <div className="flex items-center p-1 bg-muted/50 border border-border/40 rounded-[1.25rem] shadow-inner">
-                                        <button 
-                                            onClick={() => setPreviewStatus("ALERT")} 
+                                        <button
+                                            onClick={() => setPreviewStatus("ALERT")}
                                             className={`px-4 py-1.5 rounded-2xl text-[9px] font-black tracking-widest uppercase transition-all ${previewStatus === "ALERT" ? 'bg-destructive/10 text-destructive shadow-sm' : 'text-muted-foreground/60 hover:text-muted-foreground'}`}
                                         >
                                             Alert
                                         </button>
-                                        <button 
-                                            onClick={() => setPreviewStatus("RECOVERY")} 
+                                        <button
+                                            onClick={() => setPreviewStatus("RECOVERY")}
                                             className={`px-4 py-1.5 rounded-2xl text-[9px] font-black tracking-widest uppercase transition-all ${previewStatus === "RECOVERY" ? 'bg-emerald-500/10 text-emerald-500 shadow-sm' : 'text-muted-foreground/60 hover:text-muted-foreground'}`}
                                         >
                                             Recovery
@@ -2446,10 +2569,10 @@ function ProjectEmailTemplatesSection({ projectId }: { projectId: number }) {
                                             <div className="h-2.5 w-2.5 rounded-full bg-slate-600/50" />
                                         </div>
                                         <div className="flex-1 bg-slate-900/80 rounded-xl h-7 flex items-center px-4 text-[10px] text-slate-400 font-mono truncate border border-white/5 shadow-inner">
-                                            <span className="opacity-40 mr-2">Subject:</span> {replaceVariables(editSubject)}
+                                            <span className="opacity-40 mr-2">Subject:</span> {replaceVariables(previewStatus === "RECOVERY" ? recoverySubject : alertSubject)}
                                         </div>
                                     </div>
-                                    
+
                                     <div className="flex-1 overflow-y-auto bg-[#f1f5f9] p-10">
                                         <div className="mx-auto max-w-[100%] shadow-2xl rounded-[1.5rem] overflow-hidden bg-white hover:scale-[1.01] transition-transform duration-500">
                                             <div dangerouslySetInnerHTML={{ __html: replaceVariables(editBody || "", true) }} />
@@ -2504,10 +2627,10 @@ function AlertHistoryTab({ projectId }: { projectId: number }) {
         // Status filter
         if (statusFilter === 'active' && !!a.resolvedAt) return false;
         if (statusFilter === 'resolved' && !a.resolvedAt) return false;
-        
+
         // Type filter
         if (typeFilter !== 'all' && a.resourceType !== typeFilter) return false;
-        
+
         return true;
     });
 
@@ -2547,7 +2670,7 @@ function AlertHistoryTab({ projectId }: { projectId: number }) {
                             ))}
                         </div>
                     </div>
-                    
+
                     <div className="flex items-center gap-4 shrink-0">
                         <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Status</span>
                         <div className="flex gap-1.5">
@@ -2630,10 +2753,10 @@ function AlertHistoryTab({ projectId }: { projectId: number }) {
                                                         </>
                                                     );
                                                 }
-                                                const unit = alert.type.includes('response') ? 'ms' : 
-                                                            alert.type.includes('expiry') || alert.type.includes('ssl') ? 'd' : 
-                                                            alert.type.includes('connections') ? '' : '%';
-                                                
+                                                const unit = alert.type.includes('response') ? 'ms' :
+                                                    alert.type.includes('expiry') || alert.type.includes('ssl') ? 'd' :
+                                                        alert.type.includes('connections') ? '' : '%';
+
                                                 return (
                                                     <>
                                                         <span className="text-destructive font-bold">{val}{unit}</span>
@@ -2702,7 +2825,7 @@ function AlertMutingTab({ projectId, settings }: { projectId: number; settings: 
     const isMuted = (category: string, id: number) => (muted[category] || []).includes(id);
 
     const toggleSection = (key: string) => {
-        setExpandedSections(prev => 
+        setExpandedSections(prev =>
             prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]
         );
     };
@@ -2772,7 +2895,7 @@ function AlertMutingTab({ projectId, settings }: { projectId: number; settings: 
 
                         return (
                             <div key={section.key} className="group border border-border/40 bg-card/50 backdrop-blur-sm rounded-2xl overflow-hidden transition-all duration-300">
-                                <div 
+                                <div
                                     className={cn(
                                         "flex items-center justify-between p-4 cursor-pointer hover:bg-muted/30 transition-colors select-none",
                                         isExpanded && "bg-muted/20 border-b border-border/40"
