@@ -56,6 +56,12 @@ export class EmailService {
       : `Alert: High ${displayType} usage on ${resourceName}`;
 
     let subject = template?.subject || defaultSubject;
+    
+    // Ensure recovery status is reflected in the subject even for custom templates
+    if (isRecovery && !subject.toLowerCase().startsWith('recovery:')) {
+      subject = `Recovery: ${subject}`;
+    }
+
     // Simple variable replacement
     subject = subject
       .replace(/{{project}}/g, projectName)
@@ -66,7 +72,19 @@ export class EmailService {
       .replace(/{{company}}/g, companyName)
       .replace(/{{logo}}/g, logoUrl || "") // In subject, keep it as URL
       .replace(/{{company_name}}/g, companyName)
-      .replace(/{{logo_url}}/g, logoUrl || "");
+      .replace(/{{logo_url}}/g, logoUrl || "")
+      .replace(/{{status}}/g, isRecovery ? "RECOVERY" : "ALERT");
+
+    const getUnit = (t: string) => {
+      const typeLower = t.toLowerCase();
+      if (typeLower.includes('response')) return 'ms';
+      if (typeLower.includes('ssl') || typeLower.includes('expiry') || typeLower.includes('domain')) return ' days';
+      if (typeLower.includes('connections')) return '';
+      if (typeLower.includes('status')) return '';
+      return '%';
+    };
+
+    const unit = getUnit(type);
 
     let defaultBody = `
       <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 40px 20px; border: 1px solid #e2e8f0; border-radius: 16px; background: white;">
@@ -100,11 +118,11 @@ export class EmailService {
           </tr>
           <tr>
             <td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Current Value:</strong></td>
-            <td style="padding: 8px; border-bottom: 1px solid #eee; color: ${isRecovery ? '#28a745' : '#dc3545'};"><strong>${Math.round(value)}%</strong></td>
+            <td style="padding: 8px; border-bottom: 1px solid #eee; color: ${isRecovery ? '#28a745' : '#dc3545'};"><strong>${Math.round(value)}${unit}</strong></td>
           </tr>
           <tr>
             <td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Threshold:</strong></td>
-            <td style="padding: 8px; border-bottom: 1px solid #eee;">${Math.round(threshold)}%</td>
+            <td style="padding: 8px; border-bottom: 1px solid #eee;">${Math.round(threshold)}${unit}</td>
           </tr>
         </table>
 
@@ -122,8 +140,11 @@ export class EmailService {
       .replace(/{{type}}/g, displayType)
       .replace(/{{value}}/g, Math.round(value).toString())
       .replace(/{{threshold}}/g, Math.round(threshold).toString())
+      .replace(/{{unit}}/g, unit)
       .replace(/{{company}}/g, companyName)
       .replace(/{{logo}}/g, logoImg)
+      .replace(/{{status}}/g, isRecovery ? "RECOVERY" : "ALERT")
+      .replace(/{{badge_color}}/g, isRecovery ? "#28a745" : "#dc3545")
       .replace(/{{company_name}}/g, companyName)
       .replace(/{{logo_url}}/g, logoUrl || "");
 

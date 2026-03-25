@@ -15,13 +15,14 @@ import {
 } from "@shared/schema";
 import { EmailService } from "./lib/email";
 import { broadcast } from "./lib/realtime";
-import { log as info, error } from "./lib/logger";
+import { log as info, error, debug } from "./lib/logger";
 import { z } from "zod";
+
+import fs from "fs";
 
 // Safe logging helper that won't crash if file doesn't exist
 function safeLog(message: string) {
   try {
-    const fs = require("fs");
     fs.appendFileSync("alerts_debug.log", message);
   } catch (err) {
     // Silently fail or use info as fallback
@@ -112,7 +113,7 @@ export interface IStorage {
   // === ALERTS ===
   getRecentAlerts(serverId: number): Promise<Alert[]>;
   getAlertHistory(): Promise<(Alert & { serverName: string })[]>;
-  createAlert(data: { serverId?: number, databaseId?: number, clusterId?: number, webMonitorId?: number, type: string, value: number, threshold: number }): Promise<void>;
+  createAlert(data: { serverId?: number, databaseId?: number, clusterId?: number, webMonitorId?: number, domainMonitorId?: number, type: string, value: number, threshold: number }): Promise<void>;
 
   // === PROJECT AGENT ROLLOUT ===
   triggerProjectRollout(projectId: number): Promise<void>;
@@ -577,7 +578,12 @@ export class DatabaseStorage implements IStorage {
         // Ensure we are comparing numbers to avoid lexicographical string comparisons if types are loose
         const val = Number(m.value);
         const limit = Number(threshold);
-        const isBreached = m.operator === '>' ? val > limit : val <= limit;
+        let isBreached = false;
+        if (m.operator === '>') {
+          isBreached = val > limit;
+        } else if (m.operator === '<=') {
+          isBreached = val <= limit;
+        }
 
         // Look for an ACTIVE (unresolved) alert for this resource + metric type
         const [activeAlert] = await db.select().from(alerts)
@@ -594,6 +600,11 @@ export class DatabaseStorage implements IStorage {
           .limit(1);
 
         safeLog(`[${new Date().toISOString()}] ALERT EVALUATION for ${resourceName} ${m.type}. Value: ${val}, Threshold: ${limit}, Operator: ${m.operator}, Breached: ${isBreached}\n`);
+        
+        // Debug metrics less than threshold reporting
+        if (!isBreached && activeAlert && val < limit) {
+           debug(`Recovery detected for ${resourceName} ${m.type}: ${val} < ${limit}. Previous alert was active.`, "storage");
+        }
 
         if (isBreached) {
           if (activeAlert) {
@@ -777,7 +788,7 @@ export class DatabaseStorage implements IStorage {
     }));
   }
 
-  async createAlert(data: { serverId?: number, databaseId?: number, clusterId?: number, webMonitorId?: number, type: string, value: number, threshold: number }): Promise<void> {
+  async createAlert(data: { serverId?: number, databaseId?: number, clusterId?: number, webMonitorId?: number, domainMonitorId?: number, type: string, value: number, threshold: number }): Promise<void> {
     await db.insert(alerts).values(data);
   }
 

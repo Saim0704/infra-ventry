@@ -65,3 +65,20 @@ export function useUpdateProjectEmailTemplate(projectId: number) {
         },
     });
 }
+
+export function useDeleteProjectEmailTemplate(projectId: number) {
+    return useMutation({
+        mutationFn: async (alertType: string) => {
+            const url = buildUrl(api.projects.emailTemplates.delete.path, { id: projectId, alertType });
+            const res = await fetch(url, {
+                method: "DELETE",
+                credentials: "include",
+            });
+            if (!res.ok) throw new Error("Failed to reset project email template");
+            return true;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: [api.projects.emailTemplates.list.path, projectId] });
+        },
+    });
+}

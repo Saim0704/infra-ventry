@@ -4,7 +4,7 @@ import { useDeleteDatabase } from "@/hooks/use-databases";
 import { useDeleteCluster } from "@/hooks/use-clusters";
 import { useDeleteWebMonitor } from "@/hooks/use-web-monitors";
 import { useCreateToken } from "@/hooks/use-tokens";
-import { useProjectAlertSettings, useUpdateProjectAlertSettings, useProjectEmailTemplates, useUpdateProjectEmailTemplate } from "@/hooks/use-project-settings";
+import { useProjectAlertSettings, useUpdateProjectAlertSettings, useProjectEmailTemplates, useUpdateProjectEmailTemplate, useDeleteProjectEmailTemplate } from "@/hooks/use-project-settings";
 import { useLocation, useParams } from "wouter";
 import { Shell } from "@/components/layout/Shell";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -1958,6 +1958,7 @@ function ProjectSettings({ projectId }: { projectId: number }) {
 function ProjectEmailTemplatesSection({ projectId }: { projectId: number }) {
     const { data: templates, isLoading } = useProjectEmailTemplates(projectId);
     const updateTemplate = useUpdateProjectEmailTemplate(projectId);
+    const deleteTemplate = useDeleteProjectEmailTemplate(projectId);
     const { toast } = useToast();
     const [editingType, setEditingType] = useState<string | null>(null);
     const [editSubject, setEditSubject] = useState("");
@@ -1980,12 +1981,16 @@ function ProjectEmailTemplatesSection({ projectId }: { projectId: number }) {
         showMetric: true,
         showValue: true,
         showThreshold: true,
+        // Style
+        themeColor: "#6366f1",
         // Text Content
         badgeText: editingType === "Domain" ? "Expiry Warning" : "Critical Alert",
         titleText: editingType === "Domain" ? "Domain Expiry Alert" : "High usage detected",
         subtitleText: editingType === "Domain" ? "One of your domains is about to expire." : "Your infrastructure requires immediate attention.",
         footerText: "Sent via {{company}} Infrastructure Monitoring",
     });
+    
+    const [previewStatus, setPreviewStatus] = useState<"ALERT" | "RECOVERY">("ALERT");
 
     const alertTypes = [
         { id: "Server", label: "Server Alerts", description: "Templates for CPU, Memory, and Storage alerts." },
@@ -2003,32 +2008,36 @@ function ProjectEmailTemplatesSection({ projectId }: { projectId: number }) {
     };
 
     const replaceVariables = (text: string, isHtml: boolean = false) => {
+        const isRecovery = previewStatus === "RECOVERY";
+        const isDomain = editingType === "Domain";
+        const primaryColor = isRecovery ? "#22c55e" : (isDomain ? "#f59e0b" : simpleConfig.themeColor || "#dc2626");
+
         const brands = {
-            company: isHtml ? '<span style="color: #6366f1; font-weight: 800; letter-spacing: -0.02em;">InfraWatch</span>' : "InfraWatch",
+            company: isHtml ? `<span style="color: ${primaryColor}; font-weight: 800; letter-spacing: -0.02em;">InfraWatch</span>` : "InfraWatch",
             logo: isHtml ? '<img src="https://antigravity-demo.s3.amazonaws.com/logo-placeholder.png" alt="Logo" style="max-height: 40px; width: auto; vertical-align: middle;">' : ""
         };
 
-        const isDomain = editingType === "Domain";
-
         return text
-            .replace(/{{project}}/g, isHtml ? '<span style="color: #6366f1; font-weight: bold;">Demo Project</span>' : "Demo Project")
-            .replace(/{{resource}}/g, isHtml ? `<span style="color: #6366f1; font-weight: bold;">${isDomain ? 'example.com' : 'Demo Server'}</span>` : (isDomain ? 'example.com' : 'Demo Server'))
-            .replace(/{{type}}/g, isHtml ? `<span style="color: #6366f1; font-weight: bold;">${isDomain ? 'Domain Expiry' : 'CPU'}</span>` : (isDomain ? 'Domain Expiry' : 'CPU'))
-            .replace(/{{value}}/g, isHtml ? `<span style="color: #ef4444; font-weight: bold;">${isDomain ? '15 days' : '86%'}</span>` : (isDomain ? '15 days' : '86%'))
-            .replace(/{{threshold}}/g, isHtml ? `<span style="color: #10b981; font-weight: bold;">${isDomain ? '30 days' : '80%'}</span>` : (isDomain ? '30 days' : '80%'))
-            .replace(/{{expiry_date}}/g, isHtml ? '<span style="color: #6366f1; font-weight: bold;">2024-12-31</span>' : "2024-12-31")
-            .replace(/{{days_left}}/g, isHtml ? '<span style="color: #ef4444; font-weight: bold;">15</span>' : "15")
-            .replace(/{{company}}/g, brands.company)
+            .replace(/{{project}}/g, isHtml ? `<span style="color: ${primaryColor}; font-weight: bold;">Demo Project</span>` : "Demo Project")
+            .replace(/{{resource}}/g, isHtml ? `<span style="color: ${primaryColor}; font-weight: bold;">${isDomain ? 'example.com' : 'Demo Server'}</span>` : (isDomain ? 'example.com' : 'Demo Server'))
+            .replace(/{{type}}/g, isHtml ? `<span style="color: ${primaryColor}; font-weight: bold;">${isDomain ? 'Domain Expiry' : 'CPU Usage'}</span>` : (isDomain ? 'Domain Expiry' : 'CPU Usage'))
+            .replace(/{{value}}/g, isHtml ? `<span style="color: ${isRecovery ? '#22c55e' : '#ef4444'}; font-weight: bold;">${isDomain ? (isRecovery ? '365 days' : '15 days') : (isRecovery ? '12%' : '86%')}</span>` : (isDomain ? (isRecovery ? '365 days' : '15 days') : (isRecovery ? '12%' : '86%')))
+            .replace(/{{threshold}}/g, isHtml ? `<span style="color: #64748b; font-weight: bold;">${isDomain ? '30 days' : '80%'}</span>` : (isDomain ? '30 days' : '80%'))
+            .replace(/{{status}}/g, isHtml ? `<span style="color: ${isRecovery ? '#22c55e' : '#ef4444'}; font-weight: bold; text-transform: uppercase;">${previewStatus}</span>` : previewStatus)
+            .replace(/{{expiry_date}}/g, isHtml ? `<span style="color: ${primaryColor}; font-weight: bold;">2024-12-31</span>` : "2024-12-31")
+            .replace(/{{days_left}}/g, isHtml ? `<span style="color: ${isRecovery ? '#22c55e' : '#ef4444'}; font-weight: bold;">${isRecovery ? '365' : '15'}</span>` : (isRecovery ? '365' : '15'))
             .replace(/{{company_name}}/g, brands.company)
+            .replace(/{{company}}/g, brands.company)
             .replace(/{{logo}}/g, brands.logo)
             .replace(/{{logo_url}}/g, "https://antigravity-demo.s3.amazonaws.com/logo-placeholder.png");
     };
 
     const generateSimpleHtml = (config: typeof simpleConfig) => {
         const isDomain = editingType === "Domain";
-        const primaryColor = isDomain ? "#f59e0b" : "#dc2626";
-        const badgeBg = isDomain ? "#fffbeb" : "#fef2f2";
-        const badgeBorder = isDomain ? "#fef3c7" : "#fee2e2";
+        const isRecovery = previewStatus === "RECOVERY";
+        const primaryColor = isRecovery ? "#22c55e" : (isDomain ? "#f59e0b" : config.themeColor || "#dc2626");
+        const badgeBg = isRecovery ? "#f0fdf4" : (isDomain ? "#fffbeb" : "#fef2f2");
+        const badgeBorder = isRecovery ? "#dcfce7" : (isDomain ? "#fef3c7" : "#fee2e2");
 
         const getUnit = (label: string) => {
             if (isDomain) {
@@ -2046,12 +2055,16 @@ function ProjectEmailTemplatesSection({ projectId }: { projectId: number }) {
             config.showProject && `<tr><td style="padding: 10px 0; border-bottom: 1px solid #eee;"><strong>Project:</strong></td><td style="padding: 10px 0; border-bottom: 1px solid #eee; text-align: right;">{{project}}</td></tr>`,
             config.showResource && `<tr><td style="padding: 10px 0; border-bottom: 1px solid #eee;"><strong>${isDomain ? 'Domain' : 'Resource'}:</strong></td><td style="padding: 10px 0; border-bottom: 1px solid #eee; text-align: right;">{{resource}}</td></tr>`,
             config.showMetric && `<tr><td style="padding: 10px 0; border-bottom: 1px solid #eee;"><strong>${isDomain ? 'Status' : 'Metric'}:</strong></td><td style="padding: 10px 0; border-bottom: 1px solid #eee; text-align: right;">${isDomain ? 'Expiring Soon' : '{{type}}'}</td></tr>`,
-            isDomain && `<tr><td style="padding: 10px 0; border-bottom: 1px solid #eee;"><strong>Expiry Date:</strong></td><td style="padding: 10px 0; border-bottom: 1px solid #eee; text-align: right; color: #ef4444; font-weight: bold;">{{expiry_date}}</td></tr>`,
-            config.showValue && `<tr><td style="padding: 10px 0; border-bottom: 1px solid #eee;"><strong>${isDomain ? 'Days Remaining' : 'Current Value'}:</strong></td><td style="padding: 10px 0; border-bottom: 1px solid #eee; text-align: right; color: #ef4444; font-weight: bold;">${isDomain ? '{{days_left}}' : '{{value}}'}${getUnit("Value")}</td></tr>`,
-            config.showThreshold && !isDomain && `<tr><td style="padding: 10px 0; border-bottom: 1px solid #eee;"><strong>Threshold:</strong></td><td style="padding: 10px 0; border-bottom: 1px solid #eee; text-align: right; color: #10b981; font-weight: bold;">{{threshold}}${getUnit("Threshold")}</td></tr>`,
+            isDomain && `<tr><td style="padding: 10px 0; border-bottom: 1px solid #eee;"><strong>Expiry Date:</strong></td><td style="padding: 10px 0; border-bottom: 1px solid #eee; text-align: right; color: ${primaryColor}; font-weight: bold;">{{expiry_date}}</td></tr>`,
+            config.showValue && `<tr><td style="padding: 10px 0; border-bottom: 1px solid #eee;"><strong>${isDomain ? 'Days Remaining' : 'Current Value'}:</strong></td><td style="padding: 10px 0; border-bottom: 1px solid #eee; text-align: right; color: ${isRecovery ? '#22c55e' : '#ef4444'}; font-weight: bold;">${isDomain ? '{{days_left}}' : '{{value}}'}${getUnit("Value")}</td></tr>`,
+            config.showThreshold && !isDomain && `<tr><td style="padding: 10px 0; border-bottom: 1px solid #eee;"><strong>Threshold:</strong></td><td style="padding: 10px 0; border-bottom: 1px solid #eee; text-align: right; color: #64748b; font-weight: bold;">{{threshold}}${getUnit("Threshold")}</td></tr>`,
         ].filter(Boolean).join('');
 
         const brandingEnabled = config.showHeaderFooter;
+        
+        const badgeText = isRecovery ? "RECOVERY" : config.badgeText;
+        const titleText = isRecovery ? `${isDomain ? 'Domain Active' : (editingType || 'Server') + ' Stabilized'}` : config.titleText;
+        const subtitleText = isRecovery ? `The resource has returned to a normal state.` : config.subtitleText;
 
         return `
 <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 40px 20px; background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 16px;">
@@ -2069,10 +2082,10 @@ function ProjectEmailTemplatesSection({ projectId }: { projectId: number }) {
     <div style="text-align: center; margin-bottom: 32px;">
         ${config.showBadge ? `
         <div style="display: inline-block; padding: 8px 16px; background-color: ${badgeBg}; border: 1px solid ${badgeBorder}; border-radius: 99px; color: ${primaryColor}; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em;">
-            ${config.badgeText}
+            ${badgeText}
         </div>` : ''}
-        ${config.showTitle ? `<h1 style="margin: 16px 0 8px; color: #0f172a; font-size: 24px; font-weight: 800; letter-spacing: -0.02em;">${config.titleText}</h1>` : ''}
-        ${config.showSubtitle ? `<p style="margin: 0; color: #64748b; font-size: 16px;">${config.subtitleText}</p>` : ''}
+        ${config.showTitle ? `<h1 style="margin: 16px 0 8px; color: #0f172a; font-size: 24px; font-weight: 800; letter-spacing: -0.02em;">${titleText}</h1>` : ''}
+        ${config.showSubtitle ? `<p style="margin: 0; color: #64748b; font-size: 16px;">${subtitleText}</p>` : ''}
     </div>
     <div style="padding: 24px; background-color: #f8fafc; border-radius: 12px; border: 1px solid #f1f5f9;">
         <table style="width: 100%; border-collapse: collapse; font-size: 14px; color: #334155;">
@@ -2089,7 +2102,7 @@ function ProjectEmailTemplatesSection({ projectId }: { projectId: number }) {
         if (isSimpleMode && editingType) {
             setEditBody(generateSimpleHtml(simpleConfig));
         }
-    }, [simpleConfig, isSimpleMode, editingType]);
+    }, [simpleConfig, isSimpleMode, editingType, previewStatus]);
 
     const handleEdit = (type: string) => {
         const template = templates?.find(t => t.alertType === type);
@@ -2100,7 +2113,10 @@ function ProjectEmailTemplatesSection({ projectId }: { projectId: number }) {
         if (configMatch) {
             try {
                 const config = JSON.parse(configMatch[1]);
-                setSimpleConfig(config);
+                setSimpleConfig({
+                    themeColor: "#6366f1",
+                    ...config
+                });
                 setIsSimpleMode(true);
             } catch (e) {
                 setIsSimpleMode(false);
@@ -2120,6 +2136,7 @@ function ProjectEmailTemplatesSection({ projectId }: { projectId: number }) {
                 showMetric: true,
                 showValue: true,
                 showThreshold: true,
+                themeColor: "#6366f1",
                 badgeText: type === "Domain" ? "Expiry Warning" : "Critical Alert",
                 titleText: type === "Domain" ? "Domain Expiry Alert" : "High usage detected",
                 subtitleText: type === "Domain" ? "One of your domains is about to expire." : "Your infrastructure requires immediate attention.",
@@ -2148,7 +2165,6 @@ function ProjectEmailTemplatesSection({ projectId }: { projectId: number }) {
     };
 
     if (isLoading) return <div className="text-center py-8">Loading templates...</div>;
-
     return (
         <div className="space-y-4 mt-2">
             <Card className="border-border/40 shadow-sm bg-card/50 backdrop-blur-sm">
@@ -2163,93 +2179,91 @@ function ProjectEmailTemplatesSection({ projectId }: { projectId: number }) {
                         </div>
                     </div>
                 </CardHeader>
-                <CardContent>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {alertTypes.map((type) => {
-                            const hasCustom = templates?.some(t => t.alertType === type.id);
-                            return (
-                                <div key={type.id} className="p-4 rounded-2xl border border-border/40 bg-background/30 hover:bg-background/50 transition-all group">
-                                    <div className="flex justify-between items-start mb-2">
-                                        <h4 className="font-bold text-sm tracking-tight">{type.label}</h4>
-                                        {hasCustom && <Check className="h-3.5 w-3.5 text-emerald-500" />}
-                                    </div>
-                                    <p className="text-[10px] text-muted-foreground mb-4 line-clamp-2">{type.description}</p>
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        className="w-full h-8 rounded-lg text-[10px] font-bold uppercase tracking-wider"
-                                        onClick={() => handleEdit(type.id)}
-                                    >
-                                        {hasCustom ? "Edit Template" : "Configure"}
-                                    </Button>
+                <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {alertTypes.map((type) => {
+                        const hasCustom = templates?.some(t => t.alertType === type.id);
+                        return (
+                            <div key={type.id} className="relative p-6 rounded-3xl border border-border/40 bg-card/30 hover:bg-card/50 transition-all group overflow-hidden flex flex-col">
+                                <div className="absolute top-0 right-0 p-4">
+                                    {hasCustom ? (
+                                        <div className="flex items-center gap-1.5 px-2 py-1 bg-emerald-500/10 text-emerald-500 rounded-full border border-emerald-500/20 text-[9px] font-black uppercase tracking-widest">
+                                            <CheckCircle2 className="h-2.5 w-2.5" />
+                                            Customized
+                                        </div>
+                                    ) : (
+                                        <div className="flex items-center gap-1.5 px-2 py-1 bg-muted text-muted-foreground/60 rounded-full border border-border/40 text-[9px] font-black uppercase tracking-widest">
+                                            System Default
+                                        </div>
+                                    )}
                                 </div>
-                            );
-                        })}
-                    </div>
+                                <div className="pt-4 flex-1">
+                                    <div className="mb-4">
+                                        <h4 className="font-black text-lg tracking-tight text-foreground/90">{type.label}</h4>
+                                        <p className="text-[11px] text-muted-foreground leading-relaxed mt-1">{type.description}</p>
+                                    </div>
+                                    <div className="mt-auto flex gap-2">
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="flex-1 h-10 rounded-xl text-[10px] font-black uppercase tracking-widest border-border/60 hover:bg-primary hover:text-primary-foreground hover:border-primary transition-all"
+                                            onClick={() => handleEdit(type.id)}
+                                        >
+                                            {hasCustom ? "Edit Template" : "Customize"}
+                                        </Button>
+                                        {hasCustom && (
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-10 w-10 rounded-xl bg-destructive/5 text-destructive hover:bg-destructive hover:text-white transition-all"
+                                                onClick={() => {
+                                                    if (confirm("Reset to system default template?")) {
+                                                        deleteTemplate.mutate(type.id, {
+                                                            onSuccess: () => toast({ title: "Reset", description: "Template reset to system default." })
+                                                        });
+                                                    }
+                                                }}
+                                            >
+                                                <Trash2 className="h-4 w-4" />
+                                            </Button>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    })}
                 </CardContent>
             </Card>
 
             <Dialog open={!!editingType} onOpenChange={(open) => !open && setEditingType(null)}>
-                <DialogContent className="sm:max-w-[1200px] border-border/40 bg-card/95 backdrop-blur-xl rounded-3xl overflow-hidden p-0">
-                    <DialogHeader className="pt-8 px-8">
+                <DialogContent className="sm:max-w-[1400px] w-[94vw] border-border/40 bg-card/95 backdrop-blur-xl rounded-[3rem] overflow-hidden p-0 flex flex-col h-[92vh] shadow-[0_40px_100px_-15px_rgba(0,0,0,0.6)] animate-in fade-in zoom-in-95 duration-500 scale-100">
+                    <DialogHeader className="pt-6 px-8 shrink-0">
                         <div className="flex items-center justify-between w-full mb-2">
                             <div className="flex items-center gap-3">
-                                <div className="p-2 rounded-xl bg-primary/10 text-primary">
+                                <div className="p-2.5 rounded-2xl bg-primary/10 text-primary border border-primary/10">
                                     <Mail className="h-6 w-6" />
                                 </div>
-                                <DialogTitle className="text-2xl font-black tracking-tight flex items-center gap-3">
+                                <DialogTitle className="text-2xl font-black tracking-tight">
                                     Configure {alertTypes.find(a => a.id === editingType)?.label}
                                 </DialogTitle>
                             </div>
                             <Popover>
                                 <PopoverTrigger asChild>
-                                    <Button variant="outline" size="sm" className="h-8 gap-2 rounded-xl border-primary/20 bg-primary/5 hover:bg-primary/10 text-primary transition-all font-black text-[9px] uppercase tracking-widest px-3">
-                                        <Info className="h-3.5 w-3.5" />
-                                        Variable Info
+                                    <Button variant="outline" size="sm" className="h-9 gap-2 rounded-xl border-primary/20 bg-primary/5 hover:bg-primary/10 text-primary font-black text-[9px] uppercase tracking-widest px-4 transition-all active:scale-95">
+                                        <Info className="h-3.5 w-3.5" /> Variable Guide
                                     </Button>
                                 </PopoverTrigger>
-                                <PopoverContent className="w-[320px] p-5 rounded-2xl border-border/40 shadow-2xl bg-white/95 backdrop-blur-md" align="end">
+                                <PopoverContent className="w-[320px] p-5 rounded-[2rem] border-border/40 shadow-2xl bg-white/95 backdrop-blur-md" align="end">
                                     <div className="flex items-center gap-2 mb-4">
-                                        <div className="p-1.5 rounded-lg bg-primary/10 text-primary">
-                                            <Terminal className="h-4 w-4" />
-                                        </div>
-                                        <h4 className="text-xs font-black uppercase tracking-widest text-primary">Variable Documentation</h4>
+                                        <Terminal className="h-4 w-4 text-primary" />
+                                        <h4 className="text-xs font-black uppercase tracking-widest text-primary">Documentation</h4>
                                     </div>
-                                    <div className="space-y-5">
-                                        <div className="space-y-2.5">
-                                            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest border-b border-border/40 pb-1 flex items-center gap-2">
-                                                <Activity className="h-3 w-3" />
-                                                Alert Information
-                                            </p>
-                                            <div className="grid gap-2.5">
-                                                {[
-                                                    { v: "project", d: "Name of the project (e.g. \"Cloud Gateway\")" },
-                                                    { v: "resource", d: "Resource name (e.g. \"Main Server\")" },
-                                                    { v: "type", d: "Alert metric (e.g. CPU, Memory, SSL)" },
-                                                    { v: "value", d: "Current recorded value (e.g. 98.4%)" },
-                                                    { v: "threshold", d: "The alert limit that was exceeded" }
-                                                ].map(item => (
-                                                    <div key={item.v} className="flex flex-col gap-0.5">
-                                                        <code className="text-[10px] font-black text-primary/80">{"{{"}{item.v}{"}}"}</code>
-                                                        <span className="text-[10px] text-muted-foreground leading-tight italic">{item.d}</span>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                        <div className="space-y-2.5">
-                                            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest border-b border-border/40 pb-1 flex items-center gap-2">
-                                                <Shield className="h-3 w-3" />
-                                                Branding & Identity
-                                            </p>
-                                            <div className="grid gap-2.5">
-                                                {[
-                                                    { v: "company", d: "Your company name from global settings" },
-                                                    { v: "logo", d: "Renders your logo as a stylised image tag" },
-                                                    { v: "logo_url", d: "Raw image URL (useful for CSS backgrounds)" }
-                                                ].map(item => (
-                                                    <div key={item.v} className="flex flex-col gap-0.5">
-                                                        <code className="text-[10px] font-black text-primary/80">{"{{"}{item.v}{"}}"}</code>
-                                                        <span className="text-[10px] text-muted-foreground leading-tight italic">{item.d}</span>
+                                    <div className="space-y-4 max-h-[400px] overflow-y-auto scrollbar-thin">
+                                        <div className="space-y-2">
+                                            <p className="text-[10px] font-black text-muted-foreground/50 uppercase tracking-[0.2em] border-b pb-1">Dynamic Values</p>
+                                            <div className="grid gap-2 text-[10px]">
+                                                {["project", "resource", "type", "value", "threshold", "status", "expiry_date"].map(v => (
+                                                    <div key={v} className="flex flex-col gap-0.5 p-1.5 hover:bg-muted/30 rounded-lg transition-colors group">
+                                                        <code className="font-black text-primary/80 group-hover:text-primary transition-colors">{"{{"}{v}{"}}"}</code>
                                                     </div>
                                                 ))}
                                             </div>
@@ -2258,352 +2272,193 @@ function ProjectEmailTemplatesSection({ projectId }: { projectId: number }) {
                                 </PopoverContent>
                             </Popover>
                         </div>
-                        <DialogDescription className="text-muted-foreground/80 leading-relaxed">
-                            {isSimpleMode ? "Select which information to include in the alert email." : "Use dynamic variables to customize your email template. All variables are listed below for your reference."}
+                        <DialogDescription className="text-muted-foreground/80 font-medium">
+                            {isSimpleMode ? "Use the toggles below to customize your template without writing code." : "Edit the raw HTML below to create a fully custom email design."}
                         </DialogDescription>
                     </DialogHeader>
-                    <div className="px-8 pb-4">
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mt-4 h-[600px]">
-                            {/* LEFT COLUMN: EDITOR */}
-                            <div className="space-y-6 h-full overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-muted-foreground/10">
-                                {/* MODE TOGGLE */}
-                                <div className="flex items-center justify-between px-5 py-3.5 bg-primary/5 rounded-2xl border border-primary/10">
-                                    <div className="space-y-0.5">
-                                        <Label className="text-[10px] font-black uppercase tracking-widest text-primary flex items-center gap-2">
-                                            Simple Checklist Mode
-                                            {isSimpleMode && <Check className="h-3 w-3" />}
-                                        </Label>
-                                        <p className="text-[10px] text-muted-foreground/80 font-medium">Toggle alert fields without writing HTML</p>
-                                    </div>
-                                    <Switch
-                                        checked={isSimpleMode}
-                                        onCheckedChange={setIsSimpleMode}
-                                        className="data-[state=checked]:bg-primary"
-                                    />
-                                </div>
 
-                                <div className="space-y-4">
-                                    <div className="space-y-2">
-                                        <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Email Subject</Label>
-                                        <Input
-                                            value={editSubject}
-                                            onChange={(e) => setEditSubject(e.target.value)}
-                                            placeholder="Alert: {{resource}} usage is High on {{project}}"
-                                            className="h-11 bg-muted/20 border-border/40 rounded-xl text-sm"
-                                        />
-                                    </div>
+                    <div className="flex-1 overflow-hidden px-6 pb-4">
+                        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 h-full">
+                            {/* LEFT COLUMN: CONFIGURATION */}
+                            <div className="lg:col-span-6 flex flex-col h-full bg-muted/20 rounded-[2rem] border border-border/40 overflow-hidden shadow-inner">
+                                <Tabs defaultValue="design" className="flex flex-col h-full focus:outline-none">
+                                    <TabsList className="grid w-full grid-cols-2 bg-muted/50 p-1.5 h-11 shrink-0 rounded-none border-b border-border/20">
+                                        <TabsTrigger value="design" className="text-[10px] font-black uppercase tracking-widest h-full rounded-xl data-[state=active]:bg-background data-[state=active]:shadow-sm transition-all focus:outline-none">Design</TabsTrigger>
+                                        <TabsTrigger value="content" className="text-[10px] font-black uppercase tracking-widest h-full rounded-xl data-[state=active]:bg-background data-[state=active]:shadow-sm transition-all focus:outline-none">Content</TabsTrigger>
+                                    </TabsList>
 
-                                    {isSimpleMode ? (
-                                        <div className="space-y-4 pb-10 mt-2">
-                                            {/* OPTION 1: HEADER & FOOTER (BRANDING) */}
-                                            <div className="border border-border/40 rounded-2xl overflow-hidden bg-muted/5 transition-all">
-                                                <div 
-                                                    className="flex items-center justify-between p-4 cursor-pointer hover:bg-muted/10"
-                                                    onClick={() => toggleSection("branding")}
-                                                >
-                                                    <div className="flex items-center gap-3">
-                                                        <div className={`p-1.5 rounded-lg ${simpleConfig.showHeaderFooter ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'}`}>
-                                                            <Layout className="h-4 w-4" />
-                                                        </div>
-                                                        <div>
-                                                            <p className="text-[10px] font-black uppercase tracking-widest text-foreground/80">1. Header & Footer</p>
-                                                            <p className="text-[9px] text-muted-foreground font-bold uppercase tracking-tighter">Branding Layer Control</p>
-                                                        </div>
+                                    <div className="flex-1 flex flex-col min-h-0">
+                                        {/* DESIGN TAB */}
+                                        <TabsContent value="design" className="m-0 p-6 outline-none focus:outline-none flex-1 data-[state=active]:flex data-[state=active]:flex-col h-full overflow-hidden">
+                                            <div className="flex flex-col h-full justify-between gap-4 overflow-y-auto scrollbar-none [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                                                {/* SECTION 1: BRANDING */}
+                                                <div className="space-y-6">
+                                                    <div className="flex items-center justify-between px-1">
+                                                        <Label className="text-[11px] font-black uppercase tracking-[0.2em] text-muted-foreground/50">Branding Identity</Label>
+                                                        <div className="h-[1px] flex-1 mx-4 bg-border/20" />
                                                     </div>
-                                                    <div className="flex items-center gap-3">
-                                                        <Switch
-                                                            checked={simpleConfig.showHeaderFooter}
-                                                            onCheckedChange={(v) => setSimpleConfig(prev => ({ ...prev, showHeaderFooter: v }))}
-                                                            onClick={(e) => e.stopPropagation()}
-                                                            className="scale-75"
-                                                        />
-                                                        <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform duration-300 ${expandedSections.includes("branding") ? "rotate-180" : ""}`} />
+                                                    <div className="grid grid-cols-2 gap-4">
+                                                        <div className="flex flex-col justify-between p-5 rounded-2xl bg-background border border-border/40 hover:border-primary/30 transition-all shadow-sm group">
+                                                            <div className="flex items-center gap-3 mb-4">
+                                                                <div className="p-2 rounded-xl bg-primary/5 group-hover:bg-primary/10 transition-colors">
+                                                                    <Layout className="h-4 w-4 text-primary opacity-60 group-hover:opacity-100 transition-opacity" />
+                                                                </div>
+                                                                <Label className="text-[11px] font-bold uppercase tracking-tight">Main Header</Label>
+                                                            </div>
+                                                            <div className="flex justify-end">
+                                                                <Switch checked={simpleConfig.showHeaderFooter} onCheckedChange={(v) => setSimpleConfig(prev => ({ ...prev, showHeaderFooter: v }))} className="scale-90" />
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex flex-col justify-between p-5 rounded-2xl bg-background border border-border/40 hover:border-primary/30 transition-all shadow-sm group">
+                                                            <div className="flex items-center gap-3 mb-4">
+                                                                <div className="p-2 rounded-xl bg-primary/5 group-hover:bg-primary/10 transition-colors">
+                                                                    <Eye className="h-4 w-4 text-primary opacity-60 group-hover:opacity-100 transition-opacity" />
+                                                                </div>
+                                                                <Label className="text-[11px] font-bold uppercase tracking-tight">Visibility Presence</Label>
+                                                            </div>
+                                                            <div className="flex items-center justify-between gap-2.5 bg-muted/20 p-2 rounded-xl">
+                                                                <div className="flex items-center gap-2 px-1">
+                                                                    <Checkbox checked={simpleConfig.showLogo} onCheckedChange={(v) => setSimpleConfig(prev => ({ ...prev, showLogo: !!v }))} className="h-3.5 w-3.5 rounded-sm border-border/60" />
+                                                                    <span className="text-[8px] font-black uppercase tracking-widest text-muted-foreground">Logo</span>
+                                                                </div>
+                                                                <div className="flex items-center gap-2 px-1">
+                                                                    <Checkbox checked={simpleConfig.showCompany} onCheckedChange={(v) => setSimpleConfig(prev => ({ ...prev, showCompany: !!v }))} className="h-3.5 w-3.5 rounded-sm border-border/60" />
+                                                                    <span className="text-[8px] font-black uppercase tracking-widest text-muted-foreground">Brand</span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
                                                     </div>
                                                 </div>
-                                                
-                                                {expandedSections.includes("branding") && (
-                                                    <div className="p-4 pt-0 border-t border-border/20 space-y-4 animate-in slide-in-from-top-2 duration-300">
-                                                        <div className="grid grid-cols-1 gap-4 mt-4">
-                                                            <div className="flex items-center justify-between p-2 rounded-xl bg-background border border-border/20">
-                                                                <div className="flex items-center gap-2">
-                                                                    <Layout className="h-3.5 w-3.5 text-muted-foreground" />
-                                                                    <Label className="text-[9px] font-black uppercase tracking-tight text-foreground/70">Show Branding Logo</Label>
-                                                                </div>
-                                                                <Switch 
-                                                                    checked={simpleConfig.showLogo} 
-                                                                    onCheckedChange={(v) => setSimpleConfig(prev => ({ ...prev, showLogo: v }))}
-                                                                    className="scale-75"
-                                                                />
-                                                            </div>
-                                                            <div className="flex items-center justify-between p-2 rounded-xl bg-background border border-border/20">
-                                                                <div className="flex items-center gap-2">
-                                                                    <Info className="h-3.5 w-3.5 text-muted-foreground" />
-                                                                    <Label className="text-[9px] font-black uppercase tracking-tight text-foreground/70">Show Company Name</Label>
-                                                                </div>
-                                                                <Switch 
-                                                                    checked={simpleConfig.showCompany} 
-                                                                    onCheckedChange={(v) => setSimpleConfig(prev => ({ ...prev, showCompany: v }))}
-                                                                    className="scale-75"
-                                                                />
-                                                            </div>
-                                                            <div className="space-y-2 border-t border-dashed border-border/40 pt-4">
-                                                                <div className="flex items-center justify-between">
-                                                                    <div className="flex items-center gap-2">
-                                                                        <MessageSquare className="h-3.5 w-3.5 text-muted-foreground" />
-                                                                        <Label className="text-[9px] font-black uppercase tracking-tight text-foreground/70">Enable Footer</Label>
-                                                                    </div>
-                                                                    <Switch 
-                                                                        checked={simpleConfig.showFooter} 
-                                                                        onCheckedChange={(v) => setSimpleConfig(prev => ({ ...prev, showFooter: v }))}
-                                                                        className="scale-75"
-                                                                    />
-                                                                </div>
-                                                                {simpleConfig.showFooter && (
-                                                                    <Input 
-                                                                        value={simpleConfig.footerText} 
-                                                                        onChange={(e) => setSimpleConfig(prev => ({ ...prev, footerText: e.target.value }))}
-                                                                        className="h-9 bg-background/50 border-border/40 text-[10px] rounded-lg mt-2"
-                                                                        placeholder="Footer Text..."
-                                                                    />
-                                                                )}
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                )}
-                                            </div>
 
-                                            {/* OPTION 2: ALERT CONTENT */}
-                                            <div className="border border-border/40 rounded-2xl overflow-hidden bg-muted/5 transition-all">
-                                                <div 
-                                                    className="flex items-center justify-between p-4 cursor-pointer hover:bg-muted/10"
-                                                    onClick={() => toggleSection("content")}
-                                                >
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="p-1.5 rounded-lg bg-primary/10 text-primary">
-                                                            <Type className="h-4 w-4" />
-                                                        </div>
-                                                        <div>
-                                                            <p className="text-[10px] font-black uppercase tracking-widest text-foreground/80">2. Alert Content</p>
-                                                            <p className="text-[9px] text-muted-foreground font-bold uppercase tracking-tighter">Text Elements & Toggles</p>
-                                                        </div>
+                                                {/* SECTION 3: THEME */}
+                                                <div className="space-y-6">
+                                                    <div className="flex items-center justify-between px-1">
+                                                        <Label className="text-[11px] font-black uppercase tracking-[0.2em] text-muted-foreground/50">Theme Aesthetics</Label>
+                                                        <div className="h-[1px] flex-1 mx-4 bg-border/20" />
                                                     </div>
-                                                    <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform duration-300 ${expandedSections.includes("content") ? "rotate-180" : ""}`} />
+                                                    <div className="flex gap-5 px-4 items-center justify-center py-1">
+                                                        {["#dc2626", "#2563eb", "#9333ea", "#16a34a", "#f59e0b", "#0f172a"].map(color => (
+                                                            <button
+                                                                key={color}
+                                                                onClick={() => setSimpleConfig(prev => ({ ...prev, themeColor: color }))}
+                                                                className={`h-9 w-9 rounded-full border-2 transition-all hover:scale-125 active:scale-90 ${simpleConfig.themeColor === color ? 'border-primary ring-4 ring-primary/10 shadow-xl scale-110' : 'border-transparent shadow-sm hover:border-border/60'}`}
+                                                                style={{ backgroundColor: color }}
+                                                            />
+                                                        ))}
+                                                    </div>
                                                 </div>
 
-                                                {expandedSections.includes("content") && (
-                                                    <div className="p-4 pt-0 border-t border-border/20 space-y-4 animate-in slide-in-from-top-2 duration-300">
-                                                        <div className="space-y-4 mt-4">
-                                                            {/* BADGE */}
-                                                            <div className="space-y-2 bg-background p-3 rounded-xl border border-border/20">
-                                                                <div className="flex items-center justify-between mb-1">
-                                                                    <Label className="text-[9px] font-black uppercase tracking-tight text-foreground/70">Badge (e.g. Critical Alert)</Label>
-                                                                    <Switch 
-                                                                        checked={simpleConfig.showBadge} 
-                                                                        onCheckedChange={(v) => setSimpleConfig(prev => ({ ...prev, showBadge: v }))}
-                                                                        className="scale-75"
-                                                                    />
-                                                                </div>
-                                                                {simpleConfig.showBadge && (
-                                                                    <Input 
-                                                                        value={simpleConfig.badgeText} 
-                                                                        onChange={(e) => setSimpleConfig(prev => ({ ...prev, badgeText: e.target.value }))}
-                                                                        className="h-9 bg-muted/20 border-border/40 text-[10px] rounded-lg"
-                                                                        placeholder="Critical Alert..."
-                                                                    />
-                                                                )}
-                                                            </div>
-
-                                                            {/* TITLE */}
-                                                            <div className="space-y-2 bg-background p-3 rounded-xl border border-border/20">
-                                                                <div className="flex items-center justify-between mb-1">
-                                                                    <Label className="text-[9px] font-black uppercase tracking-tight text-foreground/70">Main Title</Label>
-                                                                    <Switch 
-                                                                        checked={simpleConfig.showTitle} 
-                                                                        onCheckedChange={(v) => setSimpleConfig(prev => ({ ...prev, showTitle: v }))}
-                                                                        className="scale-75"
-                                                                    />
-                                                                </div>
-                                                                {simpleConfig.showTitle && (
-                                                                    <Input 
-                                                                        value={simpleConfig.titleText} 
-                                                                        onChange={(e) => setSimpleConfig(prev => ({ ...prev, titleText: e.target.value }))}
-                                                                        className="h-9 bg-muted/20 border-border/40 text-[10px] rounded-lg font-bold"
-                                                                        placeholder="High usage detected..."
-                                                                    />
-                                                                )}
-                                                            </div>
-
-                                                            {/* SUBTITLE */}
-                                                            <div className="space-y-2 bg-background p-3 rounded-xl border border-border/20">
-                                                                <div className="flex items-center justify-between mb-1">
-                                                                    <Label className="text-[9px] font-black uppercase tracking-tight text-foreground/70">Description / Subtitle</Label>
-                                                                    <Switch 
-                                                                        checked={simpleConfig.showSubtitle} 
-                                                                        onCheckedChange={(v) => setSimpleConfig(prev => ({ ...prev, showSubtitle: v }))}
-                                                                        className="scale-75"
-                                                                    />
-                                                                </div>
-                                                                {simpleConfig.showSubtitle && (
-                                                                    <Textarea 
-                                                                        value={simpleConfig.subtitleText} 
-                                                                        onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setSimpleConfig(prev => ({ ...prev, subtitleText: e.target.value }))}
-                                                                        className="min-h-[60px] bg-muted/20 border-border/40 text-[10px] rounded-lg resize-none"
-                                                                        placeholder="Description..."
-                                                                    />
-                                                                )}
-                                                            </div>
-                                                        </div>
+                                                {/* SECTION 4: DATA PRECISION */}
+                                                <div className="space-y-4 pt-2">
+                                                    <div className="flex items-center justify-between px-1">
+                                                        <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/50">Data Precision Settings</Label>
+                                                        <div className="h-[1px] flex-1 mx-4 bg-border/20" />
                                                     </div>
-                                                )}
-                                            </div>
-
-                                            {/* OPTION 3: ALERT METRICS */}
-                                            <div className="border border-border/40 rounded-2xl overflow-hidden bg-muted/5 transition-all">
-                                                <div 
-                                                    className="flex items-center justify-between p-4 cursor-pointer hover:bg-muted/10"
-                                                    onClick={() => toggleSection("metrics")}
-                                                >
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="p-1.5 rounded-lg bg-primary/10 text-primary">
-                                                            <Activity className="h-4 w-4" />
-                                                        </div>
-                                                        <div>
-                                                            <p className="text-[10px] font-black uppercase tracking-widest text-foreground/80">3. Alert Metrics Table</p>
-                                                            <p className="text-[9px] text-muted-foreground font-bold uppercase tracking-tighter">Resource Property Mapping</p>
-                                                        </div>
-                                                    </div>
-                                                    <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform duration-300 ${expandedSections.includes("metrics") ? "rotate-180" : ""}`} />
-                                                </div>
-
-                                                {expandedSections.includes("metrics") && (
-                                                    <div className="p-4 pt-0 border-t border-border/20 space-y-4 animate-in slide-in-from-top-2 duration-300">
-                                                        <div className="grid grid-cols-1 gap-1.5 mt-4 px-1">
-                                                            {[
-                                                                { id: "showProject", label: "Project Name", key: "showProject", icon: <Server className="h-3.5 w-3.5" /> },
-                                                                { id: "showResource", label: editingType === "Domain" ? "Domain Name" : "Resource Name", key: "showResource", icon: <Globe className="h-3.5 w-3.5" /> },
-                                                                { id: "showMetric", label: editingType === "Domain" ? "Expiry Status" : "Metric Type", key: "showMetric", icon: <Activity className="h-3.5 w-3.5" /> },
-                                                                { id: "showValue", label: editingType === "Domain" ? "Days Remaining" : "Current Value", key: "showValue", icon: <Terminal className="h-3.5 w-3.5" /> },
-                                                                { id: "showThreshold", label: "Threshold Value", key: "showThreshold", icon: <Shield className="h-3.5 w-3.5" />, disabled: editingType === "Domain" },
-                                                            ].filter(item => !item.disabled).map((item) => (
-                                                                <div
-                                                                    key={item.id}
-                                                                    className="flex items-center space-x-3 group cursor-pointer p-2 rounded-xl hover:bg-background/50 transition-all"
-                                                                    onClick={() => setSimpleConfig(prev => ({ ...prev, [item.key]: !prev[item.key as keyof typeof simpleConfig] }))}
-                                                                >
-                                                                    <Checkbox
-                                                                        id={item.id}
-                                                                        checked={!!simpleConfig[item.key as keyof typeof simpleConfig]}
-                                                                        onCheckedChange={(v) => setSimpleConfig(prev => ({ ...prev, [item.key]: !!v }))}
-                                                                        className="h-4 w-4 rounded-md border-primary/20"
-                                                                        onClick={(e) => e.stopPropagation()}
-                                                                    />
-                                                                    <div className="flex items-center gap-2">
-                                                                        <div className="p-1 rounded-lg bg-background text-muted-foreground group-hover:text-primary transition-colors">
-                                                                            {item.icon}
-                                                                        </div>
-                                                                        <Label className="text-[9px] font-black text-foreground/70 cursor-pointer uppercase tracking-tight">
-                                                                            {item.label}
-                                                                        </Label>
-                                                                    </div>
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-                                    ) : (
-                                        <div className="space-y-6">
-                                            <div className="space-y-3">
-                                                <div className="flex items-center justify-between ml-1">
-                                                    <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Variable Reference</Label>
-                                                </div>
-                                                <div className="grid grid-cols-1 gap-3 p-4 bg-muted/5 rounded-2xl border border-border/40">
-                                                    <div className="space-y-2">
-                                                        <p className="text-[9px] font-black uppercase tracking-widest text-primary/60 px-1">Available Variables</p>
+                                                    <div className="grid grid-cols-2 gap-2.5">
                                                         {[
-                                                            { v: "project", d: "Project Name" },
-                                                            { v: "resource", d: "Resource/Domain Name" },
-                                                            { v: "type", d: "Metric/Alert Type" },
-                                                            { v: "value", d: "Current Value" },
-                                                            { v: "threshold", d: "Alert Threshold" },
-                                                            { v: "expiry_date", d: "Domain Expiry Date", domain: true },
-                                                            { v: "days_left", d: "Days until expiry", domain: true },
-                                                            { v: "company", d: "Company Name" },
-                                                            { v: "logo", d: "Full Logo Image Tag" },
-                                                        ].filter(v => !v.domain || editingType === "Domain").map(v => (
-                                                            <div key={v.v} className="flex items-center justify-between gap-2 p-1.5 rounded-lg hover:bg-primary/5 group transition-all">
-                                                                <code className="text-[10px] font-black text-primary/80">{"{{"}{v.v}{"}}"}</code>
-                                                                <span className="text-[9px] text-muted-foreground font-bold uppercase tracking-tighter opacity-0 group-hover:opacity-100 transition-opacity">{v.d}</span>
+                                                            { key: "showProject", label: "Project Identity" },
+                                                            { key: "showResource", label: editingType === "Domain" ? "Domain Source" : "Target Resource" },
+                                                            { key: "showMetric", label: "Metric Type" },
+                                                            { key: "showValue", label: "Live Metric Value" },
+                                                            { key: "showThreshold", label: "Alarm Threshold", disabled: editingType === "Domain" }
+                                                        ].filter(m => !m.disabled).map(item => (
+                                                            <div key={item.key} className="flex items-center justify-between p-4 bg-background border border-border/40 hover:border-primary/20 rounded-xl transition-all shadow-sm group">
+                                                                <Label className="text-[10px] font-bold uppercase text-foreground/50 group-hover:text-foreground/90 transition-colors tracking-tight">{item.label}</Label>
+                                                                <Switch checked={simpleConfig[item.key as keyof typeof simpleConfig] as boolean} onCheckedChange={(v) => setSimpleConfig(prev => ({ ...prev, [item.key]: v }))} className="scale-75" />
                                                             </div>
                                                         ))}
                                                     </div>
                                                 </div>
                                             </div>
+                                        </TabsContent>
 
-                                            <div className="space-y-2">
-                                                <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Email Body (HTML supported)</Label>
-                                                <textarea
-                                                    value={editBody}
-                                                    onChange={(e) => setEditBody(e.target.value)}
-                                                    className="w-full min-h-[300px] p-4 bg-muted/20 border border-border/40 rounded-xl text-xs font-mono focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all leading-relaxed"
-                                                    placeholder="Enter custom HTML here..."
-                                                />
+                                        {/* CONTENT TAB */}
+                                        <TabsContent value="content" className="m-0 p-8 outline-none focus:outline-none flex-1 overflow-y-auto">
+                                            <div className="space-y-6">
+                                                <div className="space-y-2">
+                                                    <Label className="text-[11px] font-black uppercase tracking-widest text-muted-foreground/50 ml-1">Subject Header</Label>
+                                                    <Input value={editSubject} onChange={(e) => setEditSubject(e.target.value)} className="h-11 text-xs rounded-[1.25rem] bg-background border-border/60 font-medium px-4" />
+                                                </div>
+                                                <div className="grid gap-4">
+                                                    <div className="grid gap-3 p-5 bg-background/50 rounded-[2rem] border border-border/40">
+                                                        <div className="flex justify-between items-center px-1">
+                                                            <Label className="text-[11px] font-black uppercase tracking-tight">Badge Label</Label>
+                                                            <Switch checked={simpleConfig.showBadge} onCheckedChange={(v) => setSimpleConfig(prev => ({ ...prev, showBadge: v }))} />
+                                                        </div>
+                                                        {simpleConfig.showBadge && <Input value={simpleConfig.badgeText} onChange={(e) => setSimpleConfig(prev => ({ ...prev, badgeText: e.target.value }))} className="h-10 text-xs rounded-xl bg-background border-border" />}
+                                                    </div>
+                                                    <div className="grid gap-3 p-5 bg-background/50 rounded-[2rem] border border-border/40">
+                                                        <div className="flex justify-between items-center px-1">
+                                                            <Label className="text-[11px] font-black uppercase tracking-tight">Main Heading</Label>
+                                                            <Switch checked={simpleConfig.showTitle} onCheckedChange={(v) => setSimpleConfig(prev => ({ ...prev, showTitle: v }))} />
+                                                        </div>
+                                                        {simpleConfig.showTitle && <Input value={simpleConfig.titleText} onChange={(e) => setSimpleConfig(prev => ({ ...prev, titleText: e.target.value }))} className="h-10 text-xs rounded-xl bg-background border-border font-bold" />}
+                                                    </div>
+                                                </div>
                                             </div>
+                                        </TabsContent>
+
+                                    </div>
+
+                                    <div className="p-6 border-t border-border/10 bg-muted/20 shrink-0">
+                                        <div className="flex gap-4">
+                                            <Button variant="outline" className="flex-1 rounded-[1.75rem] h-12 text-xs font-black uppercase tracking-widest border-border/60 hover:bg-muted transition-all" onClick={() => setEditingType(null)}>Cancel</Button>
+                                            <Button className="flex-1 rounded-[1.75rem] h-12 text-xs font-black uppercase tracking-widest shadow-xl shadow-primary/20 transition-all active:scale-95" onClick={handleSave} disabled={updateTemplate.isPending}>
+                                                {updateTemplate.isPending ? "Saving..." : "Apply Template"}
+                                            </Button>
                                         </div>
-                                    )}
-                                </div>
+                                    </div>
+                                </Tabs>
                             </div>
 
+
                             {/* RIGHT COLUMN: PREVIEW */}
-                            <div className="flex flex-col h-full">
-                                <div className="flex items-center justify-between mb-2 ml-1 shrink-0">
-                                    <Label className="text-[10px] font-black uppercase tracking-widest text-primary flex items-center gap-2">
-                                        <Activity className="h-3.5 w-3.5" />
-                                        Dynamic Live Preview
-                                    </Label>
-                                    <span className="text-[9px] font-bold text-muted-foreground bg-muted/30 px-2 py-0.5 rounded-full uppercase tracking-tighter">Desktop View</span>
-                                </div>
-                                <div className="flex-1 rounded-2xl border border-border/40 overflow-hidden bg-white shadow-2xl shadow-black/5 flex flex-col min-h-0">
-                                    <div className="bg-slate-50 px-6 py-3 border-b border-border/40 text-[11px] font-mono text-muted-foreground flex items-center gap-3">
-                                        <span className="shrink-0 font-black uppercase text-foreground/40 text-[9px] tracking-tighter">Subject:</span>
-                                        <span className="truncate font-bold text-slate-700">
-                                            {replaceVariables(editSubject)}
-                                        </span>
+                            <div className="lg:col-span-6 flex flex-col h-full space-y-4">
+                                <div className="flex items-center justify-between px-3 shrink-0">
+                                    <div className="flex flex-col">
+                                        <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-primary/60">Live Preview</Label>
+                                        <div className="flex items-center gap-1.5 mt-0.5">
+                                            <div className={`h-1.5 w-1.5 rounded-full animate-pulse ${previewStatus === "RECOVERY" ? "bg-emerald-500" : "bg-destructive"}`} />
+                                            <p className="text-[9px] text-muted-foreground font-black uppercase tracking-wider">{previewStatus === "RECOVERY" ? "Recovery State" : "Alert State"}</p>
+                                        </div>
                                     </div>
-                                    <div className="flex-1 overflow-y-auto bg-[#f8fafc] p-2 flex justify-center scrollbar-thin scrollbar-thumb-muted-foreground/20">
-                                        <div
-                                            className="w-full scale-[0.9] origin-top transition-transform duration-300"
-                                            dangerouslySetInnerHTML={{
-                                                __html: replaceVariables(editBody || `
-                                                    <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 10px; background: white;">
-                                                        <div style="text-align: center; margin-bottom: 20px;">
-                                                            <h2 style="color: #333;">InfraWatch</h2>
-                                                        </div>
-                                                        <div style="background: #f8d7da; color: #721c24; padding: 15px; border-radius: 5px; margin-bottom: 20px; text-align: center;">
-                                                            <strong>Critical Alert!</strong> High usage detected.
-                                                        </div>
-                                                        <table style="width: 100%; border-collapse: collapse;">
-                                                            <tr><td style="padding: 10px 0; border-bottom: 1px solid #eee;"><strong>Project:</strong></td><td style="padding: 10px 0; border-bottom: 1px solid #eee; text-align: right;">Demo Project</td></tr>
-                                                            <tr><td style="padding: 10px 0; border-bottom: 1px solid #eee;"><strong>Resource:</strong></td><td style="padding: 10px 0; border-bottom: 1px solid #eee; text-align: right;">Demo Server</td></tr>
-                                                            <tr><td style="padding: 10px 0; border-bottom: 1px solid #eee;"><strong>Metric:</strong></td><td style="padding: 10px 0; border-bottom: 1px solid #eee; text-align: right;">CPU Usage</td></tr>
-                                                        </table>
-                                                    </div>
-                                                `, true)
-                                            }}
-                                        />
+                                    <div className="flex items-center p-1 bg-muted/50 border border-border/40 rounded-[1.25rem] shadow-inner">
+                                        <button 
+                                            onClick={() => setPreviewStatus("ALERT")} 
+                                            className={`px-4 py-1.5 rounded-2xl text-[9px] font-black tracking-widest uppercase transition-all ${previewStatus === "ALERT" ? 'bg-destructive/10 text-destructive shadow-sm' : 'text-muted-foreground/60 hover:text-muted-foreground'}`}
+                                        >
+                                            Alert
+                                        </button>
+                                        <button 
+                                            onClick={() => setPreviewStatus("RECOVERY")} 
+                                            className={`px-4 py-1.5 rounded-2xl text-[9px] font-black tracking-widest uppercase transition-all ${previewStatus === "RECOVERY" ? 'bg-emerald-500/10 text-emerald-500 shadow-sm' : 'text-muted-foreground/60 hover:text-muted-foreground'}`}
+                                        >
+                                            Recovery
+                                        </button>
+                                    </div>
+                                </div>
+                                <div className="flex-1 rounded-[3rem] border border-border/40 overflow-hidden bg-slate-900 shadow-[0_32px_64px_-16px_rgba(0,0,0,0.4)] relative flex flex-col min-h-0">
+                                    {/* BROWSER TOP BAR */}
+                                    <div className="h-12 bg-slate-800/90 border-b border-white/5 flex items-center px-6 gap-6 shrink-0 relative z-10">
+                                        <div className="flex gap-2">
+                                            <div className="h-2.5 w-2.5 rounded-full bg-slate-600/50" />
+                                            <div className="h-2.5 w-2.5 rounded-full bg-slate-600/50" />
+                                            <div className="h-2.5 w-2.5 rounded-full bg-slate-600/50" />
+                                        </div>
+                                        <div className="flex-1 bg-slate-900/80 rounded-xl h-7 flex items-center px-4 text-[10px] text-slate-400 font-mono truncate border border-white/5 shadow-inner">
+                                            <span className="opacity-40 mr-2">Subject:</span> {replaceVariables(editSubject)}
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="flex-1 overflow-y-auto bg-[#f1f5f9] p-10">
+                                        <div className="mx-auto max-w-[100%] shadow-2xl rounded-[1.5rem] overflow-hidden bg-white hover:scale-[1.01] transition-transform duration-500">
+                                            <div dangerouslySetInnerHTML={{ __html: replaceVariables(editBody || "", true) }} />
+                                        </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
                     </div>
-
-                    <DialogFooter className="px-8 pb-8 pt-0 bg-background/50 backdrop-blur-sm border-t border-border/20 mt-4">
-                        <Button variant="ghost" onClick={() => setEditingType(null)} className="rounded-xl font-bold uppercase tracking-widest text-[10px]">Cancel</Button>
-                        <Button onClick={handleSave} className="rounded-xl px-8 bg-primary shadow-lg shadow-primary/20 font-bold uppercase tracking-widest text-[10px]">
-                            {updateTemplate.isPending ? "Saving..." : "Save Template"}
-                        </Button>
-                    </DialogFooter>
                 </DialogContent>
             </Dialog>
         </div>
