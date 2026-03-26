@@ -644,7 +644,18 @@ export const api = {
       method: 'GET' as const,
       path: '/api/projects/:id/alerts/history' as const,
       responses: {
-        200: z.array(z.custom<any>()),
+        200: z.object({
+          alerts: z.array(z.custom<any>()),
+          total: z.number(),
+        }),
+      },
+    },
+    deleteHistory: {
+      method: 'DELETE' as const,
+      path: '/api/projects/:id/alerts/history' as const,
+      responses: {
+        204: z.void(),
+        404: errorSchemas.notFound,
       },
     },
     updateMuted: {

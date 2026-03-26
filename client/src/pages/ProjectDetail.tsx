@@ -2740,17 +2740,38 @@ function ProjectEmailTemplatesSection({ projectId }: { projectId: number }) {
 // ============================================================
 function AlertHistoryTab({ projectId }: { projectId: number }) {
     const [alertHistory, setAlertHistory] = useState<any[]>([]);
+    const [total, setTotal] = useState(0);
     const [isLoading, setIsLoading] = useState(true);
+    const [page, setPage] = useState(0);
     const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'resolved'>('all');
     const [typeFilter, setTypeFilter] = useState<'all' | 'server' | 'database' | 'cluster' | 'web' | 'domain'>('all');
+    const limit = 10;
+
+    const fetchHistory = () => {
+        setIsLoading(true);
+        const url = `/api/projects/${projectId}/alerts/history?limit=${limit}&offset=${page * limit}&status=${statusFilter}&type=${typeFilter}`;
+        fetch(url)
+            .then(r => r.json())
+            .then(data => { 
+                setAlertHistory(data.alerts || []); 
+                setTotal(data.total || 0);
+                setIsLoading(false); 
+            })
+            .catch(() => setIsLoading(false));
+    };
 
     useEffect(() => {
-        setIsLoading(true);
-        fetch(`/api/projects/${projectId}/alerts/history`)
-            .then(r => r.json())
-            .then(data => { setAlertHistory(Array.isArray(data) ? data : []); setIsLoading(false); })
-            .catch(() => setIsLoading(false));
-    }, [projectId]);
+        fetchHistory();
+    }, [projectId, page, statusFilter, typeFilter]);
+
+    const handleClearHistory = () => {
+        if (!confirm("Are you sure you want to clear all alert history for this project? This cannot be undone.")) return;
+        fetch(`/api/projects/${projectId}/alerts/history`, { method: 'DELETE' })
+            .then(() => {
+                setPage(0);
+                fetchHistory();
+            });
+    };
 
     const typeColors: Record<string, string> = {
         cpu: 'text-blue-500 bg-blue-500/10 border-blue-500/20',
@@ -2770,20 +2791,11 @@ function AlertHistoryTab({ projectId }: { projectId: number }) {
         server: Server, database: Database, cluster: Cloud, web: Globe, domain: Globe
     };
 
-    const filtered = alertHistory.filter(a => {
-        // Status filter
-        if (statusFilter === 'active' && !!a.resolvedAt) return false;
-        if (statusFilter === 'resolved' && !a.resolvedAt) return false;
+    const filtered = alertHistory; // Filters are handled server-side now
 
-        // Type filter
-        if (typeFilter !== 'all' && a.resourceType !== typeFilter) return false;
-
-        return true;
-    });
-
-    if (isLoading) return (
-        <div className="flex items-center justify-center h-40 text-muted-foreground animate-pulse">
-            Loading alert history...
+    if (isLoading && alertHistory.length === 0) return (
+        <div className="flex items-center justify-center h-40 text-muted-foreground animate-pulse font-black text-[10px] uppercase tracking-widest text-[#6366f1]/60">
+            Fetching project alert streams...
         </div>
     );
 
@@ -2795,6 +2807,42 @@ function AlertHistoryTab({ projectId }: { projectId: number }) {
                         <h3 className="text-xl font-black tracking-tight">Alert History</h3>
                         <p className="text-sm text-muted-foreground mt-0.5">Filter by status and resource type to track your infrastructure health.</p>
                     </div>
+                    <Button 
+                        variant="destructive" 
+                        size="sm" 
+                        className="rounded-xl h-9 px-4 font-black uppercase tracking-widest text-[9px] gap-2"
+                        onClick={handleClearHistory}
+                    >
+                        <Trash2 className="h-3.5 w-3.5" /> Clear All History
+                    </Button>
+                </div>
+
+                <div className="flex items-center justify-between px-2">
+                    <div className="flex items-center gap-4">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60">
+                            Showing {page * limit + 1} - {Math.min((page + 1) * limit, total)} of {total} alerts
+                        </span>
+                    </div>
+                    <div className="flex gap-2">
+                        <Button 
+                            variant="outline" 
+                            size="sm" 
+                            disabled={page === 0} 
+                            onClick={() => setPage(p => Math.max(0, p - 1))}
+                            className="rounded-xl h-8 px-4 font-black uppercase tracking-widest text-[9px] border-border/40"
+                        >
+                            Previous
+                        </Button>
+                        <Button 
+                            variant="outline" 
+                            size="sm" 
+                            disabled={(page + 1) * limit >= total} 
+                            onClick={() => setPage(p => p + 1)}
+                            className="rounded-xl h-8 px-4 font-black uppercase tracking-widest text-[9px] border-border/40"
+                        >
+                            Next
+                        </Button>
+                    </div>
                 </div>
 
                 <div className="flex items-center justify-between p-3 px-4 bg-muted/20 border border-border/40 rounded-2xl gap-8 overflow-x-auto no-scrollbar">
@@ -2804,7 +2852,7 @@ function AlertHistoryTab({ projectId }: { projectId: number }) {
                             {(['all', 'server', 'database', 'cluster', 'web', 'domain'] as const).map(f => (
                                 <button
                                     key={f}
-                                    onClick={() => setTypeFilter(f)}
+                                    onClick={() => { setTypeFilter(f); setPage(0); }}
                                     className={cn(
                                         "px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest border transition-all whitespace-nowrap",
                                         typeFilter === f
@@ -2824,7 +2872,7 @@ function AlertHistoryTab({ projectId }: { projectId: number }) {
                             {(['all', 'active', 'resolved'] as const).map(f => (
                                 <button
                                     key={f}
-                                    onClick={() => setStatusFilter(f)}
+                                    onClick={() => { setStatusFilter(f); setPage(0); }}
                                     className={cn(
                                         "px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest border transition-all whitespace-nowrap",
                                         statusFilter === f

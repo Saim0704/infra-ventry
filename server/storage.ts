@@ -796,7 +796,38 @@ export class DatabaseStorage implements IStorage {
     await db.update(servers).set({ pendingUpdate: true }).where(eq(servers.projectId, projectId));
   }
 
-  async getProjectAlertHistory(projectId: number): Promise<any[]> {
+  async getProjectAlertHistory(projectId: number, limit: number = 20, offset: number = 0, status?: string, type?: string): Promise<{ alerts: any[], total: number }> {
+    let where = sql`(
+      (${alerts.serverId} IS NOT NULL AND EXISTS (SELECT 1 FROM servers s WHERE s.id = ${alerts.serverId} AND s.project_id = ${projectId})) OR
+      (${alerts.databaseId} IS NOT NULL AND EXISTS (SELECT 1 FROM databases d WHERE d.id = ${alerts.databaseId} AND d.project_id = ${projectId})) OR
+      (${alerts.clusterId} IS NOT NULL AND EXISTS (SELECT 1 FROM clusters c WHERE c.id = ${alerts.clusterId} AND c.project_id = ${projectId})) OR
+      (${alerts.webMonitorId} IS NOT NULL AND EXISTS (SELECT 1 FROM web_monitors w WHERE w.id = ${alerts.webMonitorId} AND w.project_id = ${projectId})) OR
+      (${alerts.domainMonitorId} IS NOT NULL AND EXISTS (SELECT 1 FROM domain_monitors dm WHERE dm.id = ${alerts.domainMonitorId} AND dm.project_id = ${projectId}))
+    )`;
+
+    if (status === 'active') {
+      where = sql`${where} AND ${alerts.resolvedAt} IS NULL`;
+    } else if (status === 'resolved') {
+      where = sql`${where} AND ${alerts.resolvedAt} IS NOT NULL`;
+    }
+
+    if (type && type !== 'all') {
+      const typeConditions: Record<string, any> = {
+        server: sql`${alerts.serverId} IS NOT NULL`,
+        database: sql`${alerts.databaseId} IS NOT NULL`,
+        cluster: sql`${alerts.clusterId} IS NOT NULL`,
+        web: sql`${alerts.webMonitorId} IS NOT NULL`,
+        domain: sql`${alerts.domainMonitorId} IS NOT NULL`,
+      };
+      if (typeConditions[type]) {
+        where = sql`${where} AND ${typeConditions[type]}`;
+      }
+    }
+
+    const [countResult] = await db.select({ count: sql<number>`count(*)` })
+      .from(alerts)
+      .where(where);
+
     const results = await db.select({
       alert: alerts,
       serverName: servers.name,
@@ -812,19 +843,12 @@ export class DatabaseStorage implements IStorage {
       .leftJoin(clusters, eq(alerts.clusterId, clusters.id))
       .leftJoin(webMonitors, eq(alerts.webMonitorId, webMonitors.id))
       .leftJoin(domainMonitors, eq(alerts.domainMonitorId, domainMonitors.id))
-      .where(
-        sql`(
-          (${alerts.serverId} IS NOT NULL AND ${servers.projectId} = ${projectId}) OR
-          (${alerts.databaseId} IS NOT NULL AND ${databases.projectId} = ${projectId}) OR
-          (${alerts.clusterId} IS NOT NULL AND ${clusters.projectId} = ${projectId}) OR
-          (${alerts.webMonitorId} IS NOT NULL AND ${webMonitors.projectId} = ${projectId}) OR
-          (${alerts.domainMonitorId} IS NOT NULL AND ${domainMonitors.projectId} = ${projectId})
-        )`
-      )
+      .where(where)
       .orderBy(desc(alerts.sentAt))
-      .limit(200);
+      .limit(limit)
+      .offset(offset);
 
-    return results.map(r => ({
+    const formatted = results.map(r => ({
       ...r.alert,
       resourceName: r.serverName || r.hostname || r.dbName || r.clusterName || r.webName || r.domainName || "Unknown",
       resourceType: r.alert.serverId ? 'server'
@@ -834,6 +858,19 @@ export class DatabaseStorage implements IStorage {
         : r.alert.domainMonitorId ? 'domain'
         : 'unknown',
     }));
+
+    return { alerts: formatted, total: Number(countResult?.count || 0) };
+  }
+
+  async deleteProjectAlerts(projectId: number): Promise<void> {
+    const where = sql`(
+      (${alerts.serverId} IS NOT NULL AND EXISTS (SELECT 1 FROM servers s WHERE s.id = ${alerts.serverId} AND s.project_id = ${projectId})) OR
+      (${alerts.databaseId} IS NOT NULL AND EXISTS (SELECT 1 FROM databases d WHERE d.id = ${alerts.databaseId} AND d.project_id = ${projectId})) OR
+      (${alerts.clusterId} IS NOT NULL AND EXISTS (SELECT 1 FROM clusters c WHERE c.id = ${alerts.clusterId} AND c.project_id = ${projectId})) OR
+      (${alerts.webMonitorId} IS NOT NULL AND EXISTS (SELECT 1 FROM web_monitors w WHERE w.id = ${alerts.webMonitorId} AND w.project_id = ${projectId})) OR
+      (${alerts.domainMonitorId} IS NOT NULL AND EXISTS (SELECT 1 FROM domain_monitors dm WHERE dm.id = ${alerts.domainMonitorId} AND dm.project_id = ${projectId}))
+    )`;
+    await db.delete(alerts).where(where);
   }
 
   // === PROJECT EMAIL TEMPLATES ===

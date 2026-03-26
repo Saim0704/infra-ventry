@@ -663,8 +663,22 @@ export async function registerRoutes(
   app.get(api.alerts.projectHistory.path, isAuthenticated, async (req, res) => {
     const projectId = Number(req.params.id);
     if (isNaN(projectId)) return res.status(400).json({ message: "Invalid project ID" });
-    const history = await (storage as any).getProjectAlertHistory(projectId);
+    
+    // Pagination parameters from query
+    const limit = Number(req.query.limit) || 20;
+    const offset = Number(req.query.offset) || 0;
+    const status = req.query.status as string;
+    const type = req.query.type as string;
+    
+    const history = await (storage as any).getProjectAlertHistory(projectId, limit, offset, status, type);
     res.json(history);
+  });
+
+  app.delete(api.alerts.deleteHistory.path, isAuthenticated, async (req, res) => {
+    const projectId = Number(req.params.id);
+    if (isNaN(projectId)) return res.status(400).json({ message: "Invalid project ID" });
+    await (storage as any).deleteProjectAlerts(projectId);
+    res.status(204).send();
   });
 
   app.patch(api.alerts.updateMuted.path, isAuthenticated, async (req, res) => {
