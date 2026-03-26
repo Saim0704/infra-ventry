@@ -51,14 +51,30 @@ export class EmailService {
 
     const logoImg = logoUrl ? `<img src="${logoUrl}" alt="${companyName}" style="max-height: 40px; width: auto; vertical-align: middle;">` : "";
 
+    // Parse Simple Config if available for advanced settings
+    let simpleConfig: any = null;
+    if (template?.body) {
+      const configMatch = template.body.match(/<!-- SIMPLE_CONFIG: (.*) -->/);
+      if (configMatch) {
+         try {
+           simpleConfig = JSON.parse(configMatch[1]);
+         } catch (e) {}
+      }
+    }
+
     let defaultSubject = isRecovery 
       ? `Recovery: ${displayType} stabilized on ${resourceName}`
       : `Alert: High ${displayType} usage on ${resourceName}`;
 
+    // Use mode-specific subject from simple config if available, otherwise fallback to column subject
     let subject = template?.subject || defaultSubject;
+    if (simpleConfig) {
+      if (isRecovery && simpleConfig.recoverySubject) subject = simpleConfig.recoverySubject;
+      else if (!isRecovery && simpleConfig.alertSubject) subject = simpleConfig.alertSubject;
+    }
     
-    // Ensure recovery status is reflected in the subject even for custom templates
-    if (isRecovery && !subject.toLowerCase().startsWith('recovery:')) {
+    // Final check: if it's a recovery but subject doesn't mention it (and no custom recovery subject), prefix it
+    if (isRecovery && !subject.toLowerCase().includes('recovery') && !subject.toLowerCase().includes('fixed') && !subject.toLowerCase().includes('stabilized')) {
       subject = `Recovery: ${subject}`;
     }
 
@@ -70,7 +86,7 @@ export class EmailService {
       .replace(/{{value}}/g, Math.round(value).toString())
       .replace(/{{threshold}}/g, Math.round(threshold).toString())
       .replace(/{{company}}/g, companyName)
-      .replace(/{{logo}}/g, logoUrl || "") // In subject, keep it as URL
+      .replace(/{{logo}}/g, logoUrl || "") 
       .replace(/{{company_name}}/g, companyName)
       .replace(/{{logo_url}}/g, logoUrl || "")
       .replace(/{{status}}/g, isRecovery ? "RECOVERY" : "ALERT");
@@ -133,6 +149,15 @@ export class EmailService {
     `;
 
     let html = template?.body || defaultBody;
+    
+    // Support dual-mode templates from the frontend
+    if (html.includes('<!-- ALERT_START -->')) {
+      const section = isRecovery ? 'RECOVERY' : 'ALERT';
+      const match = html.match(new RegExp(`<!-- ${section}_START -->([\\s\\S]*?)<!-- ${section}_END -->`));
+      if (match) {
+        html = match[1];
+      }
+    }
 
     html = html
       .replace(/{{project}}/g, projectName)

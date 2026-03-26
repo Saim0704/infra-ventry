@@ -19,7 +19,7 @@ import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Globe, Server, Database, Cloud, Edit, Edit2, Trash2, ChevronLeft, Plus, ChevronDown, Shield, Bell, Activity, Layout, Eye, Terminal, Mail, Save, Key, Send, ExternalLink, Settings, AlertTriangle, Check, X, Info, MessageSquare, Type, Clock, VolumeX, Volume2, CheckCircle2, Cpu, Zap, HardDrive, AlertCircle, Timer, ShieldCheck, Copy, ImageIcon, Building2 } from "lucide-react";
+import { Globe, Server, Database, Cloud, Edit, Edit2, Trash2, ChevronLeft, Plus, ChevronDown, Shield, Bell, Activity, Layout, Eye, Terminal, Mail, Save, Key, Send, ExternalLink, Settings, AlertTriangle, Check, X, Info, MessageSquare, Type, Clock, VolumeX, Volume2, CheckCircle2, Cpu, Zap, HardDrive, AlertCircle, Timer, ShieldCheck, Copy, ImageIcon, Building2, Sparkles } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useQueryClient } from "@tanstack/react-query";
@@ -358,31 +358,31 @@ export default function ProjectDetailPage() {
             </div>
 
             <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-                <TabsList className="grid w-full grid-cols-2 md:grid-cols-6 bg-muted/50 p-1 rounded-2xl h-auto md:h-14 border border-border/40 gap-1 md:gap-0">
-                    <TabsTrigger value="servers" className="rounded-xl h-12 data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-primary font-bold tracking-tight relative group transition-all">
-                        <Server className="w-4 h-4 mr-2" /> Servers ({servers.length})
-                        <div className="absolute bottom-1 left-1/2 -translate-x-1/2 w-8 h-1 bg-primary rounded-full opacity-0 data-[state=active]:group-data-[state=active]:opacity-100 transition-all" />
-                    </TabsTrigger>
-                    <TabsTrigger value="databases" className="rounded-xl h-12 data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-primary font-bold tracking-tight relative group transition-all">
-                        <Database className="w-4 h-4 mr-2" /> Databases ({databases.length})
-                        <div className="absolute bottom-1 left-1/2 -translate-x-1/2 w-8 h-1 bg-primary rounded-full opacity-0 data-[state=active]:group-data-[state=active]:opacity-100 transition-all" />
-                    </TabsTrigger>
-                    <TabsTrigger value="clusters" className="rounded-xl h-12 data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-primary font-bold tracking-tight relative group transition-all">
-                        <Cloud className="w-4 h-4 mr-2" /> Clusters ({clusters.length})
-                        <div className="absolute bottom-1 left-1/2 -translate-x-1/2 w-8 h-1 bg-primary rounded-full opacity-0 data-[state=active]:group-data-[state=active]:opacity-100 transition-all" />
-                    </TabsTrigger>
-                    <TabsTrigger value="web" className="rounded-xl h-12 data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-primary font-bold tracking-tight relative group transition-all">
-                        <Activity className="w-4 h-4 mr-2" /> Web ({webMonitors.length})
-                        <div className="absolute bottom-1 left-1/2 -translate-x-1/2 w-8 h-1 bg-primary rounded-full opacity-0 data-[state=active]:group-data-[state=active]:opacity-100 transition-all" />
-                    </TabsTrigger>
-                    <TabsTrigger value="domains" className="rounded-xl h-12 data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-primary font-bold tracking-tight relative group transition-all">
-                        <Globe className="w-4 h-4 mr-2" /> Domains ({domainMonitors?.length || 0})
-                        <div className="absolute bottom-1 left-1/2 -translate-x-1/2 w-8 h-1 bg-primary rounded-full opacity-0 data-[state=active]:group-data-[state=active]:opacity-100 transition-all" />
-                    </TabsTrigger>
-                    <TabsTrigger value="settings" className="rounded-xl h-12 data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-primary font-bold tracking-tight relative group transition-all">
-                        <Shield className="w-4 h-4 mr-2" /> Settings
-                        <div className="absolute bottom-1 left-1/2 -translate-x-1/2 w-8 h-1 bg-primary rounded-full opacity-0 data-[state=active]:group-data-[state=active]:opacity-100 transition-all" />
-                    </TabsTrigger>
+                <TabsList className="grid w-full grid-cols-2 md:grid-cols-6 bg-slate-200/40 p-1.5 rounded-2xl h-auto md:h-[64px] border-none mb-12 gap-1.5 overflow-hidden">
+                    {[
+                        { value: "servers", label: "Servers", icon: Server, count: servers.length },
+                        { value: "databases", label: "Databases", icon: Database, count: databases.length },
+                        { value: "clusters", label: "Clusters", icon: Cloud, count: clusters.length },
+                        { value: "web", label: "Web", icon: Activity, count: webMonitors.length },
+                        { value: "domains", label: "Domains", icon: Globe, count: domainMonitors?.length || 0 },
+                        { value: "settings", label: "Settings", icon: Shield, count: null },
+                    ].map((item) => (
+                        <TabsTrigger 
+                            key={item.value}
+                            value={item.value} 
+                            className="rounded-xl h-full data-[state=active]:bg-background data-[state=active]:shadow-[0_8px_30px_rgb(0,0,0,0.08)] data-[state=active]:text-primary font-black text-xs uppercase tracking-widest transition-all duration-300 flex items-center justify-center gap-3 group border border-transparent data-[state=active]:border-border/40 hover:bg-background/40"
+                        >
+                            <item.icon className="w-4.5 h-4.5 opacity-70 group-data-[state=active]:opacity-100 group-data-[state=active]:scale-110 transition-transform" />
+                            <div className="flex flex-col items-start leading-none gap-1">
+                                <span className="text-[10px] font-black">{item.label}</span>
+                                {item.count !== null && (
+                                    <span className="text-[9px] font-bold text-muted-foreground/60 group-data-[state=active]:text-primary/70 tracking-tighter">
+                                        {item.count} Active Resource{item.count !== 1 ? 's' : ''}
+                                    </span>
+                                )}
+                            </div>
+                        </TabsTrigger>
+                    ))}
                 </TabsList>
 
                 <TabsContent value="servers">
@@ -1302,39 +1302,27 @@ function ProjectSettings({ projectId }: { projectId: number }) {
         <Form {...form}>
             <div className="space-y-6">
                 <Tabs value={subTab} onValueChange={setSubTab} className="w-full">
-                    <TabsList className="grid w-full grid-cols-2 md:grid-cols-8 bg-muted/30 p-1 rounded-xl h-auto md:h-11 border border-border/20 mb-8 gap-1 md:gap-0">
-                        <TabsTrigger value="thresholds" className="rounded-lg h-9 data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-primary font-bold tracking-tight relative group transition-all">
-                            <Activity className="w-3.5 h-3.5 mr-2" /> Alert Threshold
-                            <div className="absolute bottom-0.5 left-1/2 -translate-x-1/2 w-6 h-0.5 bg-primary rounded-full opacity-0 data-[state=active]:group-data-[state=active]:opacity-100 transition-all" />
-                        </TabsTrigger>
-                        <TabsTrigger value="recipients" className="rounded-lg h-9 data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-primary font-bold tracking-tight relative group transition-all">
-                            <Bell className="w-3.5 h-3.5 mr-2" /> Alert Recipient
-                            <div className="absolute bottom-0.5 left-1/2 -translate-x-1/2 w-6 h-0.5 bg-primary rounded-full opacity-0 data-[state=active]:group-data-[state=active]:opacity-100 transition-all" />
-                        </TabsTrigger>
-                        <TabsTrigger value="smtp" className="rounded-lg h-9 data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-primary font-bold tracking-tight relative group transition-all">
-                            <Mail className="w-3.5 h-3.5 mr-2" /> SMTP Configuration
-                            <div className="absolute bottom-0.5 left-1/2 -translate-x-1/2 w-6 h-0.5 bg-primary rounded-full opacity-0 data-[state=active]:group-data-[state=active]:opacity-100 transition-all" />
-                        </TabsTrigger>
-                        <TabsTrigger value="templates" className="rounded-lg h-9 data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-primary font-bold tracking-tight relative group transition-all">
-                            <Send className="w-3.5 h-3.5 mr-2" /> Email Template
-                            <div className="absolute bottom-0.5 left-1/2 -translate-x-1/2 w-6 h-0.5 bg-primary rounded-full opacity-0 data-[state=active]:group-data-[state=active]:opacity-100 transition-all" />
-                        </TabsTrigger>
-                        <TabsTrigger value="status" className="rounded-lg h-9 data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-primary font-bold tracking-tight relative group transition-all">
-                            <Layout className="w-3.5 h-3.5 mr-2" /> Status Page Setting
-                            <div className="absolute bottom-0.5 left-1/2 -translate-x-1/2 w-6 h-0.5 bg-primary rounded-full opacity-0 data-[state=active]:group-data-[state=active]:opacity-100 transition-all" />
-                        </TabsTrigger>
-                        <TabsTrigger value="alert-history" className="rounded-lg h-9 data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-primary font-bold tracking-tight relative group transition-all">
-                            <Clock className="w-3.5 h-3.5 mr-2" /> Alert History
-                            <div className="absolute bottom-0.5 left-1/2 -translate-x-1/2 w-6 h-0.5 bg-primary rounded-full opacity-0 data-[state=active]:group-data-[state=active]:opacity-100 transition-all" />
-                        </TabsTrigger>
-                        <TabsTrigger value="alert-muting" className="rounded-lg h-9 data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-primary font-bold tracking-tight relative group transition-all">
-                            <VolumeX className="w-3.5 h-3.5 mr-2" /> Alert Muting
-                            <div className="absolute bottom-0.5 left-1/2 -translate-x-1/2 w-6 h-0.5 bg-primary rounded-full opacity-0 data-[state=active]:group-data-[state=active]:opacity-100 transition-all" />
-                        </TabsTrigger>
-                        <TabsTrigger value="agent-rollout" className="rounded-lg h-9 data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-primary font-bold tracking-tight relative group transition-all">
-                            <Zap className="w-3.5 h-3.5 mr-2" /> Agent Rollout
-                            <div className="absolute bottom-0.5 left-1/2 -translate-x-1/2 w-6 h-0.5 bg-primary rounded-full opacity-0 data-[state=active]:group-data-[state=active]:opacity-100 transition-all" />
-                        </TabsTrigger>
+                    <TabsList className="grid w-full grid-cols-2 md:grid-cols-8 bg-slate-200/40 p-1.5 rounded-2xl h-auto md:h-[52px] border-none mb-10 gap-1 overflow-hidden">
+                        {[
+                            { value: "thresholds", label: "Alert Threshold", icon: Activity },
+                            { value: "recipients", label: "Alert Recipient", icon: Bell },
+                            { value: "smtp", label: "SMTP Config", icon: Mail },
+                            { value: "templates", label: "Email Template", icon: Send },
+                            { value: "status", label: "Public Status", icon: Layout },
+                            { value: "alert-history", label: "Alert History", icon: Clock },
+                            { value: "alert-muting", label: "Alert Muting", icon: VolumeX },
+                            { value: "agent-rollout", label: "Agent Rollout", icon: Zap },
+                        ].map((item) => (
+                            <TabsTrigger 
+                                key={item.value}
+                                value={item.value} 
+                                className="rounded-xl h-full data-[state=active]:bg-background data-[state=active]:shadow-[0_4px_20px_-4px_rgba(0,0,0,0.1)] data-[state=active]:text-primary font-black text-[10px] uppercase tracking-wider transition-all duration-300 flex items-center justify-center gap-2 group border border-transparent data-[state=active]:border-border/40 hover:bg-background/40"
+                            >
+                                <item.icon className="w-4 h-4 opacity-70 group-data-[state=active]:opacity-100 group-data-[state=active]:scale-110 transition-transform" />
+                                <span className="hidden lg:inline-block">{item.label}</span>
+                                <span className="lg:hidden">{item.label.split(' ')[1] || item.label}</span>
+                            </TabsTrigger>
+                        ))}
                     </TabsList>
 
                     <TabsContent value="thresholds" className="animate-in fade-in slide-in-from-bottom-2 duration-300">
@@ -1957,6 +1945,8 @@ function ProjectSettings({ projectId }: { projectId: number }) {
 
 function ProjectEmailTemplatesSection({ projectId }: { projectId: number }) {
     const { data: templates, isLoading } = useProjectEmailTemplates(projectId);
+    const { data: projectSettings } = useProjectAlertSettings(projectId);
+    const updateProjectSettings = useUpdateProjectAlertSettings(projectId);
     const updateTemplate = useUpdateProjectEmailTemplate(projectId);
     const deleteTemplate = useDeleteProjectEmailTemplate(projectId);
     const { toast } = useToast();
@@ -1968,7 +1958,6 @@ function ProjectEmailTemplatesSection({ projectId }: { projectId: number }) {
     const [isSimpleMode, setIsSimpleMode] = useState(true);
     const [simpleConfig, setSimpleConfig] = useState<any>({
         // Branding Layer (Shared for simplicity, or can be split if needed)
-        showHeaderFooter: true,
         showLogo: true,
         showCompany: true,
         showFooter: true,
@@ -1999,10 +1988,23 @@ function ProjectEmailTemplatesSection({ projectId }: { projectId: number }) {
         recoveryTitleText: editingType === "Domain" ? "Domain Active" : "Resource Stabilized",
         recoverySubtitleText: "The resource has returned to a normal state.",
         // Shared
-        companyName: "InfraWatch",
-        logoUrl: "https://antigravity-demo.s3.amazonaws.com/logo-placeholder.png",
         footerText: "Sent via {{company}} Infrastructure Monitoring",
+        layoutTheme: "modern", // modern, industrial, classic
     });
+
+    const [localBranding, setLocalBranding] = useState({
+        companyName: "",
+        logoUrl: ""
+    });
+
+    useEffect(() => {
+        if (projectSettings) {
+            setLocalBranding({
+                companyName: projectSettings.companyName || "",
+                logoUrl: projectSettings.logoUrl || ""
+            });
+        }
+    }, [projectSettings]);
 
     const [previewStatus, setPreviewStatus] = useState<"ALERT" | "RECOVERY">("ALERT");
 
@@ -2023,14 +2025,51 @@ function ProjectEmailTemplatesSection({ projectId }: { projectId: number }) {
 
     const getC = (key: string) => {
         const isRecovery = previewStatus === "RECOVERY";
-        const recoveryKeys = ["showBadge", "showTitle", "showSubtitle", "showProject", "showResource", "showMetric", "showValue", "showThreshold", "themeColor", "badgeText", "titleText", "subtitleText"];
+        const recoveryKeys = ["showLogo", "showCompany", "showFooter", "showBadge", "showTitle", "showSubtitle", "showProject", "showResource", "showMetric", "showValue", "showThreshold", "themeColor", "badgeText", "titleText", "subtitleText"];
         const fullKey = (isRecovery && recoveryKeys.includes(key)) ? `recovery${key.charAt(0).toUpperCase()}${key.slice(1)}` : key;
         return simpleConfig[fullKey] !== undefined ? simpleConfig[fullKey] : simpleConfig[key];
     };
 
+    const LAYOUT_PRESETS = [
+        { 
+            id: 'light', 
+            name: 'Modern Light', 
+            icon: Sparkles, 
+            desc: 'Standard clean light-mode experience',
+            config: { layoutTheme: 'light', showBadge: true, showTitle: true, showSubtitle: true, showProject: true, showResource: true, showMetric: true, showValue: true, showThreshold: true } 
+        },
+        { 
+            id: 'dark', 
+            name: 'Modern Dark', 
+            icon: Shield, 
+            desc: 'Sleek dark-mode experience for contrast',
+            config: { layoutTheme: 'dark', showBadge: true, showTitle: true, showSubtitle: true, showProject: true, showResource: true, showMetric: true, showValue: true, showThreshold: true } 
+        }
+    ];
+
+    const applyPreset = (preset: any) => {
+        setSimpleConfig((prev: any) => {
+            const next = { ...prev };
+            Object.entries(preset.config).forEach(([key, val]) => {
+                // Apply to Alert mode
+                next[key] = val;
+                // Apply to Recovery mode (for visibility toggles and theme)
+                if (key.startsWith('show') || key === 'layoutTheme') {
+                    const recoveryKey = key === 'layoutTheme' ? key : `recovery${key.charAt(0).toUpperCase()}${key.slice(1)}`;
+                    next[recoveryKey] = val;
+                }
+            });
+            return next;
+        });
+        toast({
+            title: `${preset.name} Applied`,
+            description: `Switched to ${preset.id === 'dark' ? 'Dark' : 'Light'} mode design.`
+        });
+    };
+
     const updateConfig = (key: string, v: any) => {
         const isRecovery = previewStatus === "RECOVERY";
-        const recoveryKeys = ["showBadge", "showTitle", "showSubtitle", "showProject", "showResource", "showMetric", "showValue", "showThreshold", "themeColor", "badgeText", "titleText", "subtitleText"];
+        const recoveryKeys = ["showLogo", "showCompany", "showFooter", "showBadge", "showTitle", "showSubtitle", "showProject", "showResource", "showMetric", "showValue", "showThreshold", "themeColor", "badgeText", "titleText", "subtitleText"];
         const fullKey = (isRecovery && recoveryKeys.includes(key)) ? `recovery${key.charAt(0).toUpperCase()}${key.slice(1)}` : key;
         setSimpleConfig((prev: any) => ({ ...prev, [fullKey]: v }));
     };
@@ -2041,11 +2080,18 @@ function ProjectEmailTemplatesSection({ projectId }: { projectId: number }) {
         const primaryColor = isRecovery ? simpleConfig.recoveryThemeColor : (isDomain ? "#f59e0b" : simpleConfig.themeColor || "#dc2626");
 
         const brands = {
-            company: isHtml ? `<span style="color: ${primaryColor}; font-weight: 800; letter-spacing: -0.02em;">${simpleConfig.companyName || "InfraWatch"}</span>` : (simpleConfig.companyName || "InfraWatch"),
-            logo: isHtml ? `<img src="${simpleConfig.logoUrl || "https://antigravity-demo.s3.amazonaws.com/logo-placeholder.png"}" alt="Logo" style="max-height: 40px; width: auto; vertical-align: middle;">` : ""
+            company: isHtml ? `<span style="color: ${primaryColor}; font-weight: 800; letter-spacing: -0.02em;">${projectSettings?.companyName || "InfraWatch"}</span>` : (projectSettings?.companyName || "InfraWatch"),
+            logo: isHtml ? `<img src="${projectSettings?.logoUrl || "https://antigravity-demo.s3.amazonaws.com/logo-placeholder.png"}" alt="Logo" style="max-height: 40px; width: auto; vertical-align: middle;">` : ""
         };
 
-        return text
+        let processedText = text;
+        if (processedText.includes("<!-- ALERT_START -->")) {
+            const section = isRecovery ? "RECOVERY" : "ALERT";
+            const match = processedText.match(new RegExp(`<!-- ${section}_START -->([\\s\\S]*?)<!-- ${section}_END -->`));
+            if (match) processedText = match[1];
+        }
+
+        return processedText
             .replace(/{{project}}/g, isHtml ? `<span style="color: ${primaryColor}; font-weight: bold;">Demo Project</span>` : "Demo Project")
             .replace(/{{resource}}/g, isHtml ? `<span style="color: ${primaryColor}; font-weight: bold;">${isDomain ? 'example.com' : 'Demo Server'}</span>` : (isDomain ? 'example.com' : 'Demo Server'))
             .replace(/{{type}}/g, isHtml ? `<span style="color: ${primaryColor}; font-weight: bold;">${isDomain ? 'Domain Expiry' : 'CPU Usage'}</span>` : (isDomain ? 'Domain Expiry' : 'CPU Usage'))
@@ -2057,12 +2103,12 @@ function ProjectEmailTemplatesSection({ projectId }: { projectId: number }) {
             .replace(/{{company_name}}/g, brands.company)
             .replace(/{{company}}/g, brands.company)
             .replace(/{{logo}}/g, brands.logo)
-            .replace(/{{logo_url}}/g, simpleConfig.logoUrl || "https://antigravity-demo.s3.amazonaws.com/logo-placeholder.png");
+            .replace(/{{logo_url}}/g, projectSettings?.logoUrl || "https://antigravity-demo.s3.amazonaws.com/logo-placeholder.png");
     };
 
-    const generateSimpleHtml = (config: any) => {
+    const generateSimpleHtml = (config: any, forcedMode?: "ALERT" | "RECOVERY") => {
         const isDomain = editingType === "Domain";
-        const isRecovery = previewStatus === "RECOVERY";
+        const isRecovery = (forcedMode || previewStatus) === "RECOVERY";
 
         // Helper to get mode-specific value
         const getV = (key: string) => {
@@ -2095,7 +2141,6 @@ function ProjectEmailTemplatesSection({ projectId }: { projectId: number }) {
             getV('showThreshold') && !isDomain && `<tr><td style="padding: 10px 0; border-bottom: 1px solid #eee;"><strong>Threshold:</strong></td><td style="padding: 10px 0; border-bottom: 1px solid #eee; text-align: right; color: #64748b; font-weight: bold;">{{threshold}}${getUnit("Threshold")}</td></tr>`,
         ].filter(Boolean).join('');
 
-        const brandingEnabled = config.showHeaderFooter;
         const showBadge = getV('showBadge');
         const showTitle = getV('showTitle');
         const showSubtitle = getV('showSubtitle');
@@ -2104,42 +2149,66 @@ function ProjectEmailTemplatesSection({ projectId }: { projectId: number }) {
         const titleText = isRecovery ? config.recoveryTitleText : config.titleText;
         const subtitleText = isRecovery ? config.recoverySubtitleText : config.subtitleText;
 
-        // Persist BOTH subjects in the config
         const persistentConfig = {
             ...config,
             alertSubject: (window as any)._alertSubject,
             recoverySubject: (window as any)._recoverySubject
         };
 
-        return `
-<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 40px 20px; background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 16px;">
-    ${(brandingEnabled && (config.showLogo || config.showCompany)) ? `
-    <table style="width: 100%; border-collapse: collapse; margin-bottom: 32px;">
-        <tr>
-            <td style="text-align: left; vertical-align: middle;">
-                ${config.showLogo ? `{{logo}}` : ''}
-            </td>
-            <td style="text-align: right; vertical-align: middle;">
-                ${config.showCompany ? `<span style="color: #0f172a; font-size: 18px; font-weight: 800; letter-spacing: -0.02em;">{{company_name}}</span>` : ''}
-            </td>
-        </tr>
-    </table>` : ''}
+        const theme = config.layoutTheme || 'light';
+        const isDark = theme === 'dark';
+        
+        const bgColor = isDark ? '#0f172a' : '#ffffff';
+        const textColor = isDark ? '#f8fafc' : '#0f172a';
+        const mutedColor = isDark ? '#94a3b8' : '#64748b';
+        const borderColor = isDark ? 'rgba(255,255,255,0.1)' : '#e2e8f0';
+        const contentBg = isDark ? 'rgba(255,255,255,0.03)' : '#f8fafc';
+        const contentBorder = isDark ? 'rgba(255,255,255,0.05)' : '#f1f5f9';
+
+        const showLogo = getV('showLogo');
+        const showCompany = getV('showCompany');
+
+        const brandHeader = ((projectSettings?.logoUrl && showLogo) || (projectSettings?.companyName && showCompany)) ? (
+            '<table style="width: 100%; border-collapse: collapse; margin-bottom: 32px;">' +
+            '<tr>' +
+            '<td style="text-align: left; vertical-align: middle;">' +
+            (projectSettings?.logoUrl && showLogo ? '{{logo}}' : '') +
+            '</td>' +
+            '<td style="text-align: right; vertical-align: middle;">' +
+            (projectSettings?.companyName && showCompany ? '<span style="color: ' + textColor + '; font-size: 18px; font-weight: 800; letter-spacing: -0.02em;">{{company_name}}</span>' : '') +
+            '</td>' +
+            '</tr>' +
+            '</table>'
+        ) : '';
+
+        const footerMarkup = config.showFooter ? '<div style="margin-top: 32px; padding-top: 24px; border-top: 1px solid ' + contentBorder + '; text-align: center; color: ' + mutedColor + '; font-size: 11px; font-weight: 500;">' + config.footerText + '</div>' : '';
+
+        const finalRows = rows
+            .replace(/#334155/g, isDark ? '#cbd5e1' : '#334155')
+            .replace(/#64748b/g, isDark ? '#94a3b8' : '#64748b')
+            .replace(/#eee/g, isDark ? 'rgba(255,255,255,0.1)' : '#eee');
+
+        const content = `
+<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 40px 20px; background-color: ${bgColor}; border: 1px solid ${borderColor}; border-radius: 16px;">
+    ${brandHeader}
     <div style="text-align: center; margin-bottom: 32px;">
-        ${showBadge ? `
-        <div style="display: inline-block; padding: 8px 16px; background-color: ${badgeBg}; border: 1px solid ${badgeBorder}; border-radius: 99px; color: ${primaryColor}; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em;">
-            ${badgeText}
-        </div>` : ''}
-        ${showTitle ? `<h1 style="margin: 16px 0 8px; color: #0f172a; font-size: 24px; font-weight: 800; letter-spacing: -0.02em;">${titleText}</h1>` : ''}
-        ${showSubtitle ? `<p style="margin: 0; color: #64748b; font-size: 16px;">${subtitleText}</p>` : ''}
+        ${showBadge ? (
+            '<div style="display: inline-block; padding: 8px 16px; background-color: ' + badgeBg + '; border: 1px solid ' + badgeBorder + '; border-radius: 99px; color: ' + primaryColor + '; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em;">' +
+            badgeText +
+            '</div>'
+        ) : ''}
+        ${showTitle ? '<h1 style="margin: 16px 0 8px; color: ' + textColor + '; font-size: 24px; font-weight: 800; letter-spacing: -0.02em;">' + titleText + '</h1>' : ''}
+        ${showSubtitle ? '<p style="margin: 0; color: ' + mutedColor + '; font-size: 16px;">' + subtitleText + '</p>' : ''}
     </div>
-    <div style="padding: 24px; background-color: #f8fafc; border-radius: 12px; border: 1px solid #f1f5f9;">
-        <table style="width: 100%; border-collapse: collapse; font-size: 14px; color: #334155;">
-            ${rows}
+    <div style="padding: 24px; background-color: ${contentBg}; border-radius: 12px; border: 1px solid ${contentBorder};">
+        <table style="width: 100%; border-collapse: collapse; font-size: 14px; color: ${textColor};">
+            ${finalRows}
         </table>
     </div>
-    ${brandingEnabled && config.showFooter ? `<div style="margin-top: 32px; padding-top: 24px; border-top: 1px solid #f1f5f9; text-align: center; color: #94a3b8; font-size: 12px;">${config.footerText}</div>` : ''}
-</div>
-<!-- SIMPLE_CONFIG: ${JSON.stringify(persistentConfig)} -->`.trim();
+    ${footerMarkup}
+</div>`;
+
+        return content.trim();
     };
 
     // Auto-update body in simple mode
@@ -2147,9 +2216,19 @@ function ProjectEmailTemplatesSection({ projectId }: { projectId: number }) {
         (window as any)._alertSubject = alertSubject;
         (window as any)._recoverySubject = recoverySubject;
         if (isSimpleMode && editingType) {
-            setEditBody(generateSimpleHtml(simpleConfig));
+            const alertBody = generateSimpleHtml(simpleConfig, "ALERT");
+            const recoveryBody = generateSimpleHtml(simpleConfig, "RECOVERY");
+            
+            const persistentConfig = {
+                ...simpleConfig,
+                alertSubject,
+                recoverySubject
+            };
+
+            const combined = `<!-- ALERT_START -->\n${alertBody}\n<!-- ALERT_END -->\n<!-- RECOVERY_START -->\n${recoveryBody}\n<!-- RECOVERY_END -->\n\n<!-- SIMPLE_CONFIG: ${JSON.stringify(persistentConfig)} -->`;
+            setEditBody(combined);
         }
-    }, [simpleConfig, isSimpleMode, editingType, previewStatus, alertSubject, recoverySubject]);
+    }, [simpleConfig, isSimpleMode, editingType, alertSubject, recoverySubject]);
 
     const handleEdit = (type: string) => {
         const template = templates?.find(t => t.alertType === type);
@@ -2174,7 +2253,6 @@ function ProjectEmailTemplatesSection({ projectId }: { projectId: number }) {
             setIsSimpleMode(!body); // New templates start in simple mode
             if (!body) {
                 setSimpleConfig({
-                    showHeaderFooter: true,
                     showLogo: true,
                     showCompany: true,
                     showFooter: true,
@@ -2227,6 +2305,60 @@ function ProjectEmailTemplatesSection({ projectId }: { projectId: number }) {
     if (isLoading) return <div className="text-center py-8">Loading templates...</div>;
     return (
         <div className="space-y-4 mt-2">
+            <Card className="border-border/40 shadow-sm bg-card/50 backdrop-blur-sm overflow-hidden">
+                <CardHeader className="bg-primary/5 pb-4">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
+                                <Building2 className="h-5 w-5" />
+                            </div>
+                            <div>
+                                <CardTitle className="text-lg font-bold">Email Branding</CardTitle>
+                                <CardDescription className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60">Common identity for all email templates</CardDescription>
+                            </div>
+                        </div>
+                        <Button 
+                            size="sm" 
+                            className="rounded-xl h-9 px-6 font-bold uppercase tracking-widest text-[10px]"
+                            onClick={() => {
+                                updateProjectSettings.mutate(localBranding, {
+                                    onSuccess: () => toast({ title: "Branding Updated", description: "All templates will now use this common identity." })
+                                });
+                            }}
+                            disabled={updateProjectSettings.isPending}
+                        >
+                            <Save className="h-3.5 w-3.5 mr-2" /> Save Branding
+                        </Button>
+                    </div>
+                </CardHeader>
+                <CardContent className="pt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                        <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/70 ml-1">Global Logo URL</Label>
+                        <div className="relative">
+                            <Input 
+                                placeholder="https://..." 
+                                value={localBranding.logoUrl}
+                                onChange={(e) => setLocalBranding(prev => ({ ...prev, logoUrl: e.target.value }))}
+                                className="h-11 rounded-2xl bg-background border-border/40 pl-10 pr-4 font-mono text-xs"
+                            />
+                            <ImageIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/40" />
+                        </div>
+                    </div>
+                    <div className="space-y-2">
+                        <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/70 ml-1">Global Brand Label</Label>
+                        <div className="relative">
+                            <Input 
+                                placeholder="e.g. Acme Corp" 
+                                value={localBranding.companyName}
+                                onChange={(e) => setLocalBranding(prev => ({ ...prev, companyName: e.target.value }))}
+                                className="h-11 rounded-2xl bg-background border-border/40 pl-10 pr-4 font-bold"
+                            />
+                            <Building2 className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/40" />
+                        </div>
+                    </div>
+                </CardContent>
+            </Card>
+
             <Card className="border-border/40 shadow-sm bg-card/50 backdrop-blur-sm">
                 <CardHeader>
                     <div className="flex items-center gap-3">
@@ -2362,8 +2494,6 @@ function ProjectEmailTemplatesSection({ projectId }: { projectId: number }) {
                                                     </div>
                                                     <div className="grid grid-cols-2 gap-4">
                                                         {[
-                                                            { key: "showHeaderFooter", label: "Global Layout", icon: Layout },
-                                                            { key: "showFooter", label: "Footer Info", icon: Type },
                                                             { key: "showLogo", label: "Logo Presence", icon: ImageIcon },
                                                             { key: "showCompany", label: "Brand Label", icon: Building2 },
                                                         ].map(item => (
@@ -2377,40 +2507,36 @@ function ProjectEmailTemplatesSection({ projectId }: { projectId: number }) {
                                                                     </div>
                                                                     <Switch checked={getC(item.key)} onCheckedChange={(v) => updateConfig(item.key, v)} className="scale-90" />
                                                                 </div>
-                                                                {item.key === "showLogo" && getC("showLogo") && (
-                                                                    <div className="space-y-1.5 px-0.5 animate-in slide-in-from-top-2 duration-300">
-                                                                        <Label className="text-[9px] font-black uppercase text-muted-foreground/50 tracking-widest block">Logo URL</Label>
-                                                                        <Input 
-                                                                            value={simpleConfig.logoUrl} 
-                                                                            onChange={(e) => setSimpleConfig((prev: any) => ({ ...prev, logoUrl: e.target.value }))}
-                                                                            placeholder="https://..."
-                                                                            className="h-8 text-[10px] rounded-lg bg-muted/30 border-border/40 font-mono"
-                                                                        />
-                                                                    </div>
-                                                                )}
-                                                                {item.key === "showCompany" && getC("showCompany") && (
-                                                                    <div className="space-y-1.5 px-0.5 animate-in slide-in-from-top-2 duration-300">
-                                                                        <Label className="text-[9px] font-black uppercase text-muted-foreground/50 tracking-widest block">Brand Name</Label>
-                                                                        <Input 
-                                                                            value={simpleConfig.companyName} 
-                                                                            onChange={(e) => setSimpleConfig((prev: any) => ({ ...prev, companyName: e.target.value }))}
-                                                                            placeholder="Company Name"
-                                                                            className="h-8 text-[10px] rounded-lg bg-muted/30 border-border/40"
-                                                                        />
-                                                                    </div>
-                                                                )}
-                                                                {item.key === "showFooter" && getC("showFooter") && (
-                                                                    <div className="space-y-1.5 px-0.5 animate-in slide-in-from-top-2 duration-300">
-                                                                        <Label className="text-[9px] font-black uppercase text-muted-foreground/50 tracking-widest block">Footer Text</Label>
-                                                                        <Input 
-                                                                            value={simpleConfig.footerText} 
-                                                                            onChange={(e) => setSimpleConfig((prev: any) => ({ ...prev, footerText: e.target.value }))}
-                                                                            placeholder="Sent via..."
-                                                                            className="h-8 text-[10px] rounded-lg bg-muted/30 border-border/40"
-                                                                        />
-                                                                    </div>
-                                                                )}
                                                             </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+
+                                                {/* SECTION 1.5: LAYOUT TEMPLATES (PRESETS) */}
+                                                <div className="space-y-6">
+                                                    <div className="flex items-center justify-between px-1">
+                                                        <div className="flex items-center gap-3">
+                                                            <Label className="text-[11px] font-black uppercase tracking-[0.2em] text-muted-foreground/50">Email Themes</Label>
+                                                            <div className="flex items-center gap-1.5 px-1.5 py-0.5 bg-primary/5 text-primary rounded-full border border-primary/20 text-[8px] font-bold uppercase tracking-widest">Design</div>
+                                                        </div>
+                                                        <div className="h-[1px] flex-1 mx-4 bg-border/20" />
+                                                    </div>
+                                                    <div className="grid grid-cols-1 gap-2.5">
+                                                        {LAYOUT_PRESETS.map((preset) => (
+                                                            <button
+                                                                key={preset.id}
+                                                                onClick={() => applyPreset(preset)}
+                                                                className="flex items-center gap-4 p-4 rounded-3xl bg-background border border-border/40 hover:border-primary/50 hover:bg-primary/5 transition-all text-left group relative overflow-hidden active:scale-[0.98]"
+                                                            >
+                                                                <div className="p-3 rounded-2xl bg-muted/50 group-hover:bg-primary/10 transition-colors">
+                                                                    <preset.icon className="h-5 w-5 text-muted-foreground group-hover:text-primary transition-colors" />
+                                                                </div>
+                                                                <div className="flex flex-col gap-0.5 flex-1">
+                                                                    <span className="text-[11px] font-black uppercase tracking-tight text-foreground/80 group-hover:text-primary transition-colors">{preset.name}</span>
+                                                                    <span className="text-[9px] text-muted-foreground font-medium leading-relaxed opacity-60 group-hover:opacity-100">{preset.desc}</span>
+                                                                </div>
+                                                                <ChevronDown className="h-4 w-4 text-muted-foreground/30 -rotate-90 group-hover:text-primary/50 group-hover:translate-x-1 transition-all" />
+                                                            </button>
                                                         ))}
                                                     </div>
                                                 </div>
@@ -2484,6 +2610,7 @@ function ProjectEmailTemplatesSection({ projectId }: { projectId: number }) {
                                                         </div>
                                                         {getC("showSubtitle") && <Input value={getC("subtitleText")} onChange={(e) => updateConfig("subtitleText", e.target.value)} className="h-10 text-xs rounded-xl bg-background border-border font-medium text-muted-foreground" />}
                                                     </div>
+
                                                 </div>
 
                                                 {/* SECTION 4: DATA PRECISION (MIGRATED) */}
@@ -2509,6 +2636,26 @@ function ProjectEmailTemplatesSection({ projectId }: { projectId: number }) {
                                                             </div>
                                                         ))}
                                                     </div>
+                                                </div>
+
+                                                <div className="grid gap-3 p-5 bg-background/50 rounded-[2rem] border border-border/40">
+                                                    <div className="flex justify-between items-center px-1">
+                                                        <div className="flex items-center gap-3">
+                                                            <Label className="text-[11px] font-black uppercase tracking-tight">Footer Information</Label>
+                                                        </div>
+                                                        <Switch checked={getC("showFooter")} onCheckedChange={(v) => updateConfig("showFooter", v)} />
+                                                    </div>
+                                                    {getC("showFooter") && (
+                                                        <div className="space-y-1.5 px-0.5 animate-in slide-in-from-top-2 duration-300">
+                                                            <Label className="text-[9px] font-black uppercase text-muted-foreground/50 tracking-widest block">Footer Copyright Text</Label>
+                                                            <Input 
+                                                                value={simpleConfig.footerText} 
+                                                                onChange={(e) => setSimpleConfig((prev: any) => ({ ...prev, footerText: e.target.value }))}
+                                                                placeholder="Sent via {{company}} Infrastructure Monitoring..."
+                                                                className="h-10 text-xs rounded-xl bg-background border-border"
+                                                            />
+                                                        </div>
+                                                    )}
                                                 </div>
                                             </div>
                                         </TabsContent>
