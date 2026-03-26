@@ -567,6 +567,33 @@ export const api = {
         },
       },
     },
+    emailTemplates: {
+      list: {
+        method: 'GET' as const,
+        path: '/api/settings/email-templates' as const,
+        responses: {
+          200: z.array(z.custom<any>()),
+        },
+      },
+      upsert: {
+        method: 'PATCH' as const,
+        path: '/api/settings/email-templates/:alertType' as const,
+        input: z.object({
+          subject: z.string().min(1, "Subject is required"),
+          body: z.string().min(1, "Body is required"),
+        }),
+        responses: {
+          200: z.custom<any>(),
+        },
+      },
+      delete: {
+        method: 'DELETE' as const,
+        path: '/api/settings/email-templates/:alertType' as const,
+        responses: {
+          204: z.void(),
+        },
+      },
+    },
     projectAlerts: {
       get: {
         method: 'GET' as const,

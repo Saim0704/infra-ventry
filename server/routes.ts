@@ -14,15 +14,9 @@ import { insertUserSchema } from "@shared/schema";
 import { hashPassword } from "./lib/auth-utils";
 import { fromError } from "zod-validation-error";
 
-// Safe logging helper that won't crash if file doesn't exist
+// Safe logging helper that won't crash
 function safeLog(message: string) {
-  try {
-    const fs = require("fs");
-    fs.appendFileSync("alerts_debug.log", message);
-  } catch (err) {
-    // Silently fail or use console.log as fallback
-    info(message.trim());
-  }
+  info(message.trim());
 }
 
 // Middleware to check if user is admin
@@ -279,7 +273,7 @@ export async function registerRoutes(
       const id = Number(req.params.id);
       const alertType = req.params.alertType;
       const input = api.projects.emailTemplates.upsert.input.parse(req.body);
-      const template = await storage.upsertProjectEmailTemplate(id, alertType, input);
+      const template = await storage.upsertEmailTemplate(id, alertType, input);
       res.json(template);
     } catch (err) {
       res.status(400).json({ message: "Invalid template format" });
@@ -289,7 +283,7 @@ export async function registerRoutes(
   app.delete(api.projects.emailTemplates.delete.path, isAuthenticated, async (req, res) => {
     const id = Number(req.params.id);
     const alertType = req.params.alertType;
-    await storage.deleteProjectEmailTemplate(id, alertType);
+    await storage.deleteEmailTemplate(id, alertType);
     res.status(204).send();
   });
 
@@ -619,6 +613,29 @@ export async function registerRoutes(
       }
       res.status(500).json({ message: "Failed to update project alert settings" });
     }
+  });
+
+  // Global Email Templates
+  app.get(api.settings.emailTemplates.list.path, isAuthenticated, async (req, res) => {
+    const templates = await storage.getProjectEmailTemplates(null);
+    res.json(templates);
+  });
+
+  app.patch(api.settings.emailTemplates.upsert.path, isAuthenticated, async (req, res) => {
+    try {
+      const alertType = req.params.alertType;
+      const input = api.settings.emailTemplates.upsert.input.parse(req.body);
+      const template = await storage.upsertEmailTemplate(null, alertType, input);
+      res.json(template);
+    } catch (err) {
+      res.status(400).json({ message: "Invalid template format" });
+    }
+  });
+
+  app.delete(api.settings.emailTemplates.delete.path, isAuthenticated, async (req, res) => {
+    const alertType = req.params.alertType;
+    await storage.deleteEmailTemplate(null, alertType);
+    res.status(204).send();
   });
 
   app.post(api.settings.smtp.test.path, isAuthenticated, async (req, res) => {

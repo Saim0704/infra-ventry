@@ -19,7 +19,7 @@ import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Globe, Server, Database, Cloud, Edit, Edit2, Trash2, ChevronLeft, Plus, ChevronDown, Shield, Bell, Activity, Layout, Eye, Terminal, Mail, Save, Key, Send, ExternalLink, Settings, AlertTriangle, Check, X, Info, MessageSquare, Type, Clock, VolumeX, Volume2, CheckCircle2, Cpu, Zap, HardDrive, AlertCircle, Timer, ShieldCheck, Copy, ImageIcon, Building2, Sparkles } from "lucide-react";
+import { Globe, Server, Database, Cloud, Edit, Edit2, Trash2, ChevronLeft, Plus, ChevronDown, Shield, Bell, Activity, Layout, Eye, Terminal, Mail, Save, Key, Send, ExternalLink, Settings, AlertTriangle, Check, X, Info, MessageSquare, Type, Clock, VolumeX, Volume2, CheckCircle2, Cpu, Zap, HardDrive, AlertCircle, Timer, ShieldCheck, Copy, ImageIcon, Building2, Sparkles, Palette } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useQueryClient } from "@tanstack/react-query";
@@ -44,6 +44,7 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { AddDomainDialog } from "@/components/AddDomainDialog";
 import { useDeleteDomainMonitor } from "@/hooks/use-domain-monitors";
+import { EmailTemplateDesigner } from "@/components/EmailTemplateDesigner";
 
 export default function ProjectDetailPage() {
     const { id } = useParams();
@@ -1307,7 +1308,7 @@ function ProjectSettings({ projectId }: { projectId: number }) {
                             { value: "thresholds", label: "Alert Threshold", icon: Activity },
                             { value: "recipients", label: "Alert Recipient", icon: Bell },
                             { value: "smtp", label: "SMTP Config", icon: Mail },
-                            { value: "templates", label: "Email Template", icon: Send },
+                            { value: "templates", label: "Email Design", icon: Palette },
                             { value: "status", label: "Public Status", icon: Layout },
                             { value: "alert-history", label: "Alert History", icon: Clock },
                             { value: "alert-muting", label: "Alert Muting", icon: VolumeX },
@@ -1691,35 +1692,9 @@ function ProjectSettings({ projectId }: { projectId: number }) {
                                         description="Expose cluster orchestration status"
                                     />
                                 </div>
-
-                                <div className="pt-4 border-t border-border/40">
-                                    <h4 className="text-sm font-bold mb-4">Project Branding</h4>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                        <FormField
-                                            control={form.control}
-                                            name="companyName"
-                                            render={({ field }) => (
-                                                <FormItem>
-                                                    <FormLabel className="text-[10px] font-bold uppercase tracking-widest text-foreground/70">Company Name</FormLabel>
-                                                    <FormControl><Input placeholder="e.g. Acme Corp" {...field} className="rounded-xl h-11" /></FormControl>
-                                                </FormItem>
-                                            )}
-                                        />
-                                        <FormField
-                                            control={form.control}
-                                            name="logoUrl"
-                                            render={({ field }) => (
-                                                <FormItem>
-                                                    <FormLabel className="text-[10px] font-bold uppercase tracking-widest text-foreground/70">Logo URL</FormLabel>
-                                                    <FormControl><Input placeholder="https://..." {...field} className="rounded-xl h-11" /></FormControl>
-                                                </FormItem>
-                                            )}
-                                        />
-                                    </div>
-                                </div>
                                 <div className="pt-6 border-t border-border/30 mt-6 flex justify-end">
                                     <Button
-                                        onClick={() => handleSaveSection(['showWebMonitors', 'showServers', 'showDatabases', 'showClusters', 'companyName', 'logoUrl'])}
+                                        onClick={() => handleSaveSection(['showWebMonitors', 'showServers', 'showDatabases', 'showClusters'])}
                                         className="h-11 px-8 rounded-xl bg-primary shadow-lg shadow-primary/20 font-bold uppercase tracking-wider"
                                         disabled={updateSettings.isPending}
                                     >
@@ -1944,54 +1919,10 @@ function ProjectSettings({ projectId }: { projectId: number }) {
 }
 
 function ProjectEmailTemplatesSection({ projectId }: { projectId: number }) {
-    const { data: templates, isLoading } = useProjectEmailTemplates(projectId);
     const { data: projectSettings } = useProjectAlertSettings(projectId);
     const updateProjectSettings = useUpdateProjectAlertSettings(projectId);
-    const updateTemplate = useUpdateProjectEmailTemplate(projectId);
-    const deleteTemplate = useDeleteProjectEmailTemplate(projectId);
     const { toast } = useToast();
-    const [editingType, setEditingType] = useState<string | null>(null);
-    const [alertSubject, setAlertSubject] = useState("");
-    const [recoverySubject, setRecoverySubject] = useState("");
-    const [editBody, setEditBody] = useState("");
-    const [viewMode, setViewMode] = useState<"edit" | "preview">("edit");
-    const [isSimpleMode, setIsSimpleMode] = useState(true);
-    const [simpleConfig, setSimpleConfig] = useState<any>({
-        // Branding Layer (Shared for simplicity, or can be split if needed)
-        showLogo: true,
-        showCompany: true,
-        showFooter: true,
-        // Alert State
-        showBadge: true,
-        showTitle: true,
-        showSubtitle: true,
-        showProject: true,
-        showResource: true,
-        showMetric: true,
-        showValue: true,
-        showThreshold: true,
-        themeColor: "#6366f1",
-        badgeText: editingType === "Domain" ? "Expiry Warning" : "Critical Alert",
-        titleText: editingType === "Domain" ? "Domain Expiry Alert" : "High usage detected",
-        subtitleText: editingType === "Domain" ? "One of your domains is about to expire." : "Your infrastructure requires immediate attention.",
-        // Recovery State
-        recoveryShowBadge: true,
-        recoveryShowTitle: true,
-        recoveryShowSubtitle: true,
-        recoveryShowProject: true,
-        recoveryShowResource: true,
-        recoveryShowMetric: true,
-        recoveryShowValue: true,
-        recoveryShowThreshold: false,
-        recoveryThemeColor: "#22c55e",
-        recoveryBadgeText: "RECOVERY",
-        recoveryTitleText: editingType === "Domain" ? "Domain Active" : "Resource Stabilized",
-        recoverySubtitleText: "The resource has returned to a normal state.",
-        // Shared
-        footerText: "Sent via {{company}} Infrastructure Monitoring",
-        layoutTheme: "modern", // modern, industrial, classic
-    });
-
+    
     const [localBranding, setLocalBranding] = useState({
         companyName: "",
         logoUrl: ""
@@ -2006,305 +1937,8 @@ function ProjectEmailTemplatesSection({ projectId }: { projectId: number }) {
         }
     }, [projectSettings]);
 
-    const [previewStatus, setPreviewStatus] = useState<"ALERT" | "RECOVERY">("ALERT");
-
-    const alertTypes = [
-        { id: "Server", label: "Server Alerts", description: "Templates for CPU, Memory, and Storage alerts." },
-        { id: "Database", label: "Database Alerts", description: "Templates for Database storage and connection alerts." },
-        { id: "Web", label: "Web Monitor Alerts", description: "Templates for Web status, response time, and SSL alerts." },
-        { id: "Cluster", label: "Cluster Alerts", description: "Templates for K8s cluster CPU and Memory alerts." },
-        { id: "Domain", label: "Domain Alerts", description: "Templates for Domain name expiry alerts." },
-    ];
-
-    const [expandedSections, setExpandedSections] = useState<string[]>(["content", "metrics"]);
-    const toggleSection = (section: string) => {
-        setExpandedSections((prev: string[]) =>
-            prev.includes(section) ? prev.filter((s: string) => s !== section) : [...prev, section]
-        );
-    };
-
-    const getC = (key: string) => {
-        const isRecovery = previewStatus === "RECOVERY";
-        const recoveryKeys = ["showLogo", "showCompany", "showFooter", "showBadge", "showTitle", "showSubtitle", "showProject", "showResource", "showMetric", "showValue", "showThreshold", "themeColor", "badgeText", "titleText", "subtitleText"];
-        const fullKey = (isRecovery && recoveryKeys.includes(key)) ? `recovery${key.charAt(0).toUpperCase()}${key.slice(1)}` : key;
-        return simpleConfig[fullKey] !== undefined ? simpleConfig[fullKey] : simpleConfig[key];
-    };
-
-    const LAYOUT_PRESETS = [
-        { 
-            id: 'light', 
-            name: 'Modern Light', 
-            icon: Sparkles, 
-            desc: 'Standard clean light-mode experience',
-            config: { layoutTheme: 'light', showBadge: true, showTitle: true, showSubtitle: true, showProject: true, showResource: true, showMetric: true, showValue: true, showThreshold: true } 
-        },
-        { 
-            id: 'dark', 
-            name: 'Modern Dark', 
-            icon: Shield, 
-            desc: 'Sleek dark-mode experience for contrast',
-            config: { layoutTheme: 'dark', showBadge: true, showTitle: true, showSubtitle: true, showProject: true, showResource: true, showMetric: true, showValue: true, showThreshold: true } 
-        }
-    ];
-
-    const applyPreset = (preset: any) => {
-        setSimpleConfig((prev: any) => {
-            const next = { ...prev };
-            Object.entries(preset.config).forEach(([key, val]) => {
-                // Apply to Alert mode
-                next[key] = val;
-                // Apply to Recovery mode (for visibility toggles and theme)
-                if (key.startsWith('show') || key === 'layoutTheme') {
-                    const recoveryKey = key === 'layoutTheme' ? key : `recovery${key.charAt(0).toUpperCase()}${key.slice(1)}`;
-                    next[recoveryKey] = val;
-                }
-            });
-            return next;
-        });
-        toast({
-            title: `${preset.name} Applied`,
-            description: `Switched to ${preset.id === 'dark' ? 'Dark' : 'Light'} mode design.`
-        });
-    };
-
-    const updateConfig = (key: string, v: any) => {
-        const isRecovery = previewStatus === "RECOVERY";
-        const recoveryKeys = ["showLogo", "showCompany", "showFooter", "showBadge", "showTitle", "showSubtitle", "showProject", "showResource", "showMetric", "showValue", "showThreshold", "themeColor", "badgeText", "titleText", "subtitleText"];
-        const fullKey = (isRecovery && recoveryKeys.includes(key)) ? `recovery${key.charAt(0).toUpperCase()}${key.slice(1)}` : key;
-        setSimpleConfig((prev: any) => ({ ...prev, [fullKey]: v }));
-    };
-
-    const replaceVariables = (text: string, isHtml: boolean = false) => {
-        const isRecovery = previewStatus === "RECOVERY";
-        const isDomain = editingType === "Domain";
-        const primaryColor = isRecovery ? simpleConfig.recoveryThemeColor : (isDomain ? "#f59e0b" : simpleConfig.themeColor || "#dc2626");
-
-        const brands = {
-            company: isHtml ? `<span style="color: ${primaryColor}; font-weight: 800; letter-spacing: -0.02em;">${projectSettings?.companyName || "InfraWatch"}</span>` : (projectSettings?.companyName || "InfraWatch"),
-            logo: isHtml ? `<img src="${projectSettings?.logoUrl || "https://antigravity-demo.s3.amazonaws.com/logo-placeholder.png"}" alt="Logo" style="max-height: 40px; width: auto; vertical-align: middle;">` : ""
-        };
-
-        let processedText = text;
-        if (processedText.includes("<!-- ALERT_START -->")) {
-            const section = isRecovery ? "RECOVERY" : "ALERT";
-            const match = processedText.match(new RegExp(`<!-- ${section}_START -->([\\s\\S]*?)<!-- ${section}_END -->`));
-            if (match) processedText = match[1];
-        }
-
-        return processedText
-            .replace(/{{project}}/g, isHtml ? `<span style="color: ${primaryColor}; font-weight: bold;">Demo Project</span>` : "Demo Project")
-            .replace(/{{resource}}/g, isHtml ? `<span style="color: ${primaryColor}; font-weight: bold;">${isDomain ? 'example.com' : 'Demo Server'}</span>` : (isDomain ? 'example.com' : 'Demo Server'))
-            .replace(/{{type}}/g, isHtml ? `<span style="color: ${primaryColor}; font-weight: bold;">${isDomain ? 'Domain Expiry' : 'CPU Usage'}</span>` : (isDomain ? 'Domain Expiry' : 'CPU Usage'))
-            .replace(/{{value}}/g, isHtml ? `<span style="color: ${isRecovery ? '#22c55e' : '#ef4444'}; font-weight: bold;">${isDomain ? (isRecovery ? '365' : '15') : (isRecovery ? '12' : '86')}</span>` : (isDomain ? (isRecovery ? '365' : '15') : (isRecovery ? '12' : '86')))
-            .replace(/{{threshold}}/g, isHtml ? `<span style="color: #64748b; font-weight: bold;">${isDomain ? '30' : '80'}</span>` : (isDomain ? '30' : '80'))
-            .replace(/{{status}}/g, isHtml ? `<span style="color: ${isRecovery ? '#22c55e' : '#ef4444'}; font-weight: bold; text-transform: uppercase;">${previewStatus}</span>` : previewStatus)
-            .replace(/{{expiry_date}}/g, isHtml ? `<span style="color: ${primaryColor}; font-weight: bold;">2024-12-31</span>` : "2024-12-31")
-            .replace(/{{days_left}}/g, isHtml ? `<span style="color: ${isRecovery ? '#22c55e' : '#ef4444'}; font-weight: bold;">${isRecovery ? '365' : '15'}</span>` : (isRecovery ? '365' : '15'))
-            .replace(/{{company_name}}/g, brands.company)
-            .replace(/{{company}}/g, brands.company)
-            .replace(/{{logo}}/g, brands.logo)
-            .replace(/{{logo_url}}/g, projectSettings?.logoUrl || "https://antigravity-demo.s3.amazonaws.com/logo-placeholder.png");
-    };
-
-    const generateSimpleHtml = (config: any, forcedMode?: "ALERT" | "RECOVERY") => {
-        const isDomain = editingType === "Domain";
-        const isRecovery = (forcedMode || previewStatus) === "RECOVERY";
-
-        // Helper to get mode-specific value
-        const getV = (key: string) => {
-            const fullKey = isRecovery ? `recovery${key.charAt(0).toUpperCase()}${key.slice(1)}` : key;
-            return config[fullKey] !== undefined ? config[fullKey] : config[key];
-        };
-
-        const primaryColor = isRecovery ? config.recoveryThemeColor : (isDomain ? "#f59e0b" : config.themeColor || "#dc2626");
-        const badgeBg = isRecovery ? "#f0fdf4" : (isDomain ? "#fffbeb" : "#fef2f2");
-        const badgeBorder = isRecovery ? "#dcfce7" : (isDomain ? "#fef3c7" : "#fee2e2");
-
-        const getUnit = (label: string) => {
-            if (isDomain) {
-                if (label.includes("Days") || label.includes("Value") || label.includes("Threshold")) return " days";
-                return "";
-            }
-            if (label.toLowerCase().includes("cpu") || label.toLowerCase().includes("memory") || label.toLowerCase().includes("usage") || label.toLowerCase().includes("threshold") || label.toLowerCase().includes("value")) {
-                return "%";
-            }
-            if (editingType === "Web") return " (Status)";
-            return "";
-        };
-
-        const rows = [
-            getV('showProject') && `<tr><td style="padding: 10px 0; border-bottom: 1px solid #eee;"><strong>Project:</strong></td><td style="padding: 10px 0; border-bottom: 1px solid #eee; text-align: right;">{{project}}</td></tr>`,
-            getV('showResource') && `<tr><td style="padding: 10px 0; border-bottom: 1px solid #eee;"><strong>${isDomain ? 'Domain' : 'Resource'}:</strong></td><td style="padding: 10px 0; border-bottom: 1px solid #eee; text-align: right;">{{resource}}</td></tr>`,
-            getV('showMetric') && `<tr><td style="padding: 10px 0; border-bottom: 1px solid #eee;"><strong>${isDomain ? 'Status' : 'Metric'}:</strong></td><td style="padding: 10px 0; border-bottom: 1px solid #eee; text-align: right;">${isDomain ? 'Expiring Soon' : '{{type}}'}</td></tr>`,
-            isDomain && `<tr><td style="padding: 10px 0; border-bottom: 1px solid #eee;"><strong>Expiry Date:</strong></td><td style="padding: 10px 0; border-bottom: 1px solid #eee; text-align: right; color: ${primaryColor}; font-weight: bold;">{{expiry_date}}</td></tr>`,
-            getV('showValue') && `<tr><td style="padding: 10px 0; border-bottom: 1px solid #eee;"><strong>${isDomain ? 'Days Remaining' : 'Current Value'}:</strong></td><td style="padding: 10px 0; border-bottom: 1px solid #eee; text-align: right; color: ${isRecovery ? config.recoveryThemeColor : '#ef4444'}; font-weight: bold;">${isDomain ? '{{days_left}}' : '{{value}}'}${getUnit("Value")}</td></tr>`,
-            getV('showThreshold') && !isDomain && `<tr><td style="padding: 10px 0; border-bottom: 1px solid #eee;"><strong>Threshold:</strong></td><td style="padding: 10px 0; border-bottom: 1px solid #eee; text-align: right; color: #64748b; font-weight: bold;">{{threshold}}${getUnit("Threshold")}</td></tr>`,
-        ].filter(Boolean).join('');
-
-        const showBadge = getV('showBadge');
-        const showTitle = getV('showTitle');
-        const showSubtitle = getV('showSubtitle');
-
-        const badgeText = isRecovery ? config.recoveryBadgeText : config.badgeText;
-        const titleText = isRecovery ? config.recoveryTitleText : config.titleText;
-        const subtitleText = isRecovery ? config.recoverySubtitleText : config.subtitleText;
-
-        const persistentConfig = {
-            ...config,
-            alertSubject: (window as any)._alertSubject,
-            recoverySubject: (window as any)._recoverySubject
-        };
-
-        const theme = config.layoutTheme || 'light';
-        const isDark = theme === 'dark';
-        
-        const bgColor = isDark ? '#0f172a' : '#ffffff';
-        const textColor = isDark ? '#f8fafc' : '#0f172a';
-        const mutedColor = isDark ? '#94a3b8' : '#64748b';
-        const borderColor = isDark ? 'rgba(255,255,255,0.1)' : '#e2e8f0';
-        const contentBg = isDark ? 'rgba(255,255,255,0.03)' : '#f8fafc';
-        const contentBorder = isDark ? 'rgba(255,255,255,0.05)' : '#f1f5f9';
-
-        const showLogo = getV('showLogo');
-        const showCompany = getV('showCompany');
-
-        const brandHeader = ((projectSettings?.logoUrl && showLogo) || (projectSettings?.companyName && showCompany)) ? (
-            '<table style="width: 100%; border-collapse: collapse; margin-bottom: 32px;">' +
-            '<tr>' +
-            '<td style="text-align: left; vertical-align: middle;">' +
-            (projectSettings?.logoUrl && showLogo ? '{{logo}}' : '') +
-            '</td>' +
-            '<td style="text-align: right; vertical-align: middle;">' +
-            (projectSettings?.companyName && showCompany ? '<span style="color: ' + textColor + '; font-size: 18px; font-weight: 800; letter-spacing: -0.02em;">{{company_name}}</span>' : '') +
-            '</td>' +
-            '</tr>' +
-            '</table>'
-        ) : '';
-
-        const footerMarkup = config.showFooter ? '<div style="margin-top: 32px; padding-top: 24px; border-top: 1px solid ' + contentBorder + '; text-align: center; color: ' + mutedColor + '; font-size: 11px; font-weight: 500;">' + config.footerText + '</div>' : '';
-
-        const finalRows = rows
-            .replace(/#334155/g, isDark ? '#cbd5e1' : '#334155')
-            .replace(/#64748b/g, isDark ? '#94a3b8' : '#64748b')
-            .replace(/#eee/g, isDark ? 'rgba(255,255,255,0.1)' : '#eee');
-
-        const content = `
-<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 40px 20px; background-color: ${bgColor}; border: 1px solid ${borderColor}; border-radius: 16px;">
-    ${brandHeader}
-    <div style="text-align: center; margin-bottom: 32px;">
-        ${showBadge ? (
-            '<div style="display: inline-block; padding: 8px 16px; background-color: ' + badgeBg + '; border: 1px solid ' + badgeBorder + '; border-radius: 99px; color: ' + primaryColor + '; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em;">' +
-            badgeText +
-            '</div>'
-        ) : ''}
-        ${showTitle ? '<h1 style="margin: 16px 0 8px; color: ' + textColor + '; font-size: 24px; font-weight: 800; letter-spacing: -0.02em;">' + titleText + '</h1>' : ''}
-        ${showSubtitle ? '<p style="margin: 0; color: ' + mutedColor + '; font-size: 16px;">' + subtitleText + '</p>' : ''}
-    </div>
-    <div style="padding: 24px; background-color: ${contentBg}; border-radius: 12px; border: 1px solid ${contentBorder};">
-        <table style="width: 100%; border-collapse: collapse; font-size: 14px; color: ${textColor};">
-            ${finalRows}
-        </table>
-    </div>
-    ${footerMarkup}
-</div>`;
-
-        return content.trim();
-    };
-
-    // Auto-update body in simple mode
-    useEffect(() => {
-        (window as any)._alertSubject = alertSubject;
-        (window as any)._recoverySubject = recoverySubject;
-        if (isSimpleMode && editingType) {
-            const alertBody = generateSimpleHtml(simpleConfig, "ALERT");
-            const recoveryBody = generateSimpleHtml(simpleConfig, "RECOVERY");
-            
-            const persistentConfig = {
-                ...simpleConfig,
-                alertSubject,
-                recoverySubject
-            };
-
-            const combined = `<!-- ALERT_START -->\n${alertBody}\n<!-- ALERT_END -->\n<!-- RECOVERY_START -->\n${recoveryBody}\n<!-- RECOVERY_END -->\n\n<!-- SIMPLE_CONFIG: ${JSON.stringify(persistentConfig)} -->`;
-            setEditBody(combined);
-        }
-    }, [simpleConfig, isSimpleMode, editingType, alertSubject, recoverySubject]);
-
-    const handleEdit = (type: string) => {
-        const template = templates?.find(t => t.alertType === type);
-        const body = template?.body || "";
-
-        // Try to parse simple config from body
-        const configMatch = body.match(/<!-- SIMPLE_CONFIG: (.*) -->/);
-        if (configMatch) {
-            try {
-                const config = JSON.parse(configMatch[1]);
-                setSimpleConfig({
-                    themeColor: "#6366f1",
-                    ...config
-                });
-                if (config.alertSubject) setAlertSubject(config.alertSubject);
-                if (config.recoverySubject) setRecoverySubject(config.recoverySubject);
-                setIsSimpleMode(true);
-            } catch (e) {
-                setIsSimpleMode(false);
-            }
-        } else {
-            setIsSimpleMode(!body); // New templates start in simple mode
-            if (!body) {
-                setSimpleConfig({
-                    showLogo: true,
-                    showCompany: true,
-                    showFooter: true,
-                    showBadge: true,
-                    showTitle: true,
-                    showSubtitle: true,
-                    showProject: true,
-                    showResource: true,
-                    showMetric: true,
-                    showValue: true,
-                    showThreshold: true,
-                    themeColor: "#6366f1",
-                    badgeText: type === "Domain" ? "Expiry Warning" : "Critical Alert",
-                    titleText: type === "Domain" ? "Domain Expiry Alert" : "High usage detected",
-                    subtitleText: type === "Domain" ? "One of your domains is about to expire." : "Your infrastructure requires immediate attention.",
-                    footerText: "Sent via {{company}} Infrastructure Monitoring",
-                });
-                setAlertSubject(`Alert: High {{type}} on {{resource}}`);
-                setRecoverySubject(`Fixed: {{type}} on {{resource}} stabilized`);
-            } else {
-                setAlertSubject(template?.subject || `Alert: High {{type}} on {{resource}}`);
-                setRecoverySubject(`Fixed: {{type}} on {{resource}} stabilized`);
-            }
-        }
-
-        setEditingType(type);
-        setEditBody(body);
-        setViewMode("edit");
-    };
-
-    const handleSave = (closeAfterSave: boolean = true) => {
-        if (!editingType) return;
-        updateTemplate.mutate({
-            alertType: editingType,
-            data: {
-                subject: alertSubject, // Primary subject column is always the Alert subject
-                body: editBody
-            }
-        }, {
-            onSuccess: () => {
-                toast({ title: "Template Saved", description: "All design and content changes have been persisted." });
-                if (closeAfterSave) {
-                    setEditingType(null);
-                    setViewMode("edit");
-                }
-            }
-        });
-    };
-
-    if (isLoading) return <div className="text-center py-8">Loading templates...</div>;
     return (
-        <div className="space-y-4 mt-2">
+        <div className="space-y-6 mt-2">
             <Card className="border-border/40 shadow-sm bg-card/50 backdrop-blur-sm overflow-hidden">
                 <CardHeader className="bg-primary/5 pb-4">
                     <div className="flex items-center justify-between">
@@ -2313,8 +1947,8 @@ function ProjectEmailTemplatesSection({ projectId }: { projectId: number }) {
                                 <Building2 className="h-5 w-5" />
                             </div>
                             <div>
-                                <CardTitle className="text-lg font-bold">Email Branding</CardTitle>
-                                <CardDescription className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60">Common identity for all email templates</CardDescription>
+                                <CardTitle className="text-lg font-bold">Project Email Branding</CardTitle>
+                                <CardDescription className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/60">Customize the identity for alert emails in this project</CardDescription>
                             </div>
                         </div>
                         <Button 
@@ -2322,7 +1956,7 @@ function ProjectEmailTemplatesSection({ projectId }: { projectId: number }) {
                             className="rounded-xl h-9 px-6 font-bold uppercase tracking-widest text-[10px]"
                             onClick={() => {
                                 updateProjectSettings.mutate(localBranding, {
-                                    onSuccess: () => toast({ title: "Branding Updated", description: "All templates will now use this common identity." })
+                                    onSuccess: () => toast({ title: "Branding Updated", description: "This project's templates will now use this identity." })
                                 });
                             }}
                             disabled={updateProjectSettings.isPending}
@@ -2333,7 +1967,7 @@ function ProjectEmailTemplatesSection({ projectId }: { projectId: number }) {
                 </CardHeader>
                 <CardContent className="pt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-2">
-                        <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/70 ml-1">Global Logo URL</Label>
+                        <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/70 ml-1">Project Logo URL</Label>
                         <div className="relative">
                             <Input 
                                 placeholder="https://..." 
@@ -2345,7 +1979,7 @@ function ProjectEmailTemplatesSection({ projectId }: { projectId: number }) {
                         </div>
                     </div>
                     <div className="space-y-2">
-                        <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/70 ml-1">Global Brand Label</Label>
+                        <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/70 ml-1">Project Brand Label</Label>
                         <div className="relative">
                             <Input 
                                 placeholder="e.g. Acme Corp" 
@@ -2363,374 +1997,18 @@ function ProjectEmailTemplatesSection({ projectId }: { projectId: number }) {
                 <CardHeader>
                     <div className="flex items-center gap-3">
                         <div className="h-10 w-10 rounded-xl bg-purple-500/10 flex items-center justify-center">
-                            <Send className="h-5 w-5 text-purple-500" />
+                            <Palette className="h-5 w-5 text-purple-500" />
                         </div>
                         <div>
-                            <CardTitle className="text-xl font-bold">Email Templates</CardTitle>
-                            <CardDescription>Customize alert emails for this project. If not set, system defaults will be used.</CardDescription>
+                            <CardTitle className="text-xl font-bold">Email Template Overrides</CardTitle>
+                            <CardDescription>By default, this project uses system-wide global templates. You can provide project-specific overrides here.</CardDescription>
                         </div>
                     </div>
                 </CardHeader>
-                <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {alertTypes.map((type) => {
-                        const hasCustom = templates?.some(t => t.alertType === type.id);
-                        return (
-                            <div key={type.id} className="relative p-6 rounded-3xl border border-border/40 bg-card/30 hover:bg-card/50 transition-all group overflow-hidden flex flex-col">
-                                <div className="absolute top-0 right-0 p-4">
-                                    {hasCustom ? (
-                                        <div className="flex items-center gap-1.5 px-2 py-1 bg-emerald-500/10 text-emerald-500 rounded-full border border-emerald-500/20 text-[9px] font-black uppercase tracking-widest">
-                                            <CheckCircle2 className="h-2.5 w-2.5" />
-                                            Customized
-                                        </div>
-                                    ) : (
-                                        <div className="flex items-center gap-1.5 px-2 py-1 bg-muted text-muted-foreground/60 rounded-full border border-border/40 text-[9px] font-black uppercase tracking-widest">
-                                            System Default
-                                        </div>
-                                    )}
-                                </div>
-                                <div className="pt-4 flex-1">
-                                    <div className="mb-4">
-                                        <h4 className="font-black text-lg tracking-tight text-foreground/90">{type.label}</h4>
-                                        <p className="text-[11px] text-muted-foreground leading-relaxed mt-1">{type.description}</p>
-                                    </div>
-                                    <div className="mt-auto flex gap-2">
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            className="flex-1 h-10 rounded-xl text-[10px] font-black uppercase tracking-widest border-border/60 hover:bg-primary hover:text-primary-foreground hover:border-primary transition-all"
-                                            onClick={() => handleEdit(type.id)}
-                                        >
-                                            {hasCustom ? "Edit Template" : "Customize"}
-                                        </Button>
-                                        {hasCustom && (
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                className="h-10 w-10 rounded-xl bg-destructive/5 text-destructive hover:bg-destructive hover:text-white transition-all"
-                                                onClick={() => {
-                                                    if (confirm("Reset to system default template?")) {
-                                                        deleteTemplate.mutate(type.id, {
-                                                            onSuccess: () => toast({ title: "Reset", description: "Template reset to system default." })
-                                                        });
-                                                    }
-                                                }}
-                                            >
-                                                <Trash2 className="h-4 w-4" />
-                                            </Button>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-                        );
-                    })}
+                <CardContent>
+                    <EmailTemplateDesigner projectId={projectId} />
                 </CardContent>
             </Card>
-
-            <Dialog open={!!editingType} onOpenChange={(open) => !open && setEditingType(null)}>
-                <DialogContent className="sm:max-w-[1400px] w-[94vw] border-border/40 bg-card/95 backdrop-blur-xl rounded-[3rem] overflow-hidden p-0 flex flex-col h-[92vh] shadow-[0_40px_100px_-15px_rgba(0,0,0,0.6)] animate-in fade-in zoom-in-95 duration-500 scale-100">
-                    <DialogHeader className="pt-6 px-8 shrink-0">
-                        <div className="flex items-center justify-between w-full mb-2">
-                            <div className="flex items-center gap-3">
-                                <div className="p-2.5 rounded-2xl bg-primary/10 text-primary border border-primary/10">
-                                    <Mail className="h-6 w-6" />
-                                </div>
-                                <DialogTitle className="text-2xl font-black tracking-tight">
-                                    Configure {alertTypes.find(a => a.id === editingType)?.label}
-                                </DialogTitle>
-                            </div>
-                            <Popover>
-                                <PopoverTrigger asChild>
-                                    <Button variant="outline" size="sm" className="h-9 gap-2 rounded-xl border-primary/20 bg-primary/5 hover:bg-primary/10 text-primary font-black text-[9px] uppercase tracking-widest px-4 transition-all active:scale-95">
-                                        <Info className="h-3.5 w-3.5" /> Variable Guide
-                                    </Button>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-[320px] p-5 rounded-[2rem] border-border/40 shadow-2xl bg-white/95 backdrop-blur-md" align="end">
-                                    <div className="flex items-center gap-2 mb-4">
-                                        <Terminal className="h-4 w-4 text-primary" />
-                                        <h4 className="text-xs font-black uppercase tracking-widest text-primary">Documentation</h4>
-                                    </div>
-                                    <div className="space-y-4 max-h-[400px] overflow-y-auto scrollbar-thin">
-                                        <div className="space-y-2">
-                                            <p className="text-[10px] font-black text-muted-foreground/50 uppercase tracking-[0.2em] border-b pb-1">Dynamic Values</p>
-                                            <div className="grid gap-2 text-[10px]">
-                                                {["project", "resource", "type", "value", "threshold", "status", "expiry_date"].map(v => (
-                                                    <div key={v} className="flex flex-col gap-0.5 p-1.5 hover:bg-muted/30 rounded-lg transition-colors group">
-                                                        <code className="font-black text-primary/80 group-hover:text-primary transition-colors">{"{{"}{v}{"}}"}</code>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    </div>
-                                </PopoverContent>
-                            </Popover>
-                        </div>
-                        <DialogDescription className="text-muted-foreground/80 font-medium">
-                            {isSimpleMode ? "Use the toggles below to customize your template without writing code." : "Edit the raw HTML below to create a fully custom email design."}
-                        </DialogDescription>
-                    </DialogHeader>
-
-                    <div className="flex-1 overflow-hidden px-6 pb-4">
-                        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 h-full">
-                            {/* LEFT COLUMN: CONFIGURATION */}
-                            <div className="lg:col-span-6 flex flex-col h-full bg-muted/20 rounded-[2rem] border border-border/40 overflow-hidden shadow-inner">
-                                <Tabs defaultValue="design" className="flex flex-col h-full focus:outline-none">
-                                    <TabsList className="grid w-full grid-cols-2 bg-muted/50 p-1.5 h-11 shrink-0 rounded-none border-b border-border/20">
-                                        <TabsTrigger value="design" className="text-[10px] font-black uppercase tracking-widest h-full rounded-xl data-[state=active]:bg-background data-[state=active]:shadow-sm transition-all focus:outline-none">Design</TabsTrigger>
-                                        <TabsTrigger value="content" className="text-[10px] font-black uppercase tracking-widest h-full rounded-xl data-[state=active]:bg-background data-[state=active]:shadow-sm transition-all focus:outline-none">Content</TabsTrigger>
-                                    </TabsList>
-
-                                    <div className="flex-1 flex flex-col min-h-0">
-                                        {/* DESIGN TAB */}
-                                        <TabsContent value="design" className="m-0 p-6 outline-none focus:outline-none flex-1 data-[state=active]:flex data-[state=active]:flex-col h-full overflow-hidden">
-                                            <div className="flex flex-col h-full justify-between gap-4 overflow-y-auto scrollbar-none [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-                                                {/* SECTION 1: VISUAL IDENTITY */}
-                                                <div className="space-y-6">
-                                                    <div className="flex items-center justify-between px-1">
-                                                        <div className="flex items-center gap-3">
-                                                            <Label className="text-[11px] font-black uppercase tracking-[0.2em] text-muted-foreground/50">Branding & Layout</Label>
-                                                            {previewStatus === "RECOVERY" && <span className="text-[8px] px-1.5 py-0.5 bg-emerald-500/10 text-emerald-500 rounded-full font-bold uppercase tracking-widest border border-emerald-500/20">Recovery Mode</span>}
-                                                        </div>
-                                                        <div className="h-[1px] flex-1 mx-4 bg-border/20" />
-                                                    </div>
-                                                    <div className="grid grid-cols-2 gap-4">
-                                                        {[
-                                                            { key: "showLogo", label: "Logo Presence", icon: ImageIcon },
-                                                            { key: "showCompany", label: "Brand Label", icon: Building2 },
-                                                        ].map(item => (
-                                                            <div key={item.key} className="flex flex-col gap-3 p-5 rounded-2xl bg-background border border-border/40 hover:border-primary/30 transition-all shadow-sm group">
-                                                                <div className="flex items-center justify-between">
-                                                                    <div className="flex items-center gap-3">
-                                                                        <div className="p-2 rounded-xl bg-primary/5 group-hover:bg-primary/10 transition-colors">
-                                                                            <item.icon className="h-4 w-4 text-primary opacity-60 group-hover:opacity-100 transition-opacity" />
-                                                                        </div>
-                                                                        <Label className="text-[11px] font-bold uppercase tracking-tight">{item.label}</Label>
-                                                                    </div>
-                                                                    <Switch checked={getC(item.key)} onCheckedChange={(v) => updateConfig(item.key, v)} className="scale-90" />
-                                                                </div>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                </div>
-
-                                                {/* SECTION 1.5: LAYOUT TEMPLATES (PRESETS) */}
-                                                <div className="space-y-6">
-                                                    <div className="flex items-center justify-between px-1">
-                                                        <div className="flex items-center gap-3">
-                                                            <Label className="text-[11px] font-black uppercase tracking-[0.2em] text-muted-foreground/50">Email Themes</Label>
-                                                            <div className="flex items-center gap-1.5 px-1.5 py-0.5 bg-primary/5 text-primary rounded-full border border-primary/20 text-[8px] font-bold uppercase tracking-widest">Design</div>
-                                                        </div>
-                                                        <div className="h-[1px] flex-1 mx-4 bg-border/20" />
-                                                    </div>
-                                                    <div className="grid grid-cols-1 gap-2.5">
-                                                        {LAYOUT_PRESETS.map((preset) => (
-                                                            <button
-                                                                key={preset.id}
-                                                                onClick={() => applyPreset(preset)}
-                                                                className="flex items-center gap-4 p-4 rounded-3xl bg-background border border-border/40 hover:border-primary/50 hover:bg-primary/5 transition-all text-left group relative overflow-hidden active:scale-[0.98]"
-                                                            >
-                                                                <div className="p-3 rounded-2xl bg-muted/50 group-hover:bg-primary/10 transition-colors">
-                                                                    <preset.icon className="h-5 w-5 text-muted-foreground group-hover:text-primary transition-colors" />
-                                                                </div>
-                                                                <div className="flex flex-col gap-0.5 flex-1">
-                                                                    <span className="text-[11px] font-black uppercase tracking-tight text-foreground/80 group-hover:text-primary transition-colors">{preset.name}</span>
-                                                                    <span className="text-[9px] text-muted-foreground font-medium leading-relaxed opacity-60 group-hover:opacity-100">{preset.desc}</span>
-                                                                </div>
-                                                                <ChevronDown className="h-4 w-4 text-muted-foreground/30 -rotate-90 group-hover:text-primary/50 group-hover:translate-x-1 transition-all" />
-                                                            </button>
-                                                        ))}
-                                                    </div>
-                                                </div>
-
-                                                {/* SECTION 3: THEME */}
-                                                <div className="space-y-6">
-                                                    <div className="flex items-center justify-between px-1">
-                                                        <div className="flex items-center gap-3">
-                                                            <Label className="text-[11px] font-black uppercase tracking-[0.2em] text-muted-foreground/50">Theme Aesthetics</Label>
-                                                            {previewStatus === "RECOVERY" && <span className="text-[8px] px-1.5 py-0.5 bg-emerald-500/10 text-emerald-500 rounded-full font-bold uppercase tracking-widest border border-emerald-500/20">Recovery Mode</span>}
-                                                        </div>
-                                                        <div className="h-[1px] flex-1 mx-4 bg-border/20" />
-                                                    </div>
-                                                    <div className="flex gap-5 px-4 items-center justify-center py-1">
-                                                        {["#dc2626", "#2563eb", "#9333ea", "#16a34a", "#f59e0b", "#0f172a"].map(color => (
-                                                            <button
-                                                                key={color}
-                                                                onClick={() => updateConfig("themeColor", color)}
-                                                                className={`h-9 w-9 rounded-full border-2 transition-all hover:scale-125 active:scale-90 ${getC("themeColor") === color ? 'border-primary ring-4 ring-primary/10 shadow-xl scale-110' : 'border-transparent shadow-sm hover:border-border/60'}`}
-                                                                style={{ backgroundColor: color }}
-                                                            />
-                                                        ))}
-                                                    </div>
-                                                </div>
-
-                                            </div>
-                                        </TabsContent>
-
-                                        {/* CONTENT TAB */}
-                                        <TabsContent value="content" className="m-0 p-8 outline-none focus:outline-none flex-1 overflow-y-auto">
-                                            <div className="space-y-6">
-                                                <div className="space-y-2">
-                                                    <div className="flex items-center gap-2 mb-1">
-                                                        <Label className="text-[11px] font-black uppercase tracking-widest text-muted-foreground/50 ml-1">Subject Header</Label>
-                                                        {previewStatus === "RECOVERY" && <span className="text-[8px] px-1.5 py-0.5 bg-emerald-500/10 text-emerald-500 rounded-full font-bold uppercase tracking-widest border border-emerald-500/20">Recovery Mode</span>}
-                                                    </div>
-                                                    <Input
-                                                        value={previewStatus === "RECOVERY" ? recoverySubject : alertSubject}
-                                                        onChange={(e) => previewStatus === "RECOVERY" ? setRecoverySubject(e.target.value) : setAlertSubject(e.target.value)}
-                                                        className="h-11 text-xs rounded-[1.25rem] bg-background border-border/60 font-medium px-4"
-                                                    />
-                                                </div>
-                                                <div className="grid gap-4">
-                                                    <div className="grid gap-3 p-5 bg-background/50 rounded-[2rem] border border-border/40">
-                                                        <div className="flex justify-between items-center px-1">
-                                                            <div className="flex items-center gap-3">
-                                                                <Label className="text-[11px] font-black uppercase tracking-tight">Badge Label</Label>
-                                                                {previewStatus === "RECOVERY" && <span className="text-[8px] px-1.5 py-0.5 bg-emerald-500/10 text-emerald-500 rounded-full font-bold uppercase tracking-widest border border-emerald-500/20">Recovery Mode</span>}
-                                                            </div>
-                                                            <Switch checked={getC("showBadge")} onCheckedChange={(v) => updateConfig("showBadge", v)} />
-                                                        </div>
-                                                        {getC("showBadge") && <Input value={getC("badgeText")} onChange={(e) => updateConfig("badgeText", e.target.value)} className="h-10 text-xs rounded-xl bg-background border-border" />}
-                                                    </div>
-                                                    <div className="grid gap-3 p-5 bg-background/50 rounded-[2rem] border border-border/40">
-                                                        <div className="flex justify-between items-center px-1">
-                                                            <div className="flex items-center gap-3">
-                                                                <Label className="text-[11px] font-black uppercase tracking-tight">Main Heading</Label>
-                                                                {previewStatus === "RECOVERY" && <span className="text-[8px] px-1.5 py-0.5 bg-emerald-500/10 text-emerald-500 rounded-full font-bold uppercase tracking-widest border border-emerald-500/20">Recovery Mode</span>}
-                                                            </div>
-                                                            <Switch checked={getC("showTitle")} onCheckedChange={(v) => updateConfig("showTitle", v)} />
-                                                        </div>
-                                                        {getC("showTitle") && <Input value={getC("titleText")} onChange={(e) => updateConfig("titleText", e.target.value)} className="h-10 text-xs rounded-xl bg-background border-border font-bold" />}
-                                                    </div>
-                                                    <div className="grid gap-3 p-5 bg-background/50 rounded-[2rem] border border-border/40">
-                                                        <div className="flex justify-between items-center px-1">
-                                                            <div className="flex items-center gap-3">
-                                                                <Label className="text-[11px] font-black uppercase tracking-tight">Sub-Text Content</Label>
-                                                                {previewStatus === "RECOVERY" && <span className="text-[8px] px-1.5 py-0.5 bg-emerald-500/10 text-emerald-500 rounded-full font-bold uppercase tracking-widest border border-emerald-500/20">Recovery Mode</span>}
-                                                            </div>
-                                                            <Switch checked={getC("showSubtitle")} onCheckedChange={(v) => updateConfig("showSubtitle", v)} />
-                                                        </div>
-                                                        {getC("showSubtitle") && <Input value={getC("subtitleText")} onChange={(e) => updateConfig("subtitleText", e.target.value)} className="h-10 text-xs rounded-xl bg-background border-border font-medium text-muted-foreground" />}
-                                                    </div>
-
-                                                </div>
-
-                                                {/* SECTION 4: DATA PRECISION (MIGRATED) */}
-                                                <div className="space-y-4 pt-4 border-t border-border/10">
-                                                    <div className="flex items-center justify-between px-1">
-                                                        <div className="flex items-center gap-3">
-                                                            <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground/30">Data Component Visibility</Label>
-                                                            {previewStatus === "RECOVERY" && <span className="text-[8px] px-1.5 py-0.5 bg-emerald-500/10 text-emerald-500 rounded-full font-bold uppercase tracking-widest border border-emerald-500/20">Recovery Mode</span>}
-                                                        </div>
-                                                        <div className="h-[1px] flex-1 mx-4 bg-border/20" />
-                                                    </div>
-                                                    <div className="grid grid-cols-2 gap-3">
-                                                        {[
-                                                            { key: "showProject", label: "Project ID" },
-                                                            { key: "showResource", label: "Resource" },
-                                                            { key: "showMetric", label: "Metric" },
-                                                            { key: "showValue", label: "Current Value" },
-                                                            { key: "showThreshold", label: "Threshold", disabled: editingType === "Domain" }
-                                                        ].filter(m => !m.disabled).map(item => (
-                                                            <div key={item.key} className="flex items-center justify-between p-3.5 bg-background/50 border border-border/40 hover:border-primary/20 rounded-xl transition-all group">
-                                                                <Label className="text-[9px] font-black uppercase text-muted-foreground group-hover:text-foreground/90 transition-colors tracking-widest">{item.label}</Label>
-                                                                <Switch checked={getC(item.key)} onCheckedChange={(v) => updateConfig(item.key, v)} className="scale-[0.7] origin-right" />
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                </div>
-
-                                                <div className="grid gap-3 p-5 bg-background/50 rounded-[2rem] border border-border/40">
-                                                    <div className="flex justify-between items-center px-1">
-                                                        <div className="flex items-center gap-3">
-                                                            <Label className="text-[11px] font-black uppercase tracking-tight">Footer Information</Label>
-                                                        </div>
-                                                        <Switch checked={getC("showFooter")} onCheckedChange={(v) => updateConfig("showFooter", v)} />
-                                                    </div>
-                                                    {getC("showFooter") && (
-                                                        <div className="space-y-1.5 px-0.5 animate-in slide-in-from-top-2 duration-300">
-                                                            <Label className="text-[9px] font-black uppercase text-muted-foreground/50 tracking-widest block">Footer Copyright Text</Label>
-                                                            <Input 
-                                                                value={simpleConfig.footerText} 
-                                                                onChange={(e) => setSimpleConfig((prev: any) => ({ ...prev, footerText: e.target.value }))}
-                                                                placeholder="Sent via {{company}} Infrastructure Monitoring..."
-                                                                className="h-10 text-xs rounded-xl bg-background border-border"
-                                                            />
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        </TabsContent>
-
-                                    </div>
-
-                                    <div className="p-6 border-t border-border/10 bg-muted/20 shrink-0">
-                                        <div className="flex gap-4">
-                                            <Button variant="outline" className="flex-[0.5] rounded-[1.75rem] h-12 text-[10px] font-black uppercase tracking-widest border-border/40 hover:bg-muted transition-all" onClick={() => setEditingType(null)}>Discard</Button>
-                                            <Button
-                                                variant="secondary"
-                                                className="flex-1 rounded-[1.75rem] h-12 text-[10px] font-black uppercase tracking-widest bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 border-border/20 transition-all border"
-                                                onClick={() => handleSave(false)}
-                                                disabled={updateTemplate.isPending}
-                                            >
-                                                {updateTemplate.isPending ? "Saving..." : "Save Changes"}
-                                            </Button>
-                                            <Button className="flex-1 rounded-[1.75rem] h-12 text-[10px] font-black uppercase tracking-widest shadow-xl shadow-primary/20 transition-all active:scale-95" onClick={() => handleSave(true)} disabled={updateTemplate.isPending}>
-                                                {updateTemplate.isPending ? "Saving..." : "Submit & Finish"}
-                                            </Button>
-                                        </div>
-                                    </div>
-                                </Tabs>
-                            </div>
-
-
-                            {/* RIGHT COLUMN: PREVIEW */}
-                            <div className="lg:col-span-6 flex flex-col h-full space-y-4">
-                                <div className="flex items-center justify-between px-3 shrink-0">
-                                    <div className="flex flex-col">
-                                        <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-primary/60">Live Preview</Label>
-                                        <div className="flex items-center gap-1.5 mt-0.5">
-                                            <div className={`h-1.5 w-1.5 rounded-full animate-pulse ${previewStatus === "RECOVERY" ? "bg-emerald-500" : "bg-destructive"}`} />
-                                            <p className="text-[9px] text-muted-foreground font-black uppercase tracking-wider">{previewStatus === "RECOVERY" ? "Recovery State" : "Alert State"}</p>
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center p-1 bg-muted/50 border border-border/40 rounded-[1.25rem] shadow-inner">
-                                        <button
-                                            onClick={() => setPreviewStatus("ALERT")}
-                                            className={`px-4 py-1.5 rounded-2xl text-[9px] font-black tracking-widest uppercase transition-all ${previewStatus === "ALERT" ? 'bg-destructive/10 text-destructive shadow-sm' : 'text-muted-foreground/60 hover:text-muted-foreground'}`}
-                                        >
-                                            Alert
-                                        </button>
-                                        <button
-                                            onClick={() => setPreviewStatus("RECOVERY")}
-                                            className={`px-4 py-1.5 rounded-2xl text-[9px] font-black tracking-widest uppercase transition-all ${previewStatus === "RECOVERY" ? 'bg-emerald-500/10 text-emerald-500 shadow-sm' : 'text-muted-foreground/60 hover:text-muted-foreground'}`}
-                                        >
-                                            Recovery
-                                        </button>
-                                    </div>
-                                </div>
-                                <div className="flex-1 rounded-[3rem] border border-border/40 overflow-hidden bg-slate-900 shadow-[0_32px_64px_-16px_rgba(0,0,0,0.4)] relative flex flex-col min-h-0">
-                                    {/* BROWSER TOP BAR */}
-                                    <div className="h-12 bg-slate-800/90 border-b border-white/5 flex items-center px-6 gap-6 shrink-0 relative z-10">
-                                        <div className="flex gap-2">
-                                            <div className="h-2.5 w-2.5 rounded-full bg-slate-600/50" />
-                                            <div className="h-2.5 w-2.5 rounded-full bg-slate-600/50" />
-                                            <div className="h-2.5 w-2.5 rounded-full bg-slate-600/50" />
-                                        </div>
-                                        <div className="flex-1 bg-slate-900/80 rounded-xl h-7 flex items-center px-4 text-[10px] text-slate-400 font-mono truncate border border-white/5 shadow-inner">
-                                            <span className="opacity-40 mr-2">Subject:</span> {replaceVariables(previewStatus === "RECOVERY" ? recoverySubject : alertSubject)}
-                                        </div>
-                                    </div>
-
-                                    <div className="flex-1 overflow-y-auto bg-[#f1f5f9] p-10">
-                                        <div className="mx-auto max-w-[100%] shadow-2xl rounded-[1.5rem] overflow-hidden bg-white hover:scale-[1.01] transition-transform duration-500">
-                                            <div dangerouslySetInnerHTML={{ __html: replaceVariables(editBody || "", true) }} />
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </DialogContent>
-            </Dialog>
         </div>
     );
 }

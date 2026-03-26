@@ -1,11 +1,11 @@
 import { db } from "./db";
-import { eq, desc, asc, sql, or } from "drizzle-orm";
+import { eq, desc, asc, sql, or, isNull } from "drizzle-orm";
 import {
   users, tokens, servers, serverMetrics, databases, databaseMetrics, clusters, clusterMetrics, projects,
-  smtpSettings, alerts, projectAlertSettings, webMonitors, webMonitorMetrics, domainMonitors, projectEmailTemplates,
+  smtpSettings, alerts, projectAlertSettings, webMonitors, webMonitorMetrics, domainMonitors, emailTemplates,
   type User, type Token, type Server, type ServerMetric, type Database, type DatabaseMetric, type Cluster, type ClusterMetric, type Project,
   type SmtpSettings, type Alert, type ProjectAlertSettings, type WebMonitor, type WebMonitorMetric, type DomainMonitor, type DomainMonitorUpdate,
-  type ProjectEmailTemplate, type InsertProjectEmailTemplate
+  type EmailTemplate, type InsertEmailTemplate
 } from "@shared/schema";
 import {
   insertTokenSchema, insertServerSchema, insertServerMetricSchema, insertDatabaseSchema,
@@ -118,10 +118,10 @@ export interface IStorage {
   // === PROJECT AGENT ROLLOUT ===
   triggerProjectRollout(projectId: number): Promise<void>;
 
-  // === PROJECT EMAIL TEMPLATES ===
-  getProjectEmailTemplates(projectId: number): Promise<ProjectEmailTemplate[]>;
-  upsertProjectEmailTemplate(projectId: number, alertType: string, data: { subject: string, body: string }): Promise<ProjectEmailTemplate>;
-  deleteProjectEmailTemplate(projectId: number, alertType: string): Promise<void>;
+  // === EMAIL TEMPLATES ===
+  getProjectEmailTemplates(projectId?: number | null): Promise<EmailTemplate[]>;
+  upsertEmailTemplate(projectId: number | null, alertType: string, data: { subject: string, body: string }): Promise<EmailTemplate>;
+  deleteEmailTemplate(projectId: number | null, alertType: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -623,14 +623,28 @@ export class DatabaseStorage implements IStorage {
           });
 
           const category = typeToCategory[m.type];
-          let [customTemplate] = await db.select().from(projectEmailTemplates)
-            .where(sql`${projectEmailTemplates.projectId} = ${projectId} AND ${projectEmailTemplates.alertType} = ${m.type}`)
+          
+          // Try project-specific template first
+          let [customTemplate] = await db.select().from(emailTemplates)
+            .where(sql`${emailTemplates.projectId} = ${projectId} AND ${emailTemplates.alertType} = ${m.type}`)
             .limit(1);
 
           if (!customTemplate && category) {
-            [customTemplate] = await db.select().from(projectEmailTemplates)
-              .where(sql`${projectEmailTemplates.projectId} = ${projectId} AND ${projectEmailTemplates.alertType} = ${category}`)
+            [customTemplate] = await db.select().from(emailTemplates)
+              .where(sql`${emailTemplates.projectId} = ${projectId} AND ${emailTemplates.alertType} = ${category}`)
               .limit(1);
+          }
+
+          // Fallback to global templates if project-specific one not found
+          if (!customTemplate) {
+             [customTemplate] = await db.select().from(emailTemplates)
+               .where(sql`${emailTemplates.projectId} IS NULL AND ${emailTemplates.alertType} = ${m.type}`)
+               .limit(1);
+          }
+          if (!customTemplate && category) {
+             [customTemplate] = await db.select().from(emailTemplates)
+               .where(sql`${emailTemplates.projectId} IS NULL AND ${emailTemplates.alertType} = ${category}`)
+               .limit(1);
           }
 
           for (const recipient of recipients) {
@@ -663,14 +677,27 @@ export class DatabaseStorage implements IStorage {
             info(`[ALERTS] Sending recovery email for ${resourceName}: ${m.type} value ${m.value}`, "storage");
 
             const category = typeToCategory[m.type];
-            let [customTemplate] = await db.select().from(projectEmailTemplates)
-              .where(sql`${projectEmailTemplates.projectId} = ${projectId} AND ${projectEmailTemplates.alertType} = ${m.type}`)
+            // Try project-specific template first
+            let [customTemplate] = await db.select().from(emailTemplates)
+              .where(sql`${emailTemplates.projectId} = ${projectId} AND ${emailTemplates.alertType} = ${m.type}`)
               .limit(1);
 
             if (!customTemplate && category) {
-              [customTemplate] = await db.select().from(projectEmailTemplates)
-                .where(sql`${projectEmailTemplates.projectId} = ${projectId} AND ${projectEmailTemplates.alertType} = ${category}`)
+              [customTemplate] = await db.select().from(emailTemplates)
+                .where(sql`${emailTemplates.projectId} = ${projectId} AND ${emailTemplates.alertType} = ${category}`)
                 .limit(1);
+            }
+
+            // Fallback to global templates if project-specific one not found
+            if (!customTemplate) {
+               [customTemplate] = await db.select().from(emailTemplates)
+                 .where(sql`${emailTemplates.projectId} IS NULL AND ${emailTemplates.alertType} = ${m.type}`)
+                 .limit(1);
+            }
+            if (!customTemplate && category) {
+               [customTemplate] = await db.select().from(emailTemplates)
+                 .where(sql`${emailTemplates.projectId} IS NULL AND ${emailTemplates.alertType} = ${category}`)
+                 .limit(1);
             }
 
             for (const recipient of recipients) {
@@ -873,33 +900,53 @@ export class DatabaseStorage implements IStorage {
     await db.delete(alerts).where(where);
   }
 
-  // === PROJECT EMAIL TEMPLATES ===
-  async getProjectEmailTemplates(projectId: number): Promise<ProjectEmailTemplate[]> {
-    return await db.select().from(projectEmailTemplates).where(eq(projectEmailTemplates.projectId, projectId));
+  // === EMAIL TEMPLATES ===
+  async getProjectEmailTemplates(projectId?: number | null): Promise<EmailTemplate[]> {
+    if (projectId) {
+      const projectTemplates = await db.select().from(emailTemplates).where(eq(emailTemplates.projectId, projectId));
+      const globalTemplates = await db.select().from(emailTemplates).where(isNull(emailTemplates.projectId));
+      
+      const result = [...projectTemplates];
+      for (const gt of globalTemplates) {
+        if (!result.find(pt => pt.alertType === gt.alertType)) {
+          result.push(gt);
+        }
+      }
+      return result;
+    }
+    return await db.select().from(emailTemplates).where(isNull(emailTemplates.projectId));
   }
 
-  async upsertProjectEmailTemplate(projectId: number, alertType: string, data: { subject: string, body: string }): Promise<ProjectEmailTemplate> {
-    const [existing] = await db.select().from(projectEmailTemplates)
-      .where(sql`${projectEmailTemplates.projectId} = ${projectId} AND ${projectEmailTemplates.alertType} = ${alertType}`)
+  async upsertEmailTemplate(projectId: number | null, alertType: string, data: { subject: string, body: string }): Promise<EmailTemplate> {
+    const existing = await db.select().from(emailTemplates)
+      .where(
+        projectId 
+          ? sql`${emailTemplates.projectId} = ${projectId} AND ${emailTemplates.alertType} = ${alertType}`
+          : sql`${emailTemplates.projectId} IS NULL AND ${emailTemplates.alertType} = ${alertType}`
+      )
       .limit(1);
 
-    if (existing) {
-      const [updated] = await db.update(projectEmailTemplates)
+    if (existing.length > 0) {
+      const [updated] = await db.update(emailTemplates)
         .set({ ...data, updatedAt: new Date() })
-        .where(eq(projectEmailTemplates.id, existing.id))
+        .where(eq(emailTemplates.id, existing[0].id))
         .returning();
       return updated;
+    } else {
+      const [inserted] = await db.insert(emailTemplates)
+        .values({ ...data, projectId, alertType })
+        .returning();
+      return inserted;
     }
-
-    const [created] = await db.insert(projectEmailTemplates)
-      .values({ projectId, alertType, ...data })
-      .returning();
-    return created;
   }
 
-  async deleteProjectEmailTemplate(projectId: number, alertType: string): Promise<void> {
-    await db.delete(projectEmailTemplates)
-      .where(sql`${projectEmailTemplates.projectId} = ${projectId} AND ${projectEmailTemplates.alertType} = ${alertType}`);
+  async deleteEmailTemplate(projectId: number | null, alertType: string): Promise<void> {
+    await db.delete(emailTemplates)
+      .where(
+        projectId
+          ? sql`${emailTemplates.projectId} = ${projectId} AND ${emailTemplates.alertType} = ${alertType}`
+          : sql`${emailTemplates.projectId} IS NULL AND ${emailTemplates.alertType} = ${alertType}`
+      );
   }
 
   // === DATABASES ===

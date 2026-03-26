@@ -141,15 +141,15 @@ export const projectAlertSettings = pgTable("project_alert_settings", {
 });
 
 // === EMAIL TEMPLATES ===
-export const projectEmailTemplates = pgTable("project_email_templates", {
+export const emailTemplates = pgTable("email_templates", {
   id: serial("id").primaryKey(),
-  projectId: integer("project_id").references(() => projects.id, { onDelete: 'cascade' }).notNull(),
-  alertType: text("alert_type").notNull(), // 'server_down', 'cpu_high', 'memory_high', 'storage_high', 'db_storage_high', 'db_conn_high', 'web_down', 'web_ssl_expiring', 'domain_expiring'
+  projectId: integer("project_id").references(() => projects.id, { onDelete: 'cascade' }), // NULL means global/default
+  alertType: text("alert_type").notNull(), // 'server', 'database', etc.
   subject: text("subject").notNull(),
   body: text("body").notNull(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => [
-  index("project_alert_type_idx").on(table.projectId, table.alertType)
+  index("email_alert_type_idx").on(table.projectId, table.alertType)
 ]);
 
 
@@ -285,7 +285,7 @@ export const projectsRelations = relations(projects, ({ many, one }) => ({
     fields: [projects.id],
     references: [projectAlertSettings.projectId],
   }),
-  emailTemplates: many(projectEmailTemplates),
+  emailTemplates: many(emailTemplates),
 }));
 
 export const serversRelations = relations(servers, ({ one, many }) => ({
@@ -371,9 +371,9 @@ export const projectAlertSettingsRelations = relations(projectAlertSettings, ({ 
   }),
 }));
 
-export const projectEmailTemplatesRelations = relations(projectEmailTemplates, ({ one }) => ({
+export const emailTemplatesRelations = relations(emailTemplates, ({ one }) => ({
   project: one(projects, {
-    fields: [projectEmailTemplates.projectId],
+    fields: [emailTemplates.projectId],
     references: [projects.id],
   }),
 }));
@@ -426,7 +426,7 @@ export const insertClusterMetricSchema = createInsertSchema(clusterMetrics).omit
 export const insertWebMonitorSchema = createInsertSchema(webMonitors).omit({ id: true, createdAt: true, lastCheck: true, nextCheck: true, lastStatus: true, sslStatus: true, sslExpiryDate: true, serverName: true, tlsVersion: true });
 export const insertWebMonitorMetricSchema = createInsertSchema(webMonitorMetrics).omit({ id: true, createdAt: true });
 
-export const insertProjectEmailTemplateSchema = createInsertSchema(projectEmailTemplates).omit({ id: true, updatedAt: true });
+export const insertEmailTemplateSchema = createInsertSchema(emailTemplates).omit({ id: true, updatedAt: true });
 
 export const insertDomainMonitorSchema = createInsertSchema(domainMonitors).omit({ id: true, createdAt: true, lastCheck: true, nextCheck: true, expiryDate: true, lastAlertSentAt: true });
 
@@ -475,8 +475,8 @@ export type InsertWebMonitor = z.infer<typeof insertWebMonitorSchema>;
 export type InsertWebMonitorMetric = z.infer<typeof insertWebMonitorMetricSchema>;
 export type DomainMonitor = typeof domainMonitors.$inferSelect;
 export type InsertDomainMonitor = z.infer<typeof insertDomainMonitorSchema>;
-export type ProjectEmailTemplate = typeof projectEmailTemplates.$inferSelect;
-export type InsertProjectEmailTemplate = z.infer<typeof insertProjectEmailTemplateSchema>;
+export type EmailTemplate = typeof emailTemplates.$inferSelect;
+export type InsertEmailTemplate = z.infer<typeof insertEmailTemplateSchema>;
 
 // For internal service updates (full object but optional fields)
 export type WebMonitorUpdate = Partial<WebMonitor>;

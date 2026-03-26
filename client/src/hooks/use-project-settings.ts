@@ -34,51 +34,59 @@ export function useUpdateProjectAlertSettings(projectId: number) {
         },
     });
 }
-export function useProjectEmailTemplates(projectId: number) {
-    const url = buildUrl(api.projects.emailTemplates.list.path, { id: projectId });
+export function useProjectEmailTemplates(projectId?: number | null) {
+    const url = projectId 
+        ? buildUrl(api.projects.emailTemplates.list.path, { id: projectId })
+        : api.settings.emailTemplates.list.path;
+
     return useQuery<any[]>({
-        queryKey: [api.projects.emailTemplates.list.path, projectId],
+        queryKey: [projectId ? api.projects.emailTemplates.list.path : api.settings.emailTemplates.list.path, projectId],
         queryFn: async () => {
             const res = await fetch(url, { credentials: "include" });
-            if (!res.ok) throw new Error("Failed to fetch project email templates");
+            if (!res.ok) throw new Error("Failed to fetch email templates");
             return res.json();
         },
-        enabled: !!projectId,
     });
 }
 
-export function useUpdateProjectEmailTemplate(projectId: number) {
+export function useUpdateProjectEmailTemplate(projectId?: number | null) {
     return useMutation({
         mutationFn: async ({ alertType, data }: { alertType: string, data: any }) => {
-            const url = buildUrl(api.projects.emailTemplates.upsert.path, { id: projectId, alertType });
+            const url = projectId
+                ? buildUrl(api.projects.emailTemplates.upsert.path, { id: projectId, alertType })
+                : api.settings.emailTemplates.upsert.path.replace(':alertType', alertType);
+
             const res = await fetch(url, {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(data),
                 credentials: "include",
             });
-            if (!res.ok) throw new Error("Failed to update project email template");
+            if (!res.ok) throw new Error("Failed to update email template");
             return res.json();
         },
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: [api.projects.emailTemplates.list.path, projectId] });
+            queryClient.invalidateQueries({ queryKey: [projectId ? api.projects.emailTemplates.list.path : api.settings.emailTemplates.list.path, projectId] });
         },
     });
 }
 
-export function useDeleteProjectEmailTemplate(projectId: number) {
+export function useDeleteProjectEmailTemplate(projectId?: number | null) {
     return useMutation({
         mutationFn: async (alertType: string) => {
-            const url = buildUrl(api.projects.emailTemplates.delete.path, { id: projectId, alertType });
+            const url = projectId
+                ? buildUrl(api.projects.emailTemplates.delete.path, { id: projectId, alertType })
+                : api.settings.emailTemplates.delete.path.replace(':alertType', alertType);
+
             const res = await fetch(url, {
                 method: "DELETE",
                 credentials: "include",
             });
-            if (!res.ok) throw new Error("Failed to reset project email template");
+            if (!res.ok) throw new Error("Failed to reset email template");
             return true;
         },
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: [api.projects.emailTemplates.list.path, projectId] });
+            queryClient.invalidateQueries({ queryKey: [projectId ? api.projects.emailTemplates.list.path : api.settings.emailTemplates.list.path, projectId] });
         },
     });
 }
