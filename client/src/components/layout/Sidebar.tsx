@@ -12,13 +12,13 @@ export function Sidebar() {
   const navItems = [
     { href: "/", label: "Dashboard", icon: LayoutDashboard },
     { href: "/projects", label: "Projects", icon: Folder },
-    { href: "/email-design", label: "Email Design", icon: Palette },
     { href: "/servers", label: "Servers", icon: Server },
     { href: "/databases", label: "Databases", icon: Database },
     { href: "/clusters", label: "Kubernetes", icon: Cloud },
     { href: "/service-audit", label: "Service Audit", icon: Shield },
     { href: "/web-monitoring", label: "Web Monitoring", icon: Activity },
     { href: "/domain-monitoring", label: "Domain Monitoring", icon: Globe },
+    { href: "/email-design", label: "Email Design", icon: Palette },
   ];
 
   const { user } = useAuth();

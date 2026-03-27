@@ -66,7 +66,12 @@ export function useUpdateProjectEmailTemplate(projectId?: number | null) {
             return res.json();
         },
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: [projectId ? api.projects.emailTemplates.list.path : api.settings.emailTemplates.list.path, projectId] });
+            if (projectId === null) {
+                queryClient.invalidateQueries({ queryKey: [api.projects.emailTemplates.list.path] });
+                queryClient.invalidateQueries({ queryKey: [api.settings.emailTemplates.list.path] });
+            } else {
+                queryClient.invalidateQueries({ queryKey: [projectId ? api.projects.emailTemplates.list.path : api.settings.emailTemplates.list.path, projectId] });
+            }
         },
     });
 }

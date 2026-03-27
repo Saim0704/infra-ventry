@@ -241,10 +241,20 @@ export function EmailTemplateDesigner({ projectId = null }: EmailTemplateDesigne
             data: { subject: alertSubject, body: editBody }
         }, {
             onSuccess: () => {
-                toast({ title: "Template Saved", description: "Changes persisted globally." });
+                toast({ title: "Template Saved", description: projectId ? "Project override persisted." : "Global template updated." });
                 if (shouldClose) {
                     setEditingType(null);
                 }
+            }
+        });
+    };
+
+    const handleReset = () => {
+        if (!editingType || !projectId) return;
+        deleteTemplate.mutate(editingType, {
+            onSuccess: () => {
+                toast({ title: "Reset Successful", description: "Reverted to global template defaults." });
+                setEditingType(null);
             }
         });
     };
@@ -255,13 +265,23 @@ export function EmailTemplateDesigner({ projectId = null }: EmailTemplateDesigne
         <div className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {alertTypes.map((type) => {
-                    const hasCustom = templates?.some(t => t.alertType === type.id && (projectId ? t.projectId === projectId : !t.projectId));
+                    const template = templates?.find(t => t.alertType === type.id);
+                    const isOverride = !!(projectId && template?.projectId === projectId);
+                    const isInherited = !!(projectId && template && !template.projectId);
+                    
                     return (
                         <Card key={type.id} className="relative overflow-hidden group hover:shadow-lg transition-all border-border/40">
-                            <div className="absolute top-0 right-0 p-4">
-                                {hasCustom ? (
-                                    <span className="px-2 py-1 bg-emerald-500/10 text-emerald-500 rounded-full border border-emerald-500/20 text-[9px] font-black uppercase">Customized</span>
-                                ) : (
+                            <div className="absolute top-0 right-0 p-4 flex gap-2">
+                                {isOverride && (
+                                    <span className="px-2 py-1 bg-amber-500/10 text-amber-600 rounded-full border border-amber-500/20 text-[9px] font-black uppercase">Project Override</span>
+                                )}
+                                {isInherited && (
+                                    <span className="px-2 py-1 bg-blue-500/10 text-blue-600 rounded-full border border-blue-500/20 text-[9px] font-black uppercase">Inherited</span>
+                                )}
+                                {!projectId && template && (
+                                    <span className="px-2 py-1 bg-emerald-500/10 text-emerald-500 rounded-full border border-emerald-500/20 text-[9px] font-black uppercase">Global master</span>
+                                )}
+                                {!template && (
                                     <span className="px-2 py-1 bg-muted text-muted-foreground/60 rounded-full border border-border/40 text-[9px] font-black uppercase">Default</span>
                                 )}
                             </div>
@@ -271,7 +291,7 @@ export function EmailTemplateDesigner({ projectId = null }: EmailTemplateDesigne
                             </CardHeader>
                             <CardContent>
                                 <Button className="w-full rounded-xl font-bold" variant="outline" onClick={() => handleEdit(type.id)}>
-                                    {hasCustom ? "Edit Template" : "Customize"}
+                                    {(isOverride || !projectId) ? "Edit Template" : "Customize Override"}
                                 </Button>
                             </CardContent>
                         </Card>
@@ -347,11 +367,12 @@ export function EmailTemplateDesigner({ projectId = null }: EmailTemplateDesigne
 
                                 <TabsContent value="design" className="space-y-8 mt-0 outline-none animate-in fade-in duration-500">
                                     {/* BRANDING & IDENTITY */}
-                                    <div className="bg-slate-50/50 rounded-[2rem] border border-slate-200/50 p-6 space-y-4 transition-all duration-500 hover:border-indigo-500/20 shadow-[0_4px_20px_rgba(0,0,0,0.02)]">
+                                    <div className="bg-slate-50/50 rounded-[2rem] border border-slate-200/50 p-6 space-y-6 transition-all duration-500 hover:border-indigo-500/20 shadow-[0_4px_20px_rgba(0,0,0,0.02)]">
                                         <div className="flex items-center justify-between px-1">
-                                            <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Branding & Identity</Label>
+                                            <Label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Branding & Layout</Label>
                                             <Sparkles className="h-3.5 w-3.5 text-indigo-400" />
                                         </div>
+
                                         <div className="grid grid-cols-2 gap-4">
                                             <div className={cn("flex items-center justify-between p-4 rounded-2xl transition-all duration-300 border bg-white shadow-sm", getC('showLogo') ? "border-indigo-500/30 ring-1 ring-indigo-500/5" : "border-slate-200/60 opacity-60")}>
                                                 <div className="flex items-center gap-2.5">
@@ -372,6 +393,29 @@ export function EmailTemplateDesigner({ projectId = null }: EmailTemplateDesigne
                                                 <Switch checked={getC('showCompany')} onCheckedChange={(v) => setV('showCompany', v)} className="data-[state=checked]:bg-indigo-600" />
                                             </div>
                                         </div>
+
+                                        {projectId && (
+                                            <div className="space-y-4 pt-2 animate-in fade-in slide-in-from-top-2 duration-500">
+                                                <div className="space-y-2">
+                                                    <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Custom Logo URL (Project Override)</Label>
+                                                    <Input 
+                                                        value={simpleConfig.logoUrl} 
+                                                        onChange={(e) => setSimpleConfig((prev: any) => ({ ...prev, logoUrl: e.target.value }))} 
+                                                        placeholder="https://example.com/logo.png"
+                                                        className="h-11 rounded-xl bg-white border-slate-200 focus:border-indigo-500/20 transition-all font-medium text-xs" 
+                                                    />
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Custom Brand Name (Project Override)</Label>
+                                                    <Input 
+                                                        value={simpleConfig.companyName} 
+                                                        onChange={(e) => setSimpleConfig((prev: any) => ({ ...prev, companyName: e.target.value }))} 
+                                                        placeholder="Acme Corp"
+                                                        className="h-11 rounded-xl bg-white border-slate-200 focus:border-indigo-500/20 transition-all font-medium text-xs" 
+                                                    />
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
 
                                     {/* EMAIL THEMES */}
@@ -574,10 +618,18 @@ export function EmailTemplateDesigner({ projectId = null }: EmailTemplateDesigne
                                 </TabsContent>
                             </Tabs>
                             <div className="mt-auto pt-6 border-t border-slate-200 flex items-center justify-between gap-2">
-                                <Button variant="ghost" className="rounded-2xl h-12 px-6 font-bold uppercase tracking-widest text-[10px] border-2 border-slate-100 hover:bg-white" onClick={() => setEditingType(null)}>Discard</Button>
                                 <div className="flex gap-2">
-                                    <Button variant="outline" className="rounded-2xl h-12 px-6 font-black uppercase tracking-widest text-[10px] bg-emerald-50 text-emerald-600 border-emerald-100 hover:bg-emerald-100 transition-all border-2" onClick={() => handleSave(false)}>Save Changes</Button>
-                                    <Button className="rounded-2xl h-12 px-8 font-black uppercase tracking-widest text-[10px] bg-indigo-600 shadow-xl shadow-indigo-600/20 hover:shadow-indigo-600/40 transition-all" onClick={() => handleSave(true)}>Submit</Button>
+                                    <Button variant="ghost" className="rounded-xl h-10 px-4 font-black uppercase tracking-widest text-[9px] border-2 border-slate-100 hover:bg-white transition-all shadow-sm" onClick={() => setEditingType(null)}>Discard</Button>
+                                    {projectId && templates?.find(t => t.alertType === editingType)?.projectId === projectId && (
+                                        <Button variant="ghost" className="rounded-xl h-10 px-4 font-black uppercase tracking-widest text-[9px] text-rose-500 hover:bg-rose-50/50 hover:text-rose-600 transition-all border-2 border-transparent hover:border-rose-100/50 flex items-center gap-2" onClick={handleReset}>
+                                            <Trash2 className="h-4 w-4 opacity-70" />
+                                            Reset
+                                        </Button>
+                                    )}
+                                </div>
+                                <div className="flex gap-2">
+                                    <Button variant="outline" className="rounded-xl h-10 px-4 font-black uppercase tracking-widest text-[9px] bg-emerald-50 text-emerald-600 border-emerald-100 hover:bg-emerald-100 transition-all border-2" onClick={() => handleSave(false)}>Save</Button>
+                                    <Button className="rounded-xl h-10 px-6 font-black uppercase tracking-widest text-[9px] bg-indigo-600 shadow-xl shadow-indigo-600/20 hover:shadow-indigo-600/40 transition-all" onClick={() => handleSave(true)}>Submit</Button>
                                 </div>
                             </div>
                         </div>
