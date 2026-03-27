@@ -95,13 +95,6 @@ export default function SettingsPage() {
                       <span className="font-medium">User Management</span>
                     </TabsTrigger>
 
-                    <TabsTrigger
-                      value="email-design"
-                      className="w-full justify-start gap-3 px-4 py-3 h-auto data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-xl transition-all duration-200 border border-transparent data-[state=active]:border-primary/20"
-                    >
-                      <Palette className="h-4 w-4" />
-                      <span className="font-medium">Global Email Design</span>
-                    </TabsTrigger>
                   </>
                 )}
               </TabsList>
@@ -238,24 +231,6 @@ export default function SettingsPage() {
                 </TabsContent>
                 <TabsContent value="users" className="mt-0 outline-none">
                   <UserManagementTable />
-                </TabsContent>
-                <TabsContent value="email-design" className="mt-0 outline-none">
-                  <Card className="border-border/40 shadow-sm bg-card/50 backdrop-blur-sm overflow-hidden">
-                    <CardHeader className="bg-primary/5 pb-4">
-                        <div className="flex items-center gap-3">
-                            <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
-                                <Palette className="h-5 w-5" />
-                            </div>
-                            <div>
-                                <CardTitle className="text-xl font-bold">System Default Design</CardTitle>
-                                <CardDescription className="text-xs">Configure the default alert aesthetics for the entire infrastructure. These templates will serve as the foundation for all projects unless explicitly overridden.</CardDescription>
-                            </div>
-                        </div>
-                    </CardHeader>
-                    <CardContent className="pt-8">
-                       <EmailTemplateDesigner projectId={null} />
-                    </CardContent>
-                  </Card>
                 </TabsContent>
               </>
             )}

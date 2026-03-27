@@ -17,6 +17,7 @@ import DomainMonitoringPage from "@/pages/DomainMonitoring";
 import StatusPage from "@/pages/StatusPage";
 import LoginPage from "@/pages/Login";
 import ServiceAuditPage from "@/pages/ServiceAudit";
+import EmailDesignPage from "@/pages/EmailDesign";
 
 function Router() {
   useRealtime();
@@ -44,6 +45,7 @@ function Router() {
           <Route path="/service-audit" component={ServiceAuditPage} />
           <Route path="/web-monitoring" component={WebMonitoringPage} />
           <Route path="/domain-monitoring" component={DomainMonitoringPage} />
+          <Route path="/email-design" component={EmailDesignPage} />
           <Route path="/settings" component={SettingsPage} />
         </>
       ) : (
