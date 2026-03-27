@@ -536,7 +536,7 @@ export class DatabaseStorage implements IStorage {
         user: projectAlertConfig.smtpUser || smtpSettings.user,
         pass: projectAlertConfig.smtpPass || smtpSettings.pass,
         fromEmail: projectAlertConfig.smtpSenderEmail || smtpSettings.fromEmail,
-        senderName: projectAlertConfig.smtpSenderName || projectAlertConfig.companyName || (smtpSettings as any).senderName || "InfraWatch Alert",
+        senderName: projectAlertConfig.smtpSenderName || projectAlertConfig.companyName || (smtpSettings as any).senderName || "Infra-Ventry Alert",
       };
 
       const typeToCategory: Record<string, string> = {

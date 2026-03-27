@@ -97,8 +97,8 @@ EOF
         if [ "$SHOULD_AUDIT" -eq 1 ]; then
             echo "Server requested service audit. Running audit tool..."
             # Try to run from install dir first, fallback to curl
-            if [ -f "/opt/infrawatch-agent/audit_services.sh" ]; then
-                /bin/bash /opt/infrawatch-agent/audit_services.sh "$SERVER_URL" "$AGENT_TOKEN"
+            if [ -f "/opt/infra-ventry-agent/audit_services.sh" ]; then
+                /bin/bash /opt/infra-ventry-agent/audit_services.sh "$SERVER_URL" "$AGENT_TOKEN"
             else
                 /bin/bash -c "curl -s -L '$SERVER_URL/get/audit_services.sh' | bash -s -- '$SERVER_URL' '$AGENT_TOKEN'"
             fi

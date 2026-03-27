@@ -32,7 +32,7 @@ export function Sidebar() {
             <Terminal className="text-white h-6 w-6" />
           </div>
           <div>
-            <h1 className="font-display font-bold text-lg leading-none">InfraWatch</h1>
+            <h1 className="font-display font-bold text-lg leading-none">Infra-Ventry</h1>
             <span className="text-xs text-muted-foreground font-medium">System Monitor</span>
           </div>
         </div>

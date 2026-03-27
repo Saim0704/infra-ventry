@@ -31,7 +31,8 @@ const serveScript = (filename: string) => (req: Request, res: Response) => {
 app.get("/get/install-agent.sh", serveScript("install-agent.sh"));
 app.get("/get/vm_agent.sh", serveScript("vm_agent.sh"));
 app.get("/get/audit_services.sh", serveScript("audit_services.sh"));
-app.get("/get/infrawatch-agent", serveScript("infrawatch-agent"));
+app.get("/get/infra-ventry-agent", serveScript("infra-ventry-agent"));
+app.get("/get/infrawatch-agent", serveScript("infra-ventry-agent")); // Backward compatibility alias
 
 // Initialize real-time updates
 setupRealtime(httpServer);

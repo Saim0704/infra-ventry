@@ -65,7 +65,7 @@ type ServerResponse struct {
 
 func main() {
 	fmt.Println("-----------------------------------------")
-	fmt.Println("Infrawatch Go Agent Started")
+	fmt.Println("Infra-Ventry Go Agent Started")
 	fmt.Println("Server:", ServerURL)
 	fmt.Println("Initial Interval:", Interval)
 	fmt.Println("-----------------------------------------")

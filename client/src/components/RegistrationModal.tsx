@@ -99,8 +99,8 @@ export function RegistrationModal({ open, onOpenChange, token, projectName, init
     const serverUrl = typeof window !== 'undefined' ? window.location.origin : "http://YOUR_SERVER_IP:3000";
     const baseVmCommand = `curl -s -L "${serverUrl}/get/vm_agent.sh" | bash -s -- ${serverUrl} ${token || "YOUR_TOKEN"}`;
 
-    const dbCommand = `docker run -d --name infra-db-agent -e AGENT_TOKEN=${token || "YOUR_TOKEN"} infrawatch/db-agent:latest`;
-    const k8sCommand = `helm install infra-agent infrawatch/infra-agent --set token=${token || "YOUR_TOKEN"}`;
+    const dbCommand = `docker run -d --name infra-db-agent -e AGENT_TOKEN=${token || "YOUR_TOKEN"} infra-ventry/db-agent:latest`;
+    const k8sCommand = `helm install infra-agent infra-ventry/infra-agent --set token=${token || "YOUR_TOKEN"}`;
 
     const auditOnceCommand = `curl -s -L "${serverUrl}/get/audit_services.sh" | bash -s -- ${serverUrl} ${token || "YOUR_TOKEN"}`;
     const cronExpression = `${parseInt(cronTime.minute)} ${parseInt(cronTime.hour)} * * *`;
@@ -229,7 +229,7 @@ export function RegistrationModal({ open, onOpenChange, token, projectName, init
                                                     <TerminalBlock 
                                                         command={agentSubMethod === "persistent" 
                                                             ? `curl -s -L "${serverUrl}/get/install-agent.sh" | sudo bash -s -- "${serverUrl}" "${token || 'YOUR_TOKEN'}"`
-                                                            : `curl -s -L "${serverUrl}/get/audit_services.sh" | bash -s -- "${serverUrl}" "${token || 'YOUR_TOKEN'}" && export SERVER_URL="${serverUrl}" AGENT_TOKEN="${token || 'YOUR_TOKEN'}" && curl -s -L "$SERVER_URL/get/infrawatch-agent" -o infrawatch-agent && chmod +x infrawatch-agent && ./infrawatch-agent`
+                                                            : `curl -s -L "${serverUrl}/get/audit_services.sh" | bash -s -- "${serverUrl}" "${token || 'YOUR_TOKEN'}" && export SERVER_URL="${serverUrl}" AGENT_TOKEN="${token || 'YOUR_TOKEN'}" && curl -s -L "$SERVER_URL/get/infra-ventry-agent" -o infra-ventry-agent && chmod +x infra-ventry-agent && ./infra-ventry-agent`
                                                         } 
                                                         onCopy={(cmd) => copyToClipboard(cmd, agentSubMethod === "persistent" ? "Persistent Install" : "Test Command")} 
                                                     />

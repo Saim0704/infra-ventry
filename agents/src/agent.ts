@@ -3,9 +3,9 @@ import axios from "axios";
 import { execSync } from "child_process";
 
 /**
- * Infrawatch Agent
+ * Infra-Ventry Agent
  * 
- * Collects system metrics and reports them to the Infrawatch server at regular intervals.
+ * Collects system metrics and reports them to the Infra-Ventry server at regular intervals.
  */
 
 const SERVER_URL = process.env.SERVER_URL || "http://localhost:3000";
@@ -156,7 +156,7 @@ async function report() {
 
 // Start reporting
 console.log("-----------------------------------------");
-console.log("Infrawatch Agent Started");
+console.log("Infra-Ventry Agent Started");
 console.log(`Server: ${SERVER_URL}`);
 console.log(`Interval: ${INTERVAL / 1000}s`);
 console.log("-----------------------------------------");

@@ -891,7 +891,7 @@ function SmtpSettingsSection() {
                     <FormItem>
                       <FormLabel className="text-[10px] font-bold uppercase tracking-widest text-foreground/70">From Email Address</FormLabel>
                       <FormControl>
-                        <Input placeholder="alerts@infrawatch.com" className="h-11 bg-muted/20 border-border/40 rounded-xl" {...field} />
+                        <Input placeholder="alerts@infra-ventry.com" className="h-11 bg-muted/20 border-border/40 rounded-xl" {...field} />
                       </FormControl>
                       <FormDescription className="text-[10px]">Email address that will appear in the FROM field.</FormDescription>
                     </FormItem>

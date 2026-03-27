@@ -242,7 +242,7 @@ export default function StatusPage() {
                         &copy; {new Date().getFullYear()} {project.name} &bull; All Systems Monitored
                     </p>
                     <p className="text-[10px] font-black uppercase tracking-[0.3em] text-muted-foreground/40">
-                        Powered by <span className="text-primary italic">InfraWatch</span> Pro
+                        Powered by <span className="text-primary italic">Infra-Ventry</span> Pro
                     </p>
                 </div>
             </footer>

@@ -6,7 +6,7 @@ export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"
 # Configuration
 SERVER_URL="$1"
 AGENT_TOKEN="$2"
-LOG_FILE="/tmp/infrawatch_audit.log"
+LOG_FILE="/tmp/infra-ventry_audit.log"
 
 # Function to log both to console and file
 log() {
@@ -19,7 +19,7 @@ if [ -z "$SERVER_URL" ]; then
 fi
 
 log "------------------------------------------------"
-log "InfraWatch Service Audit Tool v1.1"
+log "Infra-Ventry Service Audit Tool v1.1"
 
 # Better IP detection
 IP_ADDRESS=$(hostname -I | awk '{print $1}')
@@ -111,7 +111,7 @@ SERVICES+="}"
 log "Audit Data: $SERVICES"
 
 # Report to specialized audit endpoint
-log "Reporting audit results to InfraWatch..."
+log "Reporting audit results to Infra-Ventry..."
 CURL_OUT=$(curl -s -w "\n%{http_code}" -X POST "$SERVER_URL/api/ingest/audit" \
   -H "Content-Type: application/json" \
   -d "{\"token\":\"$AGENT_TOKEN\",\"data\":{\"hostname\":\"$HOSTNAME\",\"ipAddress\":\"$IP_ADDRESS\",\"serviceVersions\":$SERVICES}}")

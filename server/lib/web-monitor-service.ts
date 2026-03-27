@@ -63,7 +63,7 @@ export class WebMonitorService {
                 maxRedirects: monitor.followRedirects ? 5 : 0,
                 validateStatus: () => true, // Don't throw for non-2xx
                 headers: {
-                    "User-Agent": "InfraWatch-Monitor/1.0"
+                    "User-Agent": "Infra-Ventry-Monitor/1.0"
                 }
             });
 
