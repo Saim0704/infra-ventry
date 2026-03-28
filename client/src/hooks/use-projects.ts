@@ -25,7 +25,10 @@ export function useCreateProject() {
                 body: JSON.stringify(data),
                 credentials: "include",
             });
-            if (!res.ok) throw new Error("Failed to create project");
+            if (!res.ok) {
+                const errorData = await res.json().catch(() => ({}));
+                throw new Error(errorData.message || "Failed to create project");
+            }
             return api.projects.create.responses[201].parse(await res.json());
         },
         onSuccess: () => {

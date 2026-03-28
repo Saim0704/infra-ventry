@@ -15,6 +15,17 @@ export const sessions = pgTable(
   (table) => [index("IDX_session_expire").on(table.expire)]
 );
 
+// === ORGANIZATIONS ===
+export const organizations = pgTable("organizations", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull().unique(),
+  domain: text("domain").notNull().unique(),
+  dbName: text("db_name"), // Added for Multi-DB isolation
+  plan: text("plan").default("trial").notNull(), // 'trial', 'pro'
+  trialExpiresAt: timestamp("trial_expires_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // === USERS ===
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -24,6 +35,7 @@ export const users = pgTable("users", {
   firstName: text("first_name"),
   lastName: text("last_name"),
   role: text("role").default("read").notNull(), // 'admin' or 'read'
+  orgId: integer("org_id").references(() => organizations.id, { onDelete: 'cascade' }),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -64,12 +76,16 @@ export const servers = pgTable("servers", {
 // === PROJECTS ===
 export const projects = pgTable("projects", {
   id: serial("id").primaryKey(),
-  name: text("name").notNull().unique(),
+  name: text("name").notNull(),
   description: text("description"),
   slug: text("slug").notNull().unique(),
+  orgId: integer("org_id").references(() => organizations.id, { onDelete: 'cascade' }),
   createdAt: timestamp("created_at").defaultNow(),
   sortOrder: integer("sort_order").default(0).notNull(),
-});
+}, (table) => [
+  index("project_org_idx").on(table.orgId),
+  index("project_name_org_idx").on(table.name, table.orgId)
+]);
 
 // === PROJECT ALERT SETTINGS ===
 export const projectAlertSettings = pgTable("project_alert_settings", {
@@ -144,12 +160,14 @@ export const projectAlertSettings = pgTable("project_alert_settings", {
 export const emailTemplates = pgTable("email_templates", {
   id: serial("id").primaryKey(),
   projectId: integer("project_id").references(() => projects.id, { onDelete: 'cascade' }), // NULL means global/default
+  orgId: integer("org_id").references(() => organizations.id, { onDelete: 'cascade' }), // Added for global templates per org
   alertType: text("alert_type").notNull(), // 'server', 'database', etc.
   subject: text("subject").notNull(),
   body: text("body").notNull(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => [
-  index("email_alert_type_idx").on(table.projectId, table.alertType)
+  index("email_alert_type_idx").on(table.projectId, table.alertType),
+  index("email_org_idx").on(table.orgId)
 ]);
 
 
@@ -166,6 +184,7 @@ export const serverMetrics = pgTable("server_metrics", {
 // === SETTINGS & ALERTS ===
 export const smtpSettings = pgTable("smtp_settings", {
   id: serial("id").primaryKey(),
+  orgId: integer("org_id").references(() => organizations.id, { onDelete: 'cascade' }).unique(),
   host: text("host").notNull(),
   port: integer("port").notNull(),
   user: text("user").notNull(),
@@ -402,9 +421,10 @@ export const domainMonitorsRelations = relations(domainMonitors, ({ one }) => ({
 
 
 // === ZOD SCHEMAS ===
+export const insertOrganizationSchema = createInsertSchema(organizations).omit({ id: true, createdAt: true });
 export const insertUserSchema = createInsertSchema(users, {
   email: z.string().email("Invalid email address"),
-  username: z.string().min(3, "Username must be at least 3 characters"),
+  username: z.string().min(3, "Username must be at least 3 characters").optional(),
   password: z.string().min(6, "Password must be at least 6 characters"),
 }).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertTokenSchema = createInsertSchema(tokens).omit({ id: true, createdAt: true });
@@ -453,7 +473,14 @@ export const serverWithMetricsSchema = z.object({
 });
 
 // === TYPES ===
-export type User = typeof users.$inferSelect;
+export type Organization = typeof organizations.$inferSelect;
+export type InsertOrganization = z.infer<typeof insertOrganizationSchema>;
+export type User = typeof users.$inferSelect & {
+  orgName?: string;
+  orgDomain?: string;
+  plan?: string;
+  trialExpiresAt?: string | Date | null;
+};
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type Token = typeof tokens.$inferSelect;
 export type Project = typeof projects.$inferSelect;

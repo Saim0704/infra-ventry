@@ -135,10 +135,9 @@ export interface IStorage {
 }
 
 export class DatabaseStorage implements IStorage {
-  constructor(private db: any) {}
   // === ORGANIZATIONS ===
   async getOrganization(id: number): Promise<Organization | undefined> {
-    const [org] = await this.db.select().from(organizations).where(eq(organizations.id, id));
+    const [org] = await db.select().from(organizations).where(eq(organizations.id, id));
     return org;
   }
 
@@ -147,17 +146,17 @@ export class DatabaseStorage implements IStorage {
     if (!org || org.plan !== 'trial') return;
 
     if (type === 'project') {
-      const [pCount] = await this.db.select({ count: sql<number>`count(*)` }).from(projects).where(eq(projects.orgId, orgId));
+      const [pCount] = await db.select({ count: sql<number>`count(*)` }).from(projects).where(eq(projects.orgId, orgId));
       if (Number(pCount?.count || 0) >= 5) {
         throw new Error("Project limit reached (Max 5 for trial plan)");
       }
     } else {
       // Sum all resources across all projects of this org
-      const [sCount] = await this.db.select({ count: sql<number>`count(*)` }).from(servers).innerJoin(projects, eq(servers.projectId, projects.id)).where(eq(projects.orgId, orgId));
-      const [dCount] = await this.db.select({ count: sql<number>`count(*)` }).from(databases).innerJoin(projects, eq(databases.projectId, projects.id)).where(eq(projects.orgId, orgId));
-      const [cCount] = await this.db.select({ count: sql<number>`count(*)` }).from(clusters).innerJoin(projects, eq(clusters.projectId, projects.id)).where(eq(projects.orgId, orgId));
-      const [wCount] = await this.db.select({ count: sql<number>`count(*)` }).from(webMonitors).innerJoin(projects, eq(webMonitors.projectId, projects.id)).where(eq(projects.orgId, orgId));
-      const [dmCount] = await this.db.select({ count: sql<number>`count(*)` }).from(domainMonitors).innerJoin(projects, eq(domainMonitors.projectId, projects.id)).where(eq(projects.orgId, orgId));
+      const [sCount] = await db.select({ count: sql<number>`count(*)` }).from(servers).innerJoin(projects, eq(servers.projectId, projects.id)).where(eq(projects.orgId, orgId));
+      const [dCount] = await db.select({ count: sql<number>`count(*)` }).from(databases).innerJoin(projects, eq(databases.projectId, projects.id)).where(eq(projects.orgId, orgId));
+      const [cCount] = await db.select({ count: sql<number>`count(*)` }).from(clusters).innerJoin(projects, eq(clusters.projectId, projects.id)).where(eq(projects.orgId, orgId));
+      const [wCount] = await db.select({ count: sql<number>`count(*)` }).from(webMonitors).innerJoin(projects, eq(webMonitors.projectId, projects.id)).where(eq(projects.orgId, orgId));
+      const [dmCount] = await db.select({ count: sql<number>`count(*)` }).from(domainMonitors).innerJoin(projects, eq(domainMonitors.projectId, projects.id)).where(eq(projects.orgId, orgId));
       
       const total = Number(sCount?.count || 0) + Number(dCount?.count || 0) + Number(cCount?.count || 0) + Number(wCount?.count || 0) + Number(dmCount?.count || 0);
       if (total >= 30) {
@@ -167,22 +166,22 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getOrganizationByDomain(domain: string): Promise<Organization | undefined> {
-    const [org] = await this.db.select().from(organizations).where(eq(organizations.domain, domain));
+    const [org] = await db.select().from(organizations).where(eq(organizations.domain, domain));
     return org;
   }
 
   async createOrganization(data: z.infer<typeof insertOrganizationSchema>): Promise<Organization> {
-    const [org] = await this.db.insert(organizations).values(data).returning();
+    const [org] = await db.insert(organizations).values(data).returning();
     return org;
   }
 
   // === TOKENS ===
   async getTokens(orgId: number, projectId?: number | null): Promise<Token[]> {
     if (projectId) {
-      return await this.db.select().from(tokens).where(eq(tokens.projectId, projectId));
+      return await db.select().from(tokens).where(eq(tokens.projectId, projectId));
     }
     // Filter tokens by project -> project by org
-    return await this.db.select({ token: tokens })
+    return await db.select({ token: tokens })
       .from(tokens)
       .innerJoin(projects, eq(tokens.projectId, projects.id))
       .where(eq(projects.orgId, orgId))
@@ -192,18 +191,18 @@ export class DatabaseStorage implements IStorage {
   async createToken(name: string, type: string, projectId?: number | null): Promise<Token> {
     // Generate a random token
     const tokenStr = `ag_${Math.random().toString(36).substring(2)}${Math.random().toString(36).substring(2)}`;
-    const [token] = await this.db.insert(tokens).values({ name, type, token: tokenStr, projectId }).returning();
+    const [token] = await db.insert(tokens).values({ name, type, token: tokenStr, projectId }).returning();
     return token;
   }
 
   async getTokenByString(tokenStr: string): Promise<Token | undefined> {
-    const [token] = await this.db.select().from(tokens).where(eq(tokens.token, tokenStr));
+    const [token] = await db.select().from(tokens).where(eq(tokens.token, tokenStr));
     return token;
   }
 
   async getTokenByProject(projectId: number | null): Promise<Token | undefined> {
     if (projectId === null) return undefined;
-    const [token] = await this.db.select().from(tokens).where(eq(tokens.projectId, projectId)).limit(1);
+    const [token] = await db.select().from(tokens).where(eq(tokens.projectId, projectId)).limit(1);
     return token;
   }
 
@@ -213,12 +212,12 @@ export class DatabaseStorage implements IStorage {
   }
 
   async revokeToken(id: number): Promise<void> {
-    await this.db.delete(tokens).where(eq(tokens.id, id));
+    await db.delete(tokens).where(eq(tokens.id, id));
   }
 
   // === PROJECTS ===
   async getProjects(orgId: number): Promise<Project[]> {
-    return await this.db.select().from(projects)
+    return await db.select().from(projects)
       .where(eq(projects.orgId, orgId))
       .orderBy(asc(projects.sortOrder), asc(projects.name));
   }
@@ -226,18 +225,18 @@ export class DatabaseStorage implements IStorage {
   async createProject(orgId: number, data: z.infer<typeof insertProjectSchema>): Promise<Project> {
     await this.checkResourceLimits(orgId, 'project');
     const slug = data.name.toLowerCase().replace(/ /g, '-').replace(/[^\w-]+/g, '');
-    const [project] = await this.db.insert(projects).values({ ...data, slug, orgId }).returning();
+    const [project] = await db.insert(projects).values({ ...data, slug, orgId }).returning();
     return project;
   }
 
   async getProjectStatusBySlug(slug: string) {
-    const [project] = await this.db.select().from(projects).where(eq(projects.slug, slug));
+    const [project] = await db.select().from(projects).where(eq(projects.slug, slug));
     if (!project) return null;
 
     const resources = await this.getProjectResources(project.orgId!, project.id);
     if (!resources) return null;
 
-    const [settings] = await this.db.select().from(projectAlertSettings).where(eq(projectAlertSettings.projectId, project.id));
+    const [settings] = await db.select().from(projectAlertSettings).where(eq(projectAlertSettings.projectId, project.id));
     const showWeb = settings?.showWebMonitors ?? true;
     const showServers = settings?.showServers ?? true;
     const showDatabases = settings?.showDatabases ?? true;
@@ -268,7 +267,7 @@ export class DatabaseStorage implements IStorage {
         lastSeen: (c as any).lastSeen,
       })) : [],
       webMonitors: showWeb ? await Promise.all(resources.webMonitors.map(async w => {
-        const lastMetrics = await this.db.select().from(webMonitorMetrics)
+        const lastMetrics = await db.select().from(webMonitorMetrics)
           .where(eq(webMonitorMetrics.monitorId, w.id))
           .orderBy(desc(webMonitorMetrics.createdAt))
           .limit(40);
@@ -296,24 +295,24 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateProject(id: number, data: Partial<z.infer<typeof insertProjectSchema>>): Promise<Project> {
-    const [project] = await this.db.update(projects).set({ ...data }).where(eq(projects.id, id)).returning();
+    const [project] = await db.update(projects).set({ ...data }).where(eq(projects.id, id)).returning();
     return project;
   }
 
   async updateProjectSortOrder(id: number, order: number): Promise<void> {
-    await this.db.update(projects).set({ sortOrder: order }).where(eq(projects.id, id));
+    await db.update(projects).set({ sortOrder: order }).where(eq(projects.id, id));
   }
 
   async deleteProject(id: number): Promise<void> {
     // Set projectId to null for all servers in this project before deleting
-    await this.db.update(servers).set({ projectId: null }).where(eq(servers.projectId, id));
-    await this.db.update(databases).set({ projectId: null }).where(eq(databases.projectId, id));
-    await this.db.update(clusters).set({ projectId: null }).where(eq(clusters.projectId, id));
-    await this.db.delete(projects).where(eq(projects.id, id));
+    await db.update(servers).set({ projectId: null }).where(eq(servers.projectId, id));
+    await db.update(databases).set({ projectId: null }).where(eq(databases.projectId, id));
+    await db.update(clusters).set({ projectId: null }).where(eq(clusters.projectId, id));
+    await db.delete(projects).where(eq(projects.id, id));
   }
 
   async getProjectResources(orgId: number, projectId: number) {
-    const [project] = await this.db.select().from(projects).where(and(eq(projects.id, projectId), eq(projects.orgId, orgId))).limit(1);
+    const [project] = await db.select().from(projects).where(and(eq(projects.id, projectId), eq(projects.orgId, orgId))).limit(1);
     if (!project) return undefined;
 
     const allServers = await this.getServers(project.orgId!);
@@ -337,32 +336,32 @@ export class DatabaseStorage implements IStorage {
   // === STATS ===
   async getDashboardStats(orgId: number) {
     // Optimized count queries with joins to projects for org filtering
-    const serverCount = await this.db.select({ count: sql<number>`count(*)` })
+    const serverCount = await db.select({ count: sql<number>`count(*)` })
       .from(servers)
       .innerJoin(projects, eq(servers.projectId, projects.id))
       .where(eq(projects.orgId, orgId));
 
-    const dbCount = await this.db.select({ count: sql<number>`count(*)` })
+    const dbCount = await db.select({ count: sql<number>`count(*)` })
       .from(databases)
       .innerJoin(projects, eq(databases.projectId, projects.id))
       .where(eq(projects.orgId, orgId));
 
-    const clusterCount = await this.db.select({ count: sql<number>`count(*)` })
+    const clusterCount = await db.select({ count: sql<number>`count(*)` })
       .from(clusters)
       .innerJoin(projects, eq(clusters.projectId, projects.id))
       .where(eq(projects.orgId, orgId));
 
-    const webMonitorCount = await this.db.select({ count: sql<number>`count(*)` })
+    const webMonitorCount = await db.select({ count: sql<number>`count(*)` })
       .from(webMonitors)
       .innerJoin(projects, eq(webMonitors.projectId, projects.id))
       .where(eq(projects.orgId, orgId));
 
-    const domainMonitorCount = await this.db.select({ count: sql<number>`count(*)` })
+    const domainMonitorCount = await db.select({ count: sql<number>`count(*)` })
       .from(domainMonitors)
       .innerJoin(projects, eq(domainMonitors.projectId, projects.id))
       .where(eq(projects.orgId, orgId));
 
-    const projectCount = await this.db.select({ count: sql<number>`count(*)` })
+    const projectCount = await db.select({ count: sql<number>`count(*)` })
       .from(projects)
       .where(eq(projects.orgId, orgId));
 
@@ -380,7 +379,7 @@ export class DatabaseStorage implements IStorage {
 
   // === SERVERS ===
   async getServers(orgId: number): Promise<(Server & { metrics: ServerMetric[], project?: Project })[]> {
-    const allServers = await this.db.select({
+    const allServers = await db.select({
       server: servers,
       project: projects
     })
@@ -392,7 +391,7 @@ export class DatabaseStorage implements IStorage {
     // Fetch latest metrics and project for each server
     const serversWithExtras = await Promise.all(allServers.map(async (row) => {
       const server = row.server;
-      const metrics = await this.db.select().from(serverMetrics)
+      const metrics = await db.select().from(serverMetrics)
         .where(eq(serverMetrics.serverId, server.id))
         .orderBy(desc(serverMetrics.createdAt))
         .limit(1);
@@ -404,17 +403,17 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getServer(id: number): Promise<(Server & { metrics: ServerMetric[], project?: Project }) | undefined> {
-    const [server] = await this.db.select().from(servers).where(eq(servers.id, id));
+    const [server] = await db.select().from(servers).where(eq(servers.id, id));
     if (!server) return undefined;
 
-    const metrics = await this.db.select().from(serverMetrics)
+    const metrics = await db.select().from(serverMetrics)
       .where(eq(serverMetrics.serverId, id))
       .orderBy(desc(serverMetrics.createdAt))
       .limit(50); // Last 50 data points
 
     let project;
     if (server.projectId) {
-      [project] = await this.db.select().from(projects).where(eq(projects.id, server.projectId));
+      [project] = await db.select().from(projects).where(eq(projects.id, server.projectId));
     }
 
     return { ...server, metrics: metrics.reverse(), project }; // Return chronological
@@ -430,14 +429,14 @@ export class DatabaseStorage implements IStorage {
     });
 
     if (data.projectId) {
-      const [project] = await this.db.select().from(projects).where(eq(projects.id, data.projectId)).limit(1);
+      const [project] = await db.select().from(projects).where(eq(projects.id, data.projectId)).limit(1);
       if (project?.orgId) {
         const existing = await this.getServerByHostname(data.hostname);
         if (!existing) await this.checkResourceLimits(project.orgId, 'resource');
       }
     }
 
-    const [server] = await this.db.insert(servers)
+    const [server] = await db.insert(servers)
       .values({ ...data, lastSeen: new Date() })
       .onConflictDoUpdate({
         target: servers.hostname,
@@ -450,12 +449,12 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getServerByHostname(hostname: string): Promise<Server | undefined> {
-    const [server] = await this.db.select().from(servers).where(eq(servers.hostname, hostname));
+    const [server] = await db.select().from(servers).where(eq(servers.hostname, hostname));
     return server;
   }
 
   async getServerByContact(ip: string, hostname: string): Promise<Server | undefined> {
-    const [server] = await this.db.select().from(servers).where(
+    const [server] = await db.select().from(servers).where(
       or(eq(servers.ipAddress, ip), eq(servers.hostname, hostname))
     );
     return server;
@@ -469,7 +468,7 @@ export class DatabaseStorage implements IStorage {
       }
     });
 
-    const [updated] = await this.db.update(servers)
+    const [updated] = await db.update(servers)
       .set(updateData)
       .where(eq(servers.id, id))
       .returning();
@@ -481,17 +480,17 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateServerSortOrder(id: number, order: number): Promise<void> {
-    await this.db.update(servers).set({ sortOrder: order }).where(eq(servers.id, id));
+    await db.update(servers).set({ sortOrder: order }).where(eq(servers.id, id));
   }
 
   async deleteServer(id: number): Promise<void> {
     // Delete associated metrics first if not handled by CASCADE
-    await this.db.delete(serverMetrics).where(eq(serverMetrics.serverId, id));
-    await this.db.delete(servers).where(eq(servers.id, id));
+    await db.delete(serverMetrics).where(eq(serverMetrics.serverId, id));
+    await db.delete(servers).where(eq(servers.id, id));
   }
 
   async addServerMetric(data: z.infer<typeof insertServerMetricSchema>): Promise<void> {
-    await this.db.insert(serverMetrics).values(data);
+    await db.insert(serverMetrics).values(data);
     if (!data.serverId) return;
 
     await this.checkAndTriggerAlert(data.serverId, 'server', [
@@ -520,31 +519,31 @@ export class DatabaseStorage implements IStorage {
       let idFields: any = {};
 
       if (type === 'server') {
-        const [s] = await this.db.select().from(servers).where(eq(servers.id, resourceId)).limit(1);
+        const [s] = await db.select().from(servers).where(eq(servers.id, resourceId)).limit(1);
         if (!s) return;
         resourceName = s.name || s.hostname;
         projectId = s.projectId;
         idFields.serverId = resourceId;
       } else if (type === 'database') {
-        const [d] = await this.db.select().from(databases).where(eq(databases.id, resourceId)).limit(1);
+        const [d] = await db.select().from(databases).where(eq(databases.id, resourceId)).limit(1);
         if (!d) return;
         resourceName = d.name;
         projectId = d.projectId;
         idFields.databaseId = resourceId;
       } else if (type === 'cluster') {
-        const [c] = await this.db.select().from(clusters).where(eq(clusters.id, resourceId)).limit(1);
+        const [c] = await db.select().from(clusters).where(eq(clusters.id, resourceId)).limit(1);
         if (!c) return;
         resourceName = c.name;
         projectId = c.projectId;
         idFields.clusterId = resourceId;
       } else if (type === 'web') {
-        const [w] = await this.db.select().from(webMonitors).where(eq(webMonitors.id, resourceId)).limit(1);
+        const [w] = await db.select().from(webMonitors).where(eq(webMonitors.id, resourceId)).limit(1);
         if (!w) return;
         resourceName = w.name;
         projectId = w.projectId;
         idFields.webMonitorId = resourceId;
       } else if (type === 'domain') {
-        const [d] = await this.db.select().from(domainMonitors).where(eq(domainMonitors.id, resourceId)).limit(1);
+        const [d] = await db.select().from(domainMonitors).where(eq(domainMonitors.id, resourceId)).limit(1);
         if (!d) return;
         resourceName = d.domain;
         projectId = d.projectId;
@@ -557,7 +556,7 @@ export class DatabaseStorage implements IStorage {
         return;
       }
 
-      const [projectObj] = await this.db.select().from(projects).where(eq(projects.id, projectId)).limit(1);
+      const [projectObj] = await db.select().from(projects).where(eq(projects.id, projectId)).limit(1);
       if (!projectObj || !projectObj.orgId) {
          safeLog(`[${new Date().toISOString()}] Project or Org not found for Resource ${resourceName}\n`);
          return;
@@ -635,7 +634,7 @@ export class DatabaseStorage implements IStorage {
         'domain_expiry': 'Domain'
       };
 
-      const [project] = await this.db.select().from(projects).where(eq(projects.id, projectId));
+      const [project] = await db.select().from(projects).where(eq(projects.id, projectId));
       const projectName = project?.name || "Unknown Project";
 
       // Check if alerting is muted for this specific resource
@@ -674,7 +673,7 @@ export class DatabaseStorage implements IStorage {
         }
 
         // Look for an ACTIVE (unresolved) alert for this resource + metric type
-        const [activeAlert] = await this.db.select().from(alerts)
+        const [activeAlert] = await db.select().from(alerts)
           .where(
             sql`${alerts.type} = ${m.type} AND ${alerts.resolvedAt} IS NULL AND (
               (${alerts.serverId} IS NOT NULL AND ${alerts.serverId} = ${idFields.serverId || 0}) OR
@@ -713,24 +712,24 @@ export class DatabaseStorage implements IStorage {
           const category = typeToCategory[m.type];
           
           // Try project-specific template first
-          let [customTemplate] = await this.db.select().from(emailTemplates)
+          let [customTemplate] = await db.select().from(emailTemplates)
             .where(sql`${emailTemplates.projectId} = ${projectId} AND ${emailTemplates.alertType} = ${m.type}`)
             .limit(1);
 
           if (!customTemplate && category) {
-            [customTemplate] = await this.db.select().from(emailTemplates)
+            [customTemplate] = await db.select().from(emailTemplates)
               .where(sql`${emailTemplates.projectId} = ${projectId} AND ${emailTemplates.alertType} = ${category}`)
               .limit(1);
           }
 
           // Fallback to global templates if project-specific one not found
           if (!customTemplate) {
-             [customTemplate] = await this.db.select().from(emailTemplates)
+             [customTemplate] = await db.select().from(emailTemplates)
                .where(sql`${emailTemplates.projectId} IS NULL AND ${emailTemplates.alertType} = ${m.type}`)
                .limit(1);
           }
           if (!customTemplate && category) {
-             [customTemplate] = await this.db.select().from(emailTemplates)
+             [customTemplate] = await db.select().from(emailTemplates)
                .where(sql`${emailTemplates.projectId} IS NULL AND ${emailTemplates.alertType} = ${category}`)
                .limit(1);
           }
@@ -758,7 +757,7 @@ export class DatabaseStorage implements IStorage {
             safeLog(`[${new Date().toISOString()}] RECOVERY DETECTED for ${resourceName} ${m.type}. Value: ${m.value} now below threshold ${threshold}\n`);
 
             // Mark the alert as resolved so the cycle can restart on next breach
-            await this.db.update(alerts)
+            await db.update(alerts)
               .set({ resolvedAt: new Date() })
               .where(eq(alerts.id, activeAlert.id));
 
@@ -766,24 +765,24 @@ export class DatabaseStorage implements IStorage {
 
             const category = typeToCategory[m.type];
             // Try project-specific template first
-            let [customTemplate] = await this.db.select().from(emailTemplates)
+            let [customTemplate] = await db.select().from(emailTemplates)
               .where(sql`${emailTemplates.projectId} = ${projectId} AND ${emailTemplates.alertType} = ${m.type}`)
               .limit(1);
 
             if (!customTemplate && category) {
-              [customTemplate] = await this.db.select().from(emailTemplates)
+              [customTemplate] = await db.select().from(emailTemplates)
                 .where(sql`${emailTemplates.projectId} = ${projectId} AND ${emailTemplates.alertType} = ${category}`)
                 .limit(1);
             }
 
             // Fallback to global templates if project-specific one not found
             if (!customTemplate) {
-               [customTemplate] = await this.db.select().from(emailTemplates)
+               [customTemplate] = await db.select().from(emailTemplates)
                  .where(sql`${emailTemplates.projectId} IS NULL AND ${emailTemplates.alertType} = ${m.type}`)
                  .limit(1);
             }
             if (!customTemplate && category) {
-               [customTemplate] = await this.db.select().from(emailTemplates)
+               [customTemplate] = await db.select().from(emailTemplates)
                  .where(sql`${emailTemplates.projectId} IS NULL AND ${emailTemplates.alertType} = ${category}`)
                  .limit(1);
             }
@@ -816,7 +815,7 @@ export class DatabaseStorage implements IStorage {
 
   // === SETTINGS ===
   async getSmtpSettings(orgId: number): Promise<SmtpSettings | undefined> {
-    const [settings] = await this.db.select().from(smtpSettings).where(eq(smtpSettings.orgId, orgId)).limit(1);
+    const [settings] = await db.select().from(smtpSettings).where(eq(smtpSettings.orgId, orgId)).limit(1);
     return settings;
   }
 
@@ -825,14 +824,14 @@ export class DatabaseStorage implements IStorage {
       safeLog(`[${new Date().toISOString()}] UPSERTING SMTP SETTINGS for org ${orgId}.\n`);
       const existing = await this.getSmtpSettings(orgId);
       if (existing) {
-        const [updated] = await this.db.update(smtpSettings)
+        const [updated] = await db.update(smtpSettings)
           .set({ ...data, updatedAt: new Date() })
           .where(eq(smtpSettings.id, existing.id))
           .returning();
         EmailService.clearTransporter();
         return updated as SmtpSettings;
       }
-      const [newSettings] = await this.db.insert(smtpSettings)
+      const [newSettings] = await db.insert(smtpSettings)
         .values({ ...data, orgId, updatedAt: new Date() })
         .returning();
       EmailService.clearTransporter();
@@ -845,17 +844,17 @@ export class DatabaseStorage implements IStorage {
 
   // === PROJECT ALERT SETTINGS ===
   async getProjectAlertSettings(orgId: number, projectId: number): Promise<ProjectAlertSettings | undefined> {
-    const [project] = await this.db.select().from(projects).where(and(eq(projects.id, projectId), eq(projects.orgId, orgId))).limit(1);
+    const [project] = await db.select().from(projects).where(and(eq(projects.id, projectId), eq(projects.orgId, orgId))).limit(1);
     if (!project) return undefined;
 
-    const [settings] = await this.db.select().from(projectAlertSettings)
+    const [settings] = await db.select().from(projectAlertSettings)
       .where(eq(projectAlertSettings.projectId, projectId))
       .limit(1);
     return settings;
   }
 
   async upsertProjectAlertSettings(orgId: number, projectId: number, data: Partial<z.infer<typeof insertProjectAlertSettingsSchema>>): Promise<ProjectAlertSettings> {
-    const [project] = await this.db.select().from(projects).where(and(eq(projects.id, projectId), eq(projects.orgId, orgId))).limit(1);
+    const [project] = await db.select().from(projects).where(and(eq(projects.id, projectId), eq(projects.orgId, orgId))).limit(1);
     if (!project) throw new Error("Project not found or unauthorized");
 
     const existing = await this.getProjectAlertSettings(orgId, projectId);
@@ -865,13 +864,13 @@ export class DatabaseStorage implements IStorage {
     };
 
     if (existing) {
-      const [updated] = await this.db.update(projectAlertSettings)
+      const [updated] = await db.update(projectAlertSettings)
         .set(updateData)
         .where(eq(projectAlertSettings.id, existing.id))
         .returning();
       return updated as ProjectAlertSettings;
     }
-    const [newSettings] = await this.db.insert(projectAlertSettings)
+    const [newSettings] = await db.insert(projectAlertSettings)
       .values({ projectId, ...data } as any)
       .returning();
     return newSettings as ProjectAlertSettings;
@@ -879,7 +878,7 @@ export class DatabaseStorage implements IStorage {
 
   // === ALERTS ===
   async getRecentAlerts(orgId: number, serverId: number): Promise<Alert[]> {
-    const [s] = await this.db.select({ project: projects })
+    const [s] = await db.select({ project: projects })
       .from(servers)
       .innerJoin(projects, eq(servers.projectId, projects.id))
       .where(and(eq(servers.id, serverId), eq(projects.orgId, orgId)))
@@ -887,14 +886,14 @@ export class DatabaseStorage implements IStorage {
     
     if (!s) return [];
 
-    return await this.db.select().from(alerts)
+    return await db.select().from(alerts)
       .where(eq(alerts.serverId, serverId))
       .orderBy(desc(alerts.sentAt))
       .limit(10);
   }
 
   async getAlertHistory(orgId: number): Promise<(Alert & { serverName: string })[]> {
-    const results = await this.db.select({
+    const results = await db.select({
       alert: alerts,
       serverName: servers.name,
       hostname: servers.hostname,
@@ -926,17 +925,17 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createAlert(data: { serverId?: number, databaseId?: number, clusterId?: number, webMonitorId?: number, domainMonitorId?: number, type: string, value: number, threshold: number }): Promise<void> {
-    await this.db.insert(alerts).values(data);
+    await db.insert(alerts).values(data);
   }
 
   async triggerProjectRollout(orgId: number, projectId: number): Promise<void> {
-    const [project] = await this.db.select().from(projects).where(and(eq(projects.id, projectId), eq(projects.orgId, orgId))).limit(1);
+    const [project] = await db.select().from(projects).where(and(eq(projects.id, projectId), eq(projects.orgId, orgId))).limit(1);
     if (!project) throw new Error("Project not found or unauthorized");
-    await this.db.update(servers).set({ pendingUpdate: true }).where(eq(servers.projectId, projectId));
+    await db.update(servers).set({ pendingUpdate: true }).where(eq(servers.projectId, projectId));
   }
 
   async getProjectAlertHistory(orgId: number, projectId: number, limit: number = 20, offset: number = 0, status?: string, type?: string): Promise<{ alerts: any[], total: number }> {
-    const [project] = await this.db.select().from(projects).where(and(eq(projects.id, projectId), eq(projects.orgId, orgId))).limit(1);
+    const [project] = await db.select().from(projects).where(and(eq(projects.id, projectId), eq(projects.orgId, orgId))).limit(1);
     if (!project) return { alerts: [], total: 0 };
 
     let where = sql`(
@@ -966,11 +965,11 @@ export class DatabaseStorage implements IStorage {
       }
     }
 
-    const [countResult] = await this.db.select({ count: sql<number>`count(*)` })
+    const [countResult] = await db.select({ count: sql<number>`count(*)` })
       .from(alerts)
       .where(where);
 
-    const results = await this.db.select({
+    const results = await db.select({
       alert: alerts,
       serverName: servers.name,
       hostname: servers.hostname,
@@ -1005,7 +1004,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteProjectAlerts(orgId: number, projectId: number): Promise<void> {
-    const [project] = await this.db.select().from(projects).where(and(eq(projects.id, projectId), eq(projects.orgId, orgId))).limit(1);
+    const [project] = await db.select().from(projects).where(and(eq(projects.id, projectId), eq(projects.orgId, orgId))).limit(1);
     if (!project) return;
 
     const where = sql`(
@@ -1015,14 +1014,14 @@ export class DatabaseStorage implements IStorage {
       (${alerts.webMonitorId} IS NOT NULL AND EXISTS (SELECT 1 FROM web_monitors w WHERE w.id = ${alerts.webMonitorId} AND w.project_id = ${projectId})) OR
       (${alerts.domainMonitorId} IS NOT NULL AND EXISTS (SELECT 1 FROM domain_monitors dm WHERE dm.id = ${alerts.domainMonitorId} AND dm.project_id = ${projectId}))
     )`;
-    await this.db.delete(alerts).where(where);
+    await db.delete(alerts).where(where);
   }
 
   // === EMAIL TEMPLATES ===
   async getProjectEmailTemplates(orgId: number, projectId?: number | null): Promise<EmailTemplate[]> {
     if (projectId) {
-      const projectTemplates = await this.db.select().from(emailTemplates).where(eq(emailTemplates.projectId, projectId));
-      const globalTemplates = await this.db.select().from(emailTemplates).where(sql`${emailTemplates.orgId} = ${orgId} AND ${emailTemplates.projectId} IS NULL`);
+      const projectTemplates = await db.select().from(emailTemplates).where(eq(emailTemplates.projectId, projectId));
+      const globalTemplates = await db.select().from(emailTemplates).where(sql`${emailTemplates.orgId} = ${orgId} AND ${emailTemplates.projectId} IS NULL`);
       
       const result = [...projectTemplates];
       for (const gt of globalTemplates) {
@@ -1032,11 +1031,11 @@ export class DatabaseStorage implements IStorage {
       }
       return result;
     }
-    return await this.db.select().from(emailTemplates).where(sql`${emailTemplates.orgId} = ${orgId} AND ${emailTemplates.projectId} IS NULL`);
+    return await db.select().from(emailTemplates).where(sql`${emailTemplates.orgId} = ${orgId} AND ${emailTemplates.projectId} IS NULL`);
   }
 
   async upsertEmailTemplate(orgId: number, projectId: number | null, alertType: string, data: { subject: string, body: string }): Promise<EmailTemplate> {
-    const existing = await this.db.select().from(emailTemplates)
+    const existing = await db.select().from(emailTemplates)
       .where(
         projectId 
           ? sql`${emailTemplates.projectId} = ${projectId} AND ${emailTemplates.alertType} = ${alertType}`
@@ -1045,13 +1044,13 @@ export class DatabaseStorage implements IStorage {
       .limit(1);
 
     if (existing.length > 0) {
-      const [updated] = await this.db.update(emailTemplates)
+      const [updated] = await db.update(emailTemplates)
         .set({ ...data, updatedAt: new Date() })
         .where(eq(emailTemplates.id, existing[0].id))
         .returning();
       return updated;
     } else {
-      const [inserted] = await this.db.insert(emailTemplates)
+      const [inserted] = await db.insert(emailTemplates)
         .values({ ...data, orgId, projectId, alertType, updatedAt: new Date() })
         .returning();
       return inserted;
@@ -1059,7 +1058,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteEmailTemplate(orgId: number, projectId: number | null, alertType: string): Promise<void> {
-    await this.db.delete(emailTemplates)
+    await db.delete(emailTemplates)
       .where(
         projectId
           ? sql`${emailTemplates.projectId} = ${projectId} AND ${emailTemplates.alertType} = ${alertType}`
@@ -1069,7 +1068,7 @@ export class DatabaseStorage implements IStorage {
 
   // === DATABASES ===
   async getDatabases(orgId: number): Promise<(Database & { metrics: DatabaseMetric[], project?: Project })[]> {
-    const allDbs = await this.db.select({
+    const allDbs = await db.select({
       database: databases,
       project: projects
     })
@@ -1081,7 +1080,7 @@ export class DatabaseStorage implements IStorage {
     // Fetch latest metrics for each db
     const dbsWithExtras = await Promise.all(allDbs.map(async (row) => {
       const dbObj = row.database;
-      const metrics = await this.db.select().from(databaseMetrics)
+      const metrics = await db.select().from(databaseMetrics)
         .where(eq(databaseMetrics.databaseId, dbObj.id))
         .orderBy(desc(databaseMetrics.createdAt))
         .limit(1);
@@ -1093,38 +1092,38 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getDatabase(id: number): Promise<(Database & { metrics: DatabaseMetric[], project?: Project }) | undefined> {
-    const [database] = await this.db.select().from(databases).where(eq(databases.id, id));
+    const [database] = await db.select().from(databases).where(eq(databases.id, id));
     if (!database) return undefined;
 
-    const metrics = await this.db.select().from(databaseMetrics)
+    const metrics = await db.select().from(databaseMetrics)
       .where(eq(databaseMetrics.databaseId, id))
       .orderBy(desc(databaseMetrics.createdAt))
       .limit(50);
 
     let project;
     if (database.projectId) {
-      [project] = await this.db.select().from(projects).where(eq(projects.id, database.projectId));
+      [project] = await db.select().from(projects).where(eq(projects.id, database.projectId));
     }
 
     return { ...database, metrics: metrics.reverse(), project };
   }
 
   async upsertDatabase(data: z.infer<typeof insertDatabaseSchema>): Promise<Database> {
-    const [existing] = await this.db.select().from(databases).where(eq(databases.name, data.name)).limit(1);
+    const [existing] = await db.select().from(databases).where(eq(databases.name, data.name)).limit(1);
     
     if (data.projectId && !existing) {
-      const [project] = await this.db.select().from(projects).where(eq(projects.id, data.projectId)).limit(1);
+      const [project] = await db.select().from(projects).where(eq(projects.id, data.projectId)).limit(1);
       if (project?.orgId) await this.checkResourceLimits(project.orgId, 'resource');
     }
 
     if (existing) {
-      const [updated] = await this.db.update(databases)
+      const [updated] = await db.update(databases)
         .set({ ...data, lastSeen: new Date() })
         .where(eq(databases.id, existing.id))
         .returning();
       return updated;
     } else {
-      const [created] = await this.db.insert(databases)
+      const [created] = await db.insert(databases)
         .values({ ...data, lastSeen: new Date() })
         .returning();
       broadcast({ type: "resource_update", resource: "database", id: created.id });
@@ -1133,7 +1132,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateDatabase(id: number, data: Partial<z.infer<typeof insertDatabaseSchema>>): Promise<Database | undefined> {
-    const [updated] = await this.db.update(databases)
+    const [updated] = await db.update(databases)
       .set({ ...data, lastSeen: new Date() })
       .where(eq(databases.id, id))
       .returning();
@@ -1141,12 +1140,12 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteDatabase(id: number): Promise<void> {
-    await this.db.delete(databaseMetrics).where(eq(databaseMetrics.databaseId, id));
-    await this.db.delete(databases).where(eq(databases.id, id));
+    await db.delete(databaseMetrics).where(eq(databaseMetrics.databaseId, id));
+    await db.delete(databases).where(eq(databases.id, id));
   }
 
   async addDatabaseMetric(data: z.infer<typeof insertDatabaseMetricSchema>): Promise<void> {
-    await this.db.insert(databaseMetrics).values(data);
+    await db.insert(databaseMetrics).values(data);
     if (!data.databaseId) return;
 
     await this.checkAndTriggerAlert(data.databaseId, 'database', [
@@ -1164,7 +1163,7 @@ export class DatabaseStorage implements IStorage {
 
   // === CLUSTERS ===
   async getClusters(orgId: number): Promise<(Cluster & { metrics: ClusterMetric[], project?: Project })[]> {
-    const allClusters = await this.db.select({
+    const allClusters = await db.select({
       cluster: clusters,
       project: projects
     })
@@ -1175,7 +1174,7 @@ export class DatabaseStorage implements IStorage {
 
     return await Promise.all(allClusters.map(async (row) => {
       const cluster = row.cluster;
-      const metrics = await this.db.select().from(clusterMetrics)
+      const metrics = await db.select().from(clusterMetrics)
         .where(eq(clusterMetrics.clusterId, cluster.id))
         .orderBy(desc(clusterMetrics.createdAt))
         .limit(50);
@@ -1184,24 +1183,24 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getCluster(id: number): Promise<(Cluster & { metrics: ClusterMetric[], project?: Project }) | undefined> {
-    const [cluster] = await this.db.select().from(clusters).where(eq(clusters.id, id));
+    const [cluster] = await db.select().from(clusters).where(eq(clusters.id, id));
     if (!cluster) return undefined;
 
-    const metrics = await this.db.select().from(clusterMetrics)
+    const metrics = await db.select().from(clusterMetrics)
       .where(eq(clusterMetrics.clusterId, id))
       .orderBy(desc(clusterMetrics.createdAt))
       .limit(50);
 
     let project;
     if (cluster.projectId) {
-      [project] = await this.db.select().from(projects).where(eq(projects.id, cluster.projectId));
+      [project] = await db.select().from(projects).where(eq(projects.id, cluster.projectId));
     }
 
     return { ...cluster, metrics: metrics.reverse(), project };
   }
 
   async upsertCluster(data: z.infer<typeof insertClusterSchema>): Promise<Cluster> {
-    const [cluster] = await this.db.insert(clusters)
+    const [cluster] = await db.insert(clusters)
       .values({ ...data, lastSeen: new Date() })
       .onConflictDoUpdate({
         target: clusters.name,
@@ -1214,7 +1213,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async addClusterMetric(data: z.infer<typeof insertClusterMetricSchema>): Promise<void> {
-    await this.db.insert(clusterMetrics).values(data);
+    await db.insert(clusterMetrics).values(data);
     if (!data.clusterId) return;
 
     await this.checkAndTriggerAlert(data.clusterId, 'cluster', [
@@ -1233,42 +1232,42 @@ export class DatabaseStorage implements IStorage {
 
   // === USERS ===
   async getUsers(orgId: number): Promise<User[]> {
-    return await this.db.select().from(users).where(eq(users.orgId, orgId)).orderBy(desc(users.createdAt));
+    return await db.select().from(users).where(eq(users.orgId, orgId)).orderBy(desc(users.createdAt));
   }
 
   async getUser(id: string): Promise<User | undefined> {
-    const [user] = await this.db.select().from(users).where(eq(users.id, id));
+    const [user] = await db.select().from(users).where(eq(users.id, id));
     return user;
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
-    const [user] = await this.db.select().from(users).where(eq(users.username, username));
+    const [user] = await db.select().from(users).where(eq(users.username, username));
     return user;
   }
 
   async getUserByEmail(email: string): Promise<User | undefined> {
-    const [user] = await this.db.select().from(users).where(eq(users.email, email));
+    const [user] = await db.select().from(users).where(eq(users.email, email));
     return user;
   }
 
   async createUser(data: z.infer<typeof insertUserSchema>): Promise<User> {
     const userData = { ...data, username: data.username || data.email };
-    const [user] = await this.db.insert(users).values(userData).returning();
+    const [user] = await db.insert(users).values(userData).returning();
     return user;
   }
 
   async updateUser(id: string, data: Partial<User>): Promise<User | undefined> {
-    const [user] = await this.db.update(users).set({ ...data, updatedAt: new Date() }).where(eq(users.id, id)).returning();
+    const [user] = await db.update(users).set({ ...data, updatedAt: new Date() }).where(eq(users.id, id)).returning();
     return user;
   }
 
   async deleteUser(id: string): Promise<void> {
-    await this.db.delete(users).where(eq(users.id, id));
+    await db.delete(users).where(eq(users.id, id));
   }
 
   // === WEB MONITORS ===
   async getWebMonitors(orgId: number): Promise<(WebMonitor & { metrics: WebMonitorMetric[], project?: Project })[]> {
-    const allWebMonitors = await this.db.select({
+    const allWebMonitors = await db.select({
       monitor: webMonitors,
       project: projects
     })
@@ -1279,7 +1278,7 @@ export class DatabaseStorage implements IStorage {
 
     return await Promise.all(allWebMonitors.map(async (row) => {
       const monitor = row.monitor;
-      const metrics = await this.db.select().from(webMonitorMetrics)
+      const metrics = await db.select().from(webMonitorMetrics)
         .where(eq(webMonitorMetrics.monitorId, monitor.id))
         .orderBy(desc(webMonitorMetrics.createdAt))
         .limit(1);
@@ -1289,17 +1288,17 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getWebMonitor(id: number): Promise<(WebMonitor & { metrics: WebMonitorMetric[], project?: Project }) | undefined> {
-    const [monitor] = await this.db.select().from(webMonitors).where(eq(webMonitors.id, id));
+    const [monitor] = await db.select().from(webMonitors).where(eq(webMonitors.id, id));
     if (!monitor) return undefined;
 
-    const metrics = await this.db.select().from(webMonitorMetrics)
+    const metrics = await db.select().from(webMonitorMetrics)
       .where(eq(webMonitorMetrics.monitorId, id))
       .orderBy(desc(webMonitorMetrics.createdAt))
       .limit(50);
 
     let project;
     if (monitor.projectId) {
-      [project] = await this.db.select().from(projects).where(eq(projects.id, monitor.projectId));
+      [project] = await db.select().from(projects).where(eq(projects.id, monitor.projectId));
     }
 
     return { ...monitor, metrics: metrics.reverse(), project };
@@ -1307,16 +1306,16 @@ export class DatabaseStorage implements IStorage {
 
   async createWebMonitor(data: z.infer<typeof insertWebMonitorSchema>): Promise<WebMonitor> {
     if (data.projectId) {
-      const [project] = await this.db.select().from(projects).where(eq(projects.id, data.projectId)).limit(1);
+      const [project] = await db.select().from(projects).where(eq(projects.id, data.projectId)).limit(1);
       if (project?.orgId) await this.checkResourceLimits(project.orgId, 'resource');
     }
 
-    const [monitor] = await this.db.insert(webMonitors).values(data).returning();
+    const [monitor] = await db.insert(webMonitors).values(data).returning();
     return monitor;
   }
 
   async updateWebMonitor(id: number, data: Partial<WebMonitor>): Promise<WebMonitor | undefined> {
-    const [updated] = await this.db.update(webMonitors)
+    const [updated] = await db.update(webMonitors)
       .set(data)
       .where(eq(webMonitors.id, id))
       .returning();
@@ -1324,12 +1323,12 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteWebMonitor(id: number): Promise<void> {
-    await this.db.delete(webMonitorMetrics).where(eq(webMonitorMetrics.monitorId, id));
-    await this.db.delete(webMonitors).where(eq(webMonitors.id, id));
+    await db.delete(webMonitorMetrics).where(eq(webMonitorMetrics.monitorId, id));
+    await db.delete(webMonitors).where(eq(webMonitors.id, id));
   }
 
   async addWebMonitorMetric(data: z.infer<typeof insertWebMonitorMetricSchema>): Promise<void> {
-    await this.db.insert(webMonitorMetrics).values(data);
+    await db.insert(webMonitorMetrics).values(data);
     if (!data.monitorId) return;
 
     // Trigger alerts if DOWN
@@ -1362,7 +1361,7 @@ export class DatabaseStorage implements IStorage {
 
   // === DOMAIN MONITORS ===
   async getDomainMonitors(orgId: number): Promise<(DomainMonitor & { project?: Project })[]> {
-    const allDomains = await this.db.select({
+    const allDomains = await db.select({
       domain: domainMonitors,
       project: projects
     })
@@ -1375,12 +1374,12 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getDomainMonitor(id: number): Promise<(DomainMonitor & { project?: Project }) | undefined> {
-    const [domain] = await this.db.select().from(domainMonitors).where(eq(domainMonitors.id, id));
+    const [domain] = await db.select().from(domainMonitors).where(eq(domainMonitors.id, id));
     if (!domain) return undefined;
 
     let project;
     if (domain.projectId) {
-      [project] = await this.db.select().from(projects).where(eq(projects.id, domain.projectId));
+      [project] = await db.select().from(projects).where(eq(projects.id, domain.projectId));
     }
 
     return { ...domain, project };
@@ -1388,16 +1387,16 @@ export class DatabaseStorage implements IStorage {
 
   async createDomainMonitor(data: z.infer<typeof insertDomainMonitorSchema>): Promise<DomainMonitor> {
     if (data.projectId) {
-      const [project] = await this.db.select().from(projects).where(eq(projects.id, data.projectId)).limit(1);
+      const [project] = await db.select().from(projects).where(eq(projects.id, data.projectId)).limit(1);
       if (project?.orgId) await this.checkResourceLimits(project.orgId, 'resource');
     }
 
-    const [monitor] = await this.db.insert(domainMonitors).values(data).returning();
+    const [monitor] = await db.insert(domainMonitors).values(data).returning();
     return monitor;
   }
 
   async updateDomainMonitor(id: number, data: DomainMonitorUpdate): Promise<DomainMonitor | undefined> {
-    const [updated] = await this.db.update(domainMonitors)
+    const [updated] = await db.update(domainMonitors)
       .set(data)
       .where(eq(domainMonitors.id, id))
       .returning();
@@ -1405,7 +1404,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteDomainMonitor(id: number): Promise<void> {
-    await this.db.delete(domainMonitors).where(eq(domainMonitors.id, id));
+    await db.delete(domainMonitors).where(eq(domainMonitors.id, id));
   }
 
   async sendTestEmail(recipient: string, settings?: any): Promise<void> {
@@ -1413,18 +1412,4 @@ export class DatabaseStorage implements IStorage {
   }
 }
 
-export const storage = new DatabaseStorage(db);
-
-import { getTenantDb } from "./db";
-
-export async function getStorageForOrg(orgId: number): Promise<DatabaseStorage> {
-  // 1. Fetch organization from ROOT DB to get dbName
-  const [org] = await db.select().from(organizations).where(eq(organizations.id, orgId)).limit(1);
-  
-  if (!org || !org.dbName) {
-    return storage; // Fallback to root DB if no tenant DB assigned yet
-  }
-  
-  // 2. Return storage instance with tenant DB connection
-  return new DatabaseStorage(getTenantDb(org.dbName));
-}
+export const storage = new DatabaseStorage();

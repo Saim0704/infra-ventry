@@ -198,10 +198,12 @@ export const api = {
       path: '/api/stats' as const,
       responses: {
         200: z.object({
+          totalProjects: z.number(),
           totalServers: z.number(),
           totalDatabases: z.number(),
           totalClusters: z.number(),
           totalWebMonitors: z.number(),
+          totalDomainMonitors: z.number(),
           healthyServers: z.number(),
           criticalServers: z.number(), // Disk > 90% or offline
         }),

@@ -10,7 +10,7 @@ import { WebMonitorService } from "./lib/web-monitor-service";
 import { DomainMonitorService } from "./services/domainMonitor";
 import { setupAuth, registerAuthRoutes, isAuthenticated } from "./auth";
 import { z } from "zod";
-import { insertUserSchema } from "@shared/schema";
+import { insertUserSchema, type User } from "@shared/schema";
 import { hashPassword } from "./lib/auth-utils";
 import { fromError } from "zod-validation-error";
 
@@ -34,23 +34,55 @@ export async function registerRoutes(
   // Setup Auth
   setupAuth(app);
   registerAuthRoutes(app);
-
-
-
   info(`Registering SMTP test route: ${api.settings.smtp.test.method} ${api.settings.smtp.test.path}`);
+
+  // Storage Context Middleware
+  app.use("/api", async (req: any, res, next) => {
+    try {
+      if (req.isAuthenticated() && req.user.orgId) {
+        const { getStorageForOrg } = await import("./storage");
+        req.storage = await getStorageForOrg(req.user.orgId);
+      } else {
+        const { storage } = await import("./storage");
+        req.storage = storage;
+      }
+      next();
+    } catch (err) {
+      error(`Storage middleware error: ${err}`);
+      next();
+    }
+  });
 
   // === PUBLIC API (Ingestion) ===
   // These routes are protected by Agent Tokens, not User Auth
 
-  // Middleware to validate agent token
   const validateAgentToken = async (req: any, res: any, next: any) => {
-    const token = req.body?.token;
-    if (!token || typeof token !== 'string') {
+    const tokenStr = req.body?.token;
+    if (!tokenStr || typeof tokenStr !== 'string') {
       return res.status(401).json({ message: "Missing token" });
     }
-    const isValid = await storage.validateToken(token) ||
-      token === process.env.AGENT_TOKEN ||
-      token === "infra_inventory_agent_secret_2026";
+    
+    // Resolve storage via token
+    const { storage, getStorageForOrg } = await import("./storage");
+    const tokenData = await storage.getTokenByString(tokenStr);
+    
+    if (tokenData && tokenData.projectId) {
+       const { db } = await import("./db");
+       const { projects } = await import("@shared/schema");
+       const { eq } = await import("drizzle-orm");
+       const [project] = await db.select().from(projects).where(eq(projects.id, tokenData.projectId)).limit(1);
+       if (project && project.orgId) {
+         req.storage = await getStorageForOrg(project.orgId);
+       } else {
+         req.storage = storage;
+       }
+    } else {
+       req.storage = storage;
+    }
+
+    const isValid = await (req as any).storage.validateToken(tokenStr) ||
+      tokenStr === process.env.AGENT_TOKEN ||
+      tokenStr === "infra_inventory_agent_secret_2026";
 
     if (!isValid) {
       return res.status(401).json({ message: "Invalid token" });
@@ -70,8 +102,8 @@ export async function registerRoutes(
       const projectId = tokenData?.projectId || null;
 
       // Upsert server with project association and agent version
-      const server = await storage.upsertServer({ ...serverInfo, projectId });
-      await storage.addServerMetric({ ...metrics, serverId: server.id });
+      const server = await (req as any).storage.upsertServer({ ...serverInfo, projectId });
+      await (req as any).storage.addServerMetric({ ...metrics, serverId: server.id });
 
       const oneMonthAgo = new Date();
       oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
@@ -79,7 +111,7 @@ export async function registerRoutes(
       
       const shouldUpdate = (server as any).pendingUpdate;
       if (shouldUpdate) {
-        await storage.updateServer(server.id, { pendingUpdate: false } as any);
+        await (req as any).storage.updateServer(server.id, { pendingUpdate: false } as any);
       }
 
       res.json({ 
@@ -100,9 +132,9 @@ export async function registerRoutes(
       const ip = req.query.ip as string;
       const hostname = req.query.hostname as string;
       
-      const server = await storage.getServerByContact(ip, hostname);
+      const server = await (req as any).storage.getServerByContact(ip, hostname);
       if (server) {
-        const token = await storage.getTokenByProject(server.projectId);
+        const token = await (req as any).storage.getTokenByProject(server.projectId);
         res.json({ registered: true, token: token?.token });
       } else {
         res.json({ registered: false });
@@ -123,7 +155,7 @@ export async function registerRoutes(
       const projectId = tokenData?.projectId || null;
 
       // Upsert server with project association and service versions
-      await storage.upsertServer({
+      await (req as any).storage.upsertServer({
         hostname,
         ipAddress: ipAddress || "",
         projectId,
@@ -148,8 +180,8 @@ export async function registerRoutes(
       const tokenData = await storage.getTokenByString(input.token);
       const projectId = tokenData?.projectId || null;
 
-      const database = await storage.upsertDatabase({ ...dbInfo, projectId });
-      await storage.addDatabaseMetric({ ...metrics, databaseId: database.id });
+      const database = await (req as any).storage.upsertDatabase({ ...dbInfo, projectId });
+      await (req as any).storage.addDatabaseMetric({ ...metrics, databaseId: database.id });
 
       res.json({ success: true });
     } catch (err) {
@@ -168,8 +200,8 @@ export async function registerRoutes(
       const tokenData = await storage.getTokenByString(input.token);
       const projectId = tokenData?.projectId || null;
 
-      const cluster = await storage.upsertCluster({ ...clusterInfo, projectId });
-      await storage.addClusterMetric({ ...metrics, clusterId: cluster.id });
+      const cluster = await (req as any).storage.upsertCluster({ ...clusterInfo, projectId });
+      await (req as any).storage.addClusterMetric({ ...metrics, clusterId: cluster.id });
 
       res.json({ success: true });
     } catch (err) {
@@ -184,36 +216,40 @@ export async function registerRoutes(
 
   // Dashboard Stats
   app.get(api.dashboard.stats.path, isAuthenticated, async (req, res) => {
-    const stats = await storage.getDashboardStats();
+    const user = req.user as User;
+    const stats = await (req as any).storage.getDashboardStats(user.orgId!);
     res.json(stats);
   });
 
   // Tokens Management
   app.get(api.tokens.list.path, isAuthenticated, async (req, res) => {
-    const tokens = await storage.getTokens();
+    const user = req.user as User;
+    const tokens = await (req as any).storage.getTokens(user.orgId!);
     res.json(tokens);
   });
 
   app.post(api.tokens.create.path, isAuthenticated, async (req, res) => {
     const { name, type, projectId } = api.tokens.create.input.parse(req.body);
-    const token = await storage.createToken(name, type, projectId);
+    const token = await (req as any).storage.createToken(name, type, projectId);
     res.status(201).json(token);
   });
 
   app.delete(api.tokens.revoke.path, isAuthenticated, async (req, res) => {
-    await storage.revokeToken(Number(req.params.id));
+    await (req as any).storage.revokeToken(Number(req.params.id));
     res.status(204).send();
   });
 
   // Projects
   app.get(api.projects.list.path, isAuthenticated, async (req, res) => {
-    const projects = await storage.getProjects();
+    const user = req.user as User;
+    const projects = await (req as any).storage.getProjects(user.orgId!);
     res.json(projects);
   });
 
   app.post(api.projects.create.path, isAuthenticated, async (req, res) => {
+    const user = req.user as User;
     const input = api.projects.create.input.parse(req.body);
-    const project = await storage.createProject(input);
+    const project = await (req as any).storage.createProject(user.orgId!, input);
     res.status(201).json(project);
   });
 
@@ -221,7 +257,7 @@ export async function registerRoutes(
     const id = Number(req.params.id);
     if (isNaN(id)) return res.status(400).json({ message: "Invalid project ID" });
     const input = api.projects.update.input.parse(req.body);
-    const project = await storage.updateProject(id, input);
+    const project = await (req as any).storage.updateProject(id, input);
     if (!project) return res.status(404).json({ message: "Project not found" });
     res.json(project);
   });
@@ -229,7 +265,7 @@ export async function registerRoutes(
   app.delete(api.projects.delete.path, isAuthenticated, async (req, res) => {
     const id = Number(req.params.id);
     if (isNaN(id)) return res.status(400).json({ message: "Invalid project ID" });
-    await storage.deleteProject(id);
+    await (req as any).storage.deleteProject(id);
     res.status(204).send();
   });
 
@@ -237,43 +273,47 @@ export async function registerRoutes(
     const id = Number(req.params.id);
     if (isNaN(id)) return res.status(400).json({ message: "Invalid project ID" });
     const { order } = api.projects.updateOrder.input.parse(req.body);
-    await storage.updateProjectSortOrder(id, order);
+    await (req as any).storage.updateProjectSortOrder(id, order);
     res.json({ success: true });
   });
 
   app.get(api.projects.resources.path, isAuthenticated, async (req, res) => {
+    const user = req.user as User;
     const id = Number(req.params.id);
     if (isNaN(id)) return res.status(400).json({ message: "Invalid project ID" });
-    const resources = await storage.getProjectResources(id);
-    if (!resources) return res.status(404).json({ message: "Project not found" });
+    const resources = await (req as any).storage.getProjectResources(user.orgId!, id);
+    if (!resources) return res.status(404).json({ message: "Project not found or unauthorized" });
     res.json(resources);
   });
 
   app.get(api.projects.status.path, async (req, res) => {
-    const status = await storage.getProjectStatusBySlug(req.params.slug);
+    const status = await (req as any).storage.getProjectStatusBySlug(req.params.slug);
     if (!status) return res.status(404).json({ message: "Project status page not found" });
     res.json(status);
   });
   
   app.post(api.projects.rollout.path, isAuthenticated, async (req, res) => {
+    const user = req.user as User;
     const id = Number(req.params.id);
     if (isNaN(id)) return res.status(400).json({ message: "Invalid project ID" });
-    await storage.triggerProjectRollout(id);
+    await (req as any).storage.triggerProjectRollout(user.orgId!, id);
     res.json({ success: true });
   });
 
   // Project Email Templates
   app.get(api.projects.emailTemplates.list.path, isAuthenticated, async (req, res) => {
-    const templates = await storage.getProjectEmailTemplates(Number(req.params.id));
+    const user = req.user as User;
+    const templates = await (req as any).storage.getProjectEmailTemplates(user.orgId!, Number(req.params.id));
     res.json(templates);
   });
 
   app.patch(api.projects.emailTemplates.upsert.path, isAuthenticated, async (req, res) => {
     try {
+      const user = req.user as User;
       const id = Number(req.params.id);
       const alertType = req.params.alertType;
       const input = api.projects.emailTemplates.upsert.input.parse(req.body);
-      const template = await storage.upsertEmailTemplate(id, alertType, input);
+      const template = await (req as any).storage.upsertEmailTemplate(user.orgId!, id, alertType, input);
       res.json(template);
     } catch (err) {
       res.status(400).json({ message: "Invalid template format" });
@@ -281,32 +321,35 @@ export async function registerRoutes(
   });
 
   app.delete(api.projects.emailTemplates.delete.path, isAuthenticated, async (req, res) => {
+    const user = req.user as User;
     const id = Number(req.params.id);
     const alertType = req.params.alertType;
-    await storage.deleteEmailTemplate(id, alertType);
+    await (req as any).storage.deleteEmailTemplate(user.orgId!, id, alertType);
     res.status(204).send();
   });
 
   // Servers
   app.get(api.servers.list.path, isAuthenticated, async (req, res) => {
-    const servers = await storage.getServers();
+    const user = req.user as User;
+    const servers = await (req as any).storage.getServers(user.orgId!);
     res.json(servers);
   });
 
   app.get(api.servers.get.path, isAuthenticated, async (req, res) => {
-    const server = await storage.getServer(Number(req.params.id));
+    const server = await (req as any).storage.getServer(Number(req.params.id));
     if (!server) return res.status(404).json({ message: "Server not found" });
     res.json(server);
   });
 
   // Databases
   app.get(api.databases.list.path, isAuthenticated, async (req, res) => {
-    const databases = await storage.getDatabases();
+    const user = req.user as User;
+    const databases = await (req as any).storage.getDatabases(user.orgId!);
     res.json(databases);
   });
 
   app.get(api.databases.get.path, isAuthenticated, async (req, res) => {
-    const database = await storage.getDatabase(Number(req.params.id));
+    const database = await (req as any).storage.getDatabase(Number(req.params.id));
     if (!database) return res.status(404).json({ message: "Database not found" });
     res.json(database);
   });
@@ -314,7 +357,7 @@ export async function registerRoutes(
   app.post(api.databases.create.path, isAuthenticated, async (req, res) => {
     try {
       const input = api.databases.create.input.parse(req.body);
-      const database = await storage.upsertDatabase(input);
+      const database = await (req as any).storage.upsertDatabase(input);
       res.status(201).json(database);
     } catch (err) {
       error("Database Create Error:", err);
@@ -329,7 +372,7 @@ export async function registerRoutes(
     try {
       const id = Number(req.params.id);
       const input = api.databases.update.input.parse(req.body);
-      const database = await storage.updateDatabase(id, input);
+      const database = await (req as any).storage.updateDatabase(id, input);
       if (!database) return res.status(404).json({ message: "Database not found" });
       res.json(database);
     } catch (err) {
@@ -342,32 +385,34 @@ export async function registerRoutes(
   });
 
   app.delete(api.databases.delete.path, isAuthenticated, async (req, res) => {
-    await storage.deleteDatabase(Number(req.params.id));
+    await (req as any).storage.deleteDatabase(Number(req.params.id));
     res.status(204).send();
   });
 
   // Clusters
   app.get(api.clusters.list.path, isAuthenticated, async (req, res) => {
-    const clusters = await storage.getClusters();
+    const user = req.user as User;
+    const clusters = await (req as any).storage.getClusters(user.orgId!);
     res.json(clusters);
   });
 
   app.get(api.clusters.get.path, isAuthenticated, async (req, res) => {
-    const cluster = await storage.getCluster(Number(req.params.id));
+    const cluster = await (req as any).storage.getCluster(Number(req.params.id));
     if (!cluster) return res.status(404).json({ message: "Cluster not found" });
     res.json(cluster);
   });
 
   // Web Monitors
   app.get(api.webMonitors.list.path, isAuthenticated, async (req, res) => {
-    const monitors = await storage.getWebMonitors();
+    const user = req.user as User;
+    const monitors = await (req as any).storage.getWebMonitors(user.orgId!);
     res.json(monitors);
   });
 
   app.get(api.webMonitors.get.path, isAuthenticated, async (req, res) => {
     const id = Number(req.params.id);
     if (isNaN(id)) return res.status(400).json({ message: "Invalid monitor ID" });
-    const monitor = await storage.getWebMonitor(id);
+    const monitor = await (req as any).storage.getWebMonitor(id);
     if (!monitor) return res.status(404).json({ message: "Monitor not found" });
     res.json(monitor);
   });
@@ -375,7 +420,7 @@ export async function registerRoutes(
   app.post(api.webMonitors.create.path, isAuthenticated, async (req, res) => {
     try {
       const input = api.webMonitors.create.input.parse(req.body);
-      const monitor = await storage.createWebMonitor(input);
+      const monitor = await (req as any).storage.createWebMonitor(input);
       res.status(201).json(monitor);
     } catch (err) {
       error(err);
@@ -388,7 +433,7 @@ export async function registerRoutes(
       const id = Number(req.params.id);
       if (isNaN(id)) return res.status(400).json({ message: "Invalid monitor ID" });
       const input = api.webMonitors.update.input.parse(req.body);
-      const monitor = await storage.updateWebMonitor(id, input);
+      const monitor = await (req as any).storage.updateWebMonitor(id, input);
       if (!monitor) return res.status(404).json({ message: "Monitor not found" });
       res.json(monitor);
     } catch (err) {
@@ -400,20 +445,21 @@ export async function registerRoutes(
   app.delete(api.webMonitors.delete.path, isAuthenticated, async (req, res) => {
     const id = Number(req.params.id);
     if (isNaN(id)) return res.status(400).json({ message: "Invalid monitor ID" });
-    await storage.deleteWebMonitor(id);
+    await (req as any).storage.deleteWebMonitor(id);
     res.status(204).send();
   });
 
   // === DOMAIN MONITORS ===
   app.get(api.domainMonitors.list.path, isAuthenticated, async (req, res) => {
-    const monitors = await storage.getDomainMonitors();
+    const user = req.user as User;
+    const monitors = await (req as any).storage.getDomainMonitors(user.orgId!);
     res.json(monitors);
   });
 
   app.get(api.domainMonitors.get.path, isAuthenticated, async (req, res) => {
     const id = Number(req.params.id);
     if (isNaN(id)) return res.status(400).json({ message: "Invalid domain monitor ID" });
-    const monitor = await storage.getDomainMonitor(id);
+    const monitor = await (req as any).storage.getDomainMonitor(id);
     if (!monitor) return res.status(404).json({ message: "Domain monitor not found" });
     res.json(monitor);
   });
@@ -421,7 +467,7 @@ export async function registerRoutes(
   app.post(api.domainMonitors.create.path, isAuthenticated, async (req, res) => {
     try {
       const input = api.domainMonitors.create.input.parse(req.body);
-      const monitor = await storage.createDomainMonitor(input);
+      const monitor = await (req as any).storage.createDomainMonitor(input);
       // Trigger a proactive check for the newly added domain asynchronously
       DomainMonitorService.checkSingleDomain(monitor).catch(err => {
         error("Proactive domain check failed:", err);
@@ -436,7 +482,79 @@ export async function registerRoutes(
   app.delete(api.domainMonitors.delete.path, isAuthenticated, async (req, res) => {
     const id = Number(req.params.id);
     if (isNaN(id)) return res.status(400).json({ message: "Invalid domain monitor ID" });
-    await storage.deleteDomainMonitor(id);
+    await (req as any).storage.deleteDomainMonitor(id);
+    res.status(204).send();
+  });
+
+  // === SETTINGS ===
+
+  // Project Alert Settings
+  app.get(api.settings.projectAlerts.get.path, isAuthenticated, async (req, res) => {
+    const user = req.user as User;
+    const projectId = Number(req.params.id);
+    const settings = await (req as any).storage.getProjectAlertSettings(user.orgId!, projectId);
+    if (!settings) return res.status(404).json({ message: "Settings not found" });
+    res.json(settings);
+  });
+
+  app.patch(api.settings.projectAlerts.update.path, isAuthenticated, async (req, res) => {
+    const user = req.user as User;
+    const projectId = Number(req.params.id);
+    const input = api.settings.projectAlerts.update.input.parse(req.body);
+    const settings = await (req as any).storage.upsertProjectAlertSettings(user.orgId!, projectId, input);
+    res.json(settings);
+  });
+
+  // SMTP Settings
+  app.get(api.settings.smtp.get.path, isAuthenticated, async (req, res) => {
+    const user = req.user as User;
+    const settings = await (req as any).storage.getSmtpSettings(user.orgId!);
+    if (!settings) return res.status(404).json({ message: "SMTP settings not found" });
+    res.json(settings);
+  });
+
+  app.patch(api.settings.smtp.upsert.path, isAuthenticated, async (req, res) => {
+    const user = req.user as User;
+    const input = api.settings.smtp.upsert.input.parse(req.body);
+    const settings = await (req as any).storage.upsertSmtpSettings(user.orgId!, input);
+    res.json(settings);
+  });
+
+  // SMTP Test
+  app.post(api.settings.smtp.test.path, isAuthenticated, async (req, res) => {
+    try {
+      const { recipient, settings: customSettings } = api.settings.smtp.test.input.parse(req.body);
+      await (req as any).storage.sendTestEmail(recipient, customSettings);
+      res.json({ success: true, message: "Test email sent" });
+    } catch (err: any) {
+      error("SMTP Test failed:", err);
+      res.status(400).json({ message: err.message || "Failed to send test email" });
+    }
+  });
+
+  // Global Email Templates
+  app.get(api.settings.emailTemplates.list.path, isAuthenticated, async (req, res) => {
+    const user = req.user as User;
+    const templates = await (req as any).storage.getProjectEmailTemplates(user.orgId!, null);
+    res.json(templates);
+  });
+
+  app.patch(api.settings.emailTemplates.upsert.path, isAuthenticated, async (req, res) => {
+    try {
+      const user = req.user as User;
+      const alertType = req.params.alertType;
+      const input = api.settings.emailTemplates.upsert.input.parse(req.body);
+      const template = await (req as any).storage.upsertEmailTemplate(user.orgId!, null, alertType, input);
+      res.json(template);
+    } catch (err) {
+      res.status(400).json({ message: "Invalid template format" });
+    }
+  });
+
+  app.delete(api.settings.emailTemplates.delete.path, isAuthenticated, async (req, res) => {
+    const user = req.user as User;
+    const alertType = req.params.alertType;
+    await (req as any).storage.deleteEmailTemplate(user.orgId!, null, alertType);
     res.status(204).send();
   });
 
@@ -445,10 +563,10 @@ export async function registerRoutes(
     try {
       const input = api.servers.create.input.parse(req.body);
       const { cpuUsage, memoryUsage, diskUsage, ...serverData } = input;
-      const server = await storage.upsertServer(serverData);
+      const server = await (req as any).storage.upsertServer(serverData);
 
       if (cpuUsage !== undefined || memoryUsage !== undefined || diskUsage !== undefined) {
-        await storage.addServerMetric({
+        await (req as any).storage.addServerMetric({
           serverId: server.id,
           cpuUsage: cpuUsage ?? 0,
           memoryUsage: memoryUsage ?? 0,
@@ -469,13 +587,13 @@ export async function registerRoutes(
       const input = api.servers.update.input.parse(req.body);
       const { cpuUsage, memoryUsage, diskUsage, ...serverData } = input;
 
-      const server = await storage.updateServer(id, serverData);
+      const server = await (req as any).storage.updateServer(id, serverData);
       if (!server) {
         return res.status(404).json({ message: "Server not found" });
       }
 
       if (cpuUsage !== undefined || memoryUsage !== undefined || diskUsage !== undefined) {
-        await storage.addServerMetric({
+        await (req as any).storage.addServerMetric({
           serverId: server.id,
           cpuUsage: cpuUsage ?? 0,
           memoryUsage: memoryUsage ?? 0,
@@ -491,7 +609,7 @@ export async function registerRoutes(
   });
 
   app.delete(api.servers.delete.path, isAuthenticated, async (req, res) => {
-    await storage.deleteServer(Number(req.params.id));
+    await (req as any).storage.deleteServer(Number(req.params.id));
     res.status(204).send();
   });
 
@@ -499,14 +617,15 @@ export async function registerRoutes(
     const id = Number(req.params.id);
     if (isNaN(id)) return res.status(400).json({ message: "Invalid server ID" });
     const { order } = api.servers.updateOrder.input.parse(req.body);
-    await storage.updateServerSortOrder(id, order);
+    await (req as any).storage.updateServerSortOrder(id, order);
     res.json({ success: true });
   });
 
   // === USER MANAGEMENT ===
   // Admin only: List users
   app.get("/api/admin/users", isAdmin, async (req, res) => {
-    const usersList = await storage.getUsers();
+    const user = req.user as User;
+    const usersList = await (req as any).storage.getUsers(user.orgId!);
     // Remove sensitive data (passwords)
     const safeUsers = usersList.map(({ password, ...rest }) => rest);
     res.json(safeUsers);
@@ -517,7 +636,7 @@ export async function registerRoutes(
     try {
       const input = insertUserSchema.parse(req.body);
       const hashedPassword = await hashPassword(input.password);
-      const user = await storage.createUser({ ...input, password: hashedPassword });
+      const user = await (req as any).storage.createUser({ ...input, password: hashedPassword });
       const { password, ...safeUser } = user;
       res.status(201).json(safeUser);
     } catch (err) {
@@ -533,7 +652,7 @@ export async function registerRoutes(
     try {
       const { password } = z.object({ password: z.string().min(6) }).parse(req.body);
       const hashedPassword = await hashPassword(password);
-      const user = await storage.updateUser(req.params.id, { password: hashedPassword });
+      const user = await (req as any).storage.updateUser(req.params.id, { password: hashedPassword });
       if (!user) return res.status(404).json({ message: "User not found" });
       res.json({ message: "Password updated successfully" });
     } catch (err) {
@@ -547,7 +666,7 @@ export async function registerRoutes(
       if (req.params.id === (req.user as any).id) {
         return res.status(400).json({ message: "You cannot delete your own account" });
       }
-      await storage.deleteUser(req.params.id);
+      await (req as any).storage.deleteUser(req.params.id);
       res.status(204).send();
     } catch (err) {
       error("Error deleting user:", err);
@@ -561,149 +680,56 @@ export async function registerRoutes(
       const { password } = z.object({ password: z.string().min(6) }).parse(req.body);
       const hashedPassword = await hashPassword(password);
       const user = req.user as any;
-      await storage.updateUser(user.id, { password: hashedPassword });
+      await (req as any).storage.updateUser(user.id, { password: hashedPassword });
       res.json({ message: "Password updated successfully" });
     } catch (err) {
       res.status(400).json({ message: "Invalid password format" });
     }
   });
 
-  // === SETTINGS ===
-  app.get(api.settings.smtp.get.path, isAuthenticated, async (req, res) => {
-    const settings = await storage.getSmtpSettings();
-    if (!settings) return res.status(404).json({ message: "SMTP settings not found" });
-    res.json(settings);
-  });
-
-  app.patch(api.settings.smtp.upsert.path, isAuthenticated, async (req, res) => {
-    try {
-      safeLog(`[${new Date().toISOString()}] PATCH SMTP UPSERT REQUEST. Body: ${JSON.stringify(req.body)}\n`);
-
-      const input = api.settings.smtp.upsert.input.parse(req.body);
-      const settings = await storage.upsertSmtpSettings(input);
-      res.json(settings);
-    } catch (err: any) {
-      if (err instanceof z.ZodError) {
-        const validationError = fromError(err);
-        safeLog(`[${new Date().toISOString()}] SMTP Validation error: ${validationError.message}\n`);
-        res.status(400).json({ message: validationError.message });
-      } else {
-        safeLog(`[${new Date().toISOString()}] Error upserting SMTP: ${err}\n`);
-        res.status(400).json({ message: "Invalid SMTP settings format" });
-      }
-    }
-  });
-
-  // Project Alert Settings
-  app.get(api.settings.projectAlerts.get.path, isAuthenticated, async (req, res) => {
-    const settings = await storage.getProjectAlertSettings(Number(req.params.id));
-    if (!settings) return res.status(404).json({ message: "Project alert settings not found" });
-    res.json(settings);
-  });
-
-  app.patch(api.settings.projectAlerts.update.path, isAuthenticated, async (req, res) => {
-    try {
-      const id = Number(req.params.id);
-      const input = api.settings.projectAlerts.update.input.parse(req.body);
-      const settings = await storage.upsertProjectAlertSettings(id, input as any);
-      res.json(settings);
-    } catch (err: any) {
-      if (err instanceof z.ZodError) {
-        return res.status(400).json({ message: fromError(err).message });
-      }
-      res.status(500).json({ message: "Failed to update project alert settings" });
-    }
-  });
-
-  // Global Email Templates
-  app.get(api.settings.emailTemplates.list.path, isAuthenticated, async (req, res) => {
-    const templates = await storage.getProjectEmailTemplates(null);
-    res.json(templates);
-  });
-
-  app.patch(api.settings.emailTemplates.upsert.path, isAuthenticated, async (req, res) => {
-    try {
-      const alertType = req.params.alertType;
-      const input = api.settings.emailTemplates.upsert.input.parse(req.body);
-      const template = await storage.upsertEmailTemplate(null, alertType, input);
-      res.json(template);
-    } catch (err) {
-      res.status(400).json({ message: "Invalid template format" });
-    }
-  });
-
-  app.delete(api.settings.emailTemplates.delete.path, isAuthenticated, async (req, res) => {
-    const alertType = req.params.alertType;
-    await storage.deleteEmailTemplate(null, alertType);
-    res.status(204).send();
-  });
-
-  app.post(api.settings.smtp.test.path, isAuthenticated, async (req, res) => {
-    try {
-      const { recipient, settings: bodySettings } = api.settings.smtp.test.input.parse(req.body);
-      safeLog(`[${new Date().toISOString()}] TEST EMAIL REQUEST for ${recipient}\n`);
-
-      let settingsToUse: any = bodySettings;
-      if (!settingsToUse) {
-        settingsToUse = await storage.getSmtpSettings();
-      }
-
-      if (!settingsToUse) {
-        return res.status(400).json({ message: "Provide SMTP settings or configure them in settings first" });
-      }
-
-      const EmailService = (await import("./lib/email")).EmailService;
-      await EmailService.sendTestEmail(settingsToUse as any, recipient);
-      res.json({ success: true, message: "Test email sent successfully" });
-    } catch (err: any) {
-      error("Test email failed:", err);
-      // Return a more descriptive error if possible
-      res.status(400).json({
-        success: false,
-        message: err.message || "Failed to send test email. Check your SMTP configuration and network."
-      });
-    }
-  });
-
   // === ALERTS ===
   app.get(api.alerts.list.path, isAuthenticated, async (req, res) => {
+    const user = req.user as User;
     const serverId = Number(req.params.serverId);
-    const alerts = await storage.getRecentAlerts(serverId);
+    const alerts = await (req as any).storage.getRecentAlerts(user.orgId!, serverId);
     res.json(alerts);
   });
 
   app.get(api.alerts.history.path, isAuthenticated, async (req, res) => {
-    const alerts = await storage.getAlertHistory();
+    const user = req.user as User;
+    const alerts = await (req as any).storage.getAlertHistory(user.orgId!);
     res.json(alerts);
   });
 
   app.get(api.alerts.projectHistory.path, isAuthenticated, async (req, res) => {
+    const user = req.user as User;
     const projectId = Number(req.params.id);
     if (isNaN(projectId)) return res.status(400).json({ message: "Invalid project ID" });
     
-    // Pagination parameters from query
     const limit = Number(req.query.limit) || 20;
     const offset = Number(req.query.offset) || 0;
     const status = req.query.status as string;
     const type = req.query.type as string;
     
-    const history = await (storage as any).getProjectAlertHistory(projectId, limit, offset, status, type);
+    const history = await (req as any).storage.getProjectAlertHistory(user.orgId!, projectId, limit, offset, status, type);
     res.json(history);
   });
 
   app.delete(api.alerts.deleteHistory.path, isAuthenticated, async (req, res) => {
+    const user = req.user as User;
     const projectId = Number(req.params.id);
     if (isNaN(projectId)) return res.status(400).json({ message: "Invalid project ID" });
-    await (storage as any).deleteProjectAlerts(projectId);
+    await (req as any).storage.deleteProjectAlerts(user.orgId!, projectId);
     res.status(204).send();
   });
 
   app.patch(api.alerts.updateMuted.path, isAuthenticated, async (req, res) => {
     try {
+      const user = req.user as User;
       const projectId = Number(req.params.id);
       if (isNaN(projectId)) return res.status(400).json({ message: "Invalid project ID" });
       const { alertMutedResources } = api.alerts.updateMuted.input.parse(req.body);
-      const updated = await storage.upsertProjectAlertSettings(projectId, { alertMutedResources } as any);
+      const updated = await (req as any).storage.upsertProjectAlertSettings(user.orgId!, projectId, { alertMutedResources } as any);
       res.json(updated);
     } catch (err: any) {
       res.status(400).json({ message: err.message || "Failed to update alert muting" });
@@ -714,64 +740,5 @@ export async function registerRoutes(
   WebMonitorService.start();
   DomainMonitorService.start();
 
-  // === SEED DATA ===
-  await seedDatabase();
-
   return httpServer;
-}
-
-async function seedDatabase() {
-  const existingTokens = await storage.getTokens();
-  if (existingTokens.length === 0) {
-    info("Seeding database...");
-
-    // Create a default token for testing agents
-    const token = await storage.createToken("Default Dev Token", "vm");
-    info(`Created default token: ${token.token}`);
-
-    // Create some dummy servers
-    const s1 = await storage.upsertServer({
-      hostname: "prod-web-01",
-      os: "Ubuntu 22.04 LTS",
-      cpuCores: 4,
-      totalRam: 16,
-      totalDisk: 500,
-      ipAddress: "10.0.0.5"
-    });
-    // Add metrics for s1
-    await storage.addServerMetric({ serverId: s1.id, cpuUsage: 45, memoryUsage: 60, diskUsage: 82 });
-    await storage.addServerMetric({ serverId: s1.id, cpuUsage: 48, memoryUsage: 62, diskUsage: 82 });
-    await storage.addServerMetric({ serverId: s1.id, cpuUsage: 50, memoryUsage: 65, diskUsage: 83 });
-
-    const s2 = await storage.upsertServer({
-      hostname: "prod-db-replica",
-      os: "Debian 11",
-      cpuCores: 8,
-      totalRam: 32,
-      totalDisk: 1000,
-      ipAddress: "10.0.0.20"
-    });
-    // Critical disk usage example
-    await storage.addServerMetric({ serverId: s2.id, cpuUsage: 20, memoryUsage: 40, diskUsage: 92 });
-
-    const db1 = await storage.upsertDatabase({
-      name: "main-postgres",
-      engine: "PostgreSQL",
-      version: "15.4",
-      host: "db.internal",
-      port: 5432
-    });
-    await storage.addDatabaseMetric({ databaseId: db1.id, storageUsed: 150, activeConnections: 45 });
-
-    const k8s1 = await storage.upsertCluster({
-      name: "us-east-1-cluster",
-      version: "1.28.2",
-      nodeCount: 5,
-      totalCpu: 40,
-      totalMemory: 160
-    });
-    await storage.addClusterMetric({ clusterId: k8s1.id, cpuUsage: 65, memoryUsage: 70, podCount: 120 });
-
-    info("Seeding complete.");
-  }
 }

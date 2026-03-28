@@ -1,15 +1,53 @@
 import { useDashboardStats } from "@/hooks/use-dashboard";
 import { Shell } from "@/components/layout/Shell";
 import { MetricCard } from "@/components/ui/MetricCard";
-import { Server, Database, Cloud, AlertTriangle, Activity, Plus, Github, ArrowRight, Globe, Zap } from "lucide-react";
+import { Server, Database, Cloud, AlertTriangle, Activity, Plus, Github, ArrowRight, Globe, Zap, Gift, ShieldCheck, Clock } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Link } from "wouter";
+import { useAuth } from "@/hooks/use-auth";
+import { useState, useEffect } from "react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
 
 export default function Dashboard() {
   const { data: stats, isLoading } = useDashboardStats();
+  const { user } = useAuth();
+  const [showTrialPopup, setShowTrialPopup] = useState(false);
+
+  useEffect(() => {
+    if (user?.plan === 'trial') {
+      const dismissed = localStorage.getItem(`trial_popup_${user.id}`);
+      if (!dismissed) {
+        setShowTrialPopup(true);
+      }
+    }
+  }, [user]);
+
+  const handleDismiss = () => {
+    setShowTrialPopup(false);
+    if (user?.id) {
+      localStorage.setItem(`trial_popup_${user.id}`, "true");
+    }
+  };
+
+  const daysLeft = user?.trialExpiresAt 
+    ? Math.max(0, Math.ceil((new Date(user.trialExpiresAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24))) 
+    : 0;
+
+  const totalResources = (stats?.totalServers || 0) + 
+                         (stats?.totalDatabases || 0) + 
+                         (stats?.totalClusters || 0) + 
+                         (stats?.totalWebMonitors || 0) + 
+                         (stats?.totalDomainMonitors || 0);
+
+  const projectUsage = ((stats?.totalProjects || 0) / 5) * 100;
+  const resourceUsage = (totalResources / 30) * 100;
 
   return (
+    <>
     <Shell title="Dashboard" description="Overview of your infrastructure health and metrics.">
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
         {isLoading ? (
@@ -151,5 +189,60 @@ export default function Dashboard() {
         </Card>
       </div>
     </Shell>
+
+    <Dialog open={showTrialPopup} onOpenChange={setShowTrialPopup}>
+      <DialogContent className="sm:max-w-[500px] border-primary/20 bg-background/95 backdrop-blur-xl shadow-2xl p-0 overflow-hidden">
+        <div className="relative h-32 bg-gradient-to-br from-primary/20 via-primary/5 to-transparent flex items-center justify-center">
+          <div className="absolute top-4 right-4">
+             <Badge variant="outline" className="bg-primary/10 border-primary/20 text-primary font-bold">
+               <Clock className="h-3 w-3 mr-1" /> {daysLeft} Days Left
+             </Badge>
+          </div>
+          <div className="h-16 w-16 rounded-3xl bg-primary shadow-[0_0_30px_rgba(var(--primary),0.3)] flex items-center justify-center text-primary-foreground transform -rotate-6">
+            <Gift className="h-8 w-8" />
+          </div>
+        </div>
+        
+        <div className="p-8 pt-6">
+          <DialogHeader>
+            <DialogTitle className="text-2xl font-black tracking-tight flex items-center gap-2">
+              Welcome to Your Trial Period!
+            </DialogTitle>
+            <DialogDescription className="text-muted-foreground font-medium pt-2">
+              You've successfully joined <span className="text-primary font-bold">Infra-Ventry</span>. You are currently on the <span className="font-bold underline decoration-primary/30 underline-offset-4 decoration-2">Trial Plan</span> with access to all premium features.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="mt-8 space-y-6">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between text-xs font-black uppercase tracking-widest text-muted-foreground/70">
+                <span className="flex items-center gap-1.5"><ShieldCheck className="h-3 w-3 text-primary" /> Projects Limit</span>
+                <span>{stats?.totalProjects || 0} / 5</span>
+              </div>
+              <Progress value={projectUsage} className="h-2 bg-primary/10" />
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex items-center justify-between text-xs font-black uppercase tracking-widest text-muted-foreground/70">
+                <span className="flex items-center gap-1.5"><Activity className="h-3 w-3 text-indigo-500" /> Resource Limit</span>
+                <span>{totalResources} / 30</span>
+              </div>
+              <Progress value={resourceUsage} className="h-2 bg-indigo-500/10" />
+              <p className="text-[10px] text-muted-foreground/60 font-medium italic">Includes Servers, Databases, Clusters & Web Monitors</p>
+            </div>
+          </div>
+
+          <DialogFooter className="mt-10 gap-3 sm:justify-start">
+            <Button onClick={handleDismiss} className="w-full font-bold shadow-lg shadow-primary/20 h-11">
+              Start Monitoring
+            </Button>
+            <Button variant="ghost" asChild className="w-full font-bold h-11">
+              <Link href="/settings?tab=billing">View Plans</Link>
+            </Button>
+          </DialogFooter>
+        </div>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }
